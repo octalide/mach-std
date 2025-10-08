@@ -1,0 +1,103 @@
+use std.mem;
+use std.types.string;
+
+ext "C:write"  c_write:  fun(i64, *u8, i64) i64;
+ext "C:open"   c_open:   fun(*u8, i32, ...) i32;
+ext "C:read"   c_read:   fun(i32, *u8, i64) i64;
+ext "C:close"  c_close:  fun(i32) i32;
+
+# basic posix flags subset for open(2)
+pub val O_RDONLY: i32 = 0;
+pub val O_WRONLY: i32 = 1;
+pub val O_RDWR:   i32 = 2;
+pub val O_CREAT:  i32 = 64;   # 0o100
+pub val O_TRUNC:  i32 = 512;  # 0o1000
+
+# unix style permissions subset
+pub val MODE_644: i32 = 420;  # 0644
+pub val MODE_600: i32 = 384;  # 0600
+
+pub fun fs_read_all(path: string) []u8 {
+    val fd: i32 = c_open(path, O_RDONLY);
+
+    if (fd < 0) {
+        ret []u8{nil, 0};
+    }
+
+    # grow buffer progressively
+    var cap: u64 = 4096;
+    var buf: *u8 = allocate(cap);
+    if (buf == nil) {
+        c_close(fd);
+        ret []u8{nil, 0};
+    }
+
+    var len: u64 = 0;
+    for {
+        val space: u64 = cap - len;
+        if (space == 0) {
+            val ncap: u64 = cap + (cap >> 1) + 1;
+            val nbuf: *u8 = reallocate(buf, cap, ncap);
+
+            if (nbuf == nil) {
+                deallocate(buf, cap);
+                c_close(fd);
+                ret []u8{ nil, 0 };
+            }
+
+            buf = nbuf;
+            cap = ncap;
+        }
+
+        val got: i64 = c_read(fd, (buf + len), (cap - len)::i64);
+        
+        if (got < 0) {
+            deallocate(buf, cap);
+            c_close(fd);
+
+            ret []u8{ nil, 0 };
+        }
+        or (got == 0) {
+            brk;
+        }
+
+        len = len + (got::u64);
+    }
+
+    c_close(fd);
+
+    # shrink to fit
+    if (len < cap) {
+        val nbuf: *u8 = reallocate(buf, cap, len);
+        if (nbuf != nil) {
+            buf = nbuf;
+            cap = len;
+        }
+    }
+
+    ret []u8{ buf, len };
+}
+
+pub fun fs_write_all(path: string, data: []u8) i32 {
+    val fd: i32 = c_open(path, O_WRONLY | O_CREAT | O_TRUNC, MODE_644);
+
+    if (fd < 0) {
+        ret -1;
+    }
+    
+    var off: u64 = 0;
+    var res: i64 = 0;
+    for (off < data.length) {
+        res = c_write(fd::i64, (data.data + off), (data.length - off)::i64);
+        if (res <= 0) {
+            c_close(fd);
+            ret -1;
+        }
+
+        off = off + (res::u64);
+    }
+
+    c_close(fd);
+
+    ret 0;
+}

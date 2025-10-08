@@ -1,0 +1,28 @@
+use std.types.string;
+
+# linux clock_gettime for monotonic time (fallback to 0 if unavailable)
+ext "C:clock_gettime" c_clock_gettime: fun(i32, *u8) i32;
+
+str Timespec {
+    tv_sec:  i64;
+    tv_nsec: i64;
+}
+
+val CLOCK_MONOTONIC: i32 = 1;
+
+pub fun now_nanos() u64 {
+    var ts: Timespec;
+    ts.tv_sec  = 0;
+    ts.tv_nsec = 0;
+    val r:  i32 = c_clock_gettime(CLOCK_MONOTONIC, (?ts) :: *u8);
+
+    if (r != 0) {
+        ret 0;
+    }
+
+    ret (ts.tv_sec :: u64) * 1000000000 + (ts.tv_nsec :: u64);
+}
+
+pub fun now_millis() u64 {
+    ret now_nanos() / 1000000;
+}

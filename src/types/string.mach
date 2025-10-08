@@ -1,0 +1,2 @@
+pub def char:   u8;
+pub def string: []char;
