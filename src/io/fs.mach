@@ -1,10 +1,22 @@
+use target;
 use std.mem;
+use std.os.linux.sys;
 use std.types.string;
 
-ext "C:write"  c_write:  fun(i64, *u8, i64) i64;
-ext "C:open"   c_open:   fun(*u8, i32, ...) i32;
-ext "C:read"   c_read:   fun(i32, *u8, i64) i64;
-ext "C:close"  c_close:  fun(i32) i32;
+fun path_to_cstr(path: string) []u8 {
+    val size: u64 = path.length + 1;
+    val buf: *u8 = allocate(size);
+    if (buf == nil) {
+        ret []u8{ nil, 0 };
+    }
+
+    if (path.length > 0) {
+        mem_copy(buf, path.data, path.length);
+    }
+    @(buf + path.length) = 0;
+
+    ret []u8{ buf, size };
+}
 
 # basic posix flags subset for open(2)
 pub val O_RDONLY: i32 = 0;
@@ -18,17 +30,29 @@ pub val MODE_644: i32 = 420;  # 0644
 pub val MODE_600: i32 = 384;  # 0600
 
 pub fun fs_read_all(path: string) []u8 {
-    val fd: i32 = c_open(path, O_RDONLY);
-
-    if (fd < 0) {
-        ret []u8{nil, 0};
+    if (OS != OS_LINUX) {
+        ret []u8{ nil, 0 };
     }
+
+    val c_path: []u8 = path_to_cstr(path);
+    if (c_path.data == nil) {
+        ret []u8{ nil, 0 };
+    }
+
+    val fd_res: i64 = sys_openat(AT_FDCWD, c_path.data, O_RDONLY, 0);
+    deallocate(c_path.data, c_path.length);
+
+    if (fd_res < 0) {
+        ret []u8{ nil, 0 };
+    }
+
+    val fd: i32 = fd_res :: i32;
 
     # grow buffer progressively
     var cap: u64 = 4096;
     var buf: *u8 = allocate(cap);
     if (buf == nil) {
-        c_close(fd);
+        sys_close(fd);
         ret []u8{nil, 0};
     }
 
@@ -41,7 +65,7 @@ pub fun fs_read_all(path: string) []u8 {
 
             if (nbuf == nil) {
                 deallocate(buf, cap);
-                c_close(fd);
+                sys_close(fd);
                 ret []u8{ nil, 0 };
             }
 
@@ -49,11 +73,11 @@ pub fun fs_read_all(path: string) []u8 {
             cap = ncap;
         }
 
-        val got: i64 = c_read(fd, (buf + len), (cap - len)::i64);
+        val got: i64 = sys_read(fd, (buf + len), (cap - len));
         
         if (got < 0) {
             deallocate(buf, cap);
-            c_close(fd);
+            sys_close(fd);
 
             ret []u8{ nil, 0 };
         }
@@ -63,8 +87,7 @@ pub fun fs_read_all(path: string) []u8 {
 
         len = len + (got::u64);
     }
-
-    c_close(fd);
+    sys_close(fd);
 
     # shrink to fit
     if (len < cap) {
@@ -79,25 +102,37 @@ pub fun fs_read_all(path: string) []u8 {
 }
 
 pub fun fs_write_all(path: string, data: []u8) i32 {
-    val fd: i32 = c_open(path, O_WRONLY | O_CREAT | O_TRUNC, MODE_644);
-
-    if (fd < 0) {
+    if (OS != OS_LINUX) {
         ret -1;
     }
+
+    val c_path: []u8 = path_to_cstr(path);
+    if (c_path.data == nil) {
+        ret -1;
+    }
+
+    val fd_res: i64 = sys_openat(AT_FDCWD, c_path.data, O_WRONLY | O_CREAT | O_TRUNC, MODE_644);
+    deallocate(c_path.data, c_path.length);
+
+    if (fd_res < 0) {
+        ret -1;
+    }
+
+    val fd: i32 = fd_res :: i32;
     
     var off: u64 = 0;
     var res: i64 = 0;
     for (off < data.length) {
-        res = c_write(fd::i64, (data.data + off), (data.length - off)::i64);
+        res = sys_write(fd, (data.data + off), (data.length - off));
         if (res <= 0) {
-            c_close(fd);
+            sys_close(fd);
             ret -1;
         }
 
         off = off + (res::u64);
     }
 
-    c_close(fd);
+    sys_close(fd);
 
     ret 0;
 }

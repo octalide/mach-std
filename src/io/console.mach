@@ -1,21 +1,35 @@
-use std.c;
+use target;
+use std.os.linux.sys;
 use std.types.string;
-
-ext "C:write"  c_write:  fun(i64, *u8, i64) i64;
-ext "C:read"   c_read:   fun(i64, *u8, i64) i64;
 
 pub val STDIN:  i32 = 0;
 pub val STDOUT: i32 = 1;
 pub val STDERR: i32 = 2;
 
 pub fun print(s: string) {
-    val size: i64 = (s.length)::i64;
-    c_write(STDOUT::i64, s, size);
+    val size: u64 = s.length;
+
+    if (size == 0) {
+        ret;
+    }
+
+    if (OS == OS_LINUX) {
+        sys_write(STDOUT, s.data, size);
+    }
 }
 
 pub fun write_to(dest: i32, s: string) i64 {
-    val size: i64 = (s.length)::i64;
-    ret c_write(dest::i64, s, size);
+    val size: u64 = s.length;
+
+    if (size == 0) {
+        ret 0;
+    }
+
+    if (OS == OS_LINUX) {
+        ret sys_write(dest, s.data, size);
+    }
+
+    ret -1;
 }
 
 pub fun read_into(dest: *u8, max: u64) i64 {
@@ -23,7 +37,11 @@ pub fun read_into(dest: *u8, max: u64) i64 {
         ret 0;
     }
 
-    ret c_read(STDIN::i64, dest, max::i64);
+    if (OS == OS_LINUX) {
+        ret sys_read(STDIN, dest, max);
+    }
+
+    ret -1;
 }
 
 pub fun read_from(src: i32, dest: *u8, max: u64) i64 {
@@ -31,5 +49,9 @@ pub fun read_from(src: i32, dest: *u8, max: u64) i64 {
         ret 0;
     }
 
-    ret c_read(src::i64, dest, max::i64);
+    if (OS == OS_LINUX) {
+        ret sys_read(src, dest, max);
+    }
+
+    ret -1;
 }

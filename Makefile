@@ -22,6 +22,7 @@ $(LIB): $(OBJECTS) | $(LIB_DIR)
 	@OBJS="$$(find $(OBJ_DIR) -type f -name '*.o' -print 2>/dev/null)"; ar rcs $@ $$OBJS
 
 # compile each .mach to .o (no link); infer package via -M alias
+
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.mach | $(OBJ_DIR)
 	@mkdir -p $(dir $@)
 	@$(CMACH) build $< --emit-obj --no-link -I $(SRC_DIR) -M std=$(SRC_DIR) -o $@
