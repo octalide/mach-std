@@ -1,2 +1,282 @@
+use std.system.memory;
+
 pub def char:   u8;
 pub def string: []char;
+
+fun ensure_capacity(buf_ptr: **u8, cap_ptr: *u64, len: u64, needed: u64) u8 {
+	val required: u64 = len + needed;
+	var cap: u64 = @cap_ptr;
+	if (required <= cap) { ret 1; }
+
+	var new_cap: u64 = cap;
+	if (new_cap == 0) { new_cap = 64; }
+
+	for (new_cap < required) {
+		new_cap = new_cap + (new_cap >> 1) + 16;
+	}
+
+	val current: *u8 = @buf_ptr;
+
+	var fresh: *u8 = nil;
+	if (current == nil) {
+		fresh = allocate(new_cap);
+	}
+	or {
+		fresh = reallocate(current, cap, new_cap);
+	}
+
+	if (fresh == nil) { ret 0; }
+
+	@buf_ptr = fresh;
+	@cap_ptr = new_cap;
+	ret 1;
+}
+
+
+fun append_byte(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, ch: u8) u8 {
+	val len: u64 = @len_ptr;
+	if (ensure_capacity(buf_ptr, cap_ptr, len, 1) == 0) { ret 0; }
+
+	val buf: *u8 = @buf_ptr;
+	@(buf + len) = ch;
+	@len_ptr = len + 1;
+	ret 1;
+}
+
+fun append_slice(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, data: *u8, size: u64) u8 {
+	if (size == 0 || data == nil) { ret 1; }
+
+	val len: u64 = @len_ptr;
+	if (ensure_capacity(buf_ptr, cap_ptr, len, size) == 0) { ret 0; }
+
+	val buf: *u8 = @buf_ptr;
+	memory_copy(buf + len, data, size);
+	@len_ptr = len + size;
+	ret 1;
+}
+
+fun append_string(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, value: string) u8 {
+	if (value.length == 0 || value.data == nil) { ret 1; }
+	ret append_slice(buf_ptr, len_ptr, cap_ptr, value.data, value.length);
+}
+
+fun append_unsigned_recursive(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, value: u64) u8 {
+	if (value >= 10) {
+		if (append_unsigned_recursive(buf_ptr, len_ptr, cap_ptr, value / 10) == 0) { ret 0; }
+	}
+
+	val digit_value: u64 = value % 10;
+	val digit: u8 = ('0' :: u8) + (digit_value :: u8);
+	ret append_byte(buf_ptr, len_ptr, cap_ptr, digit);
+}
+
+fun append_hex_recursive(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, value: u64, uppercase: u8) u8 {
+	if (value >= 16) {
+		if (append_hex_recursive(buf_ptr, len_ptr, cap_ptr, value / 16, uppercase) == 0) { ret 0; }
+	}
+
+	val digit: u64 = value % 16;
+	var ch: u8 = '0' :: u8;
+	if (digit < 10) {
+		ch = ('0' :: u8) + (digit :: u8);
+	}
+	or {
+		var base: u8 = 'a' :: u8;
+		if (uppercase != 0) { base = 'A' :: u8; }
+		val offset: u64 = digit - 10;
+		ch = base + (offset :: u8);
+	}
+
+	ret append_byte(buf_ptr, len_ptr, cap_ptr, ch);
+}
+
+fun append_signed(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, value: i64) u8 {
+	if (value < 0) {
+		if (append_byte(buf_ptr, len_ptr, cap_ptr, '-' :: u8) == 0) { ret 0; }
+		var magnitude: u64 = value :: u64;
+		magnitude = (~magnitude) + 1;
+		ret append_unsigned_recursive(buf_ptr, len_ptr, cap_ptr, magnitude);
+	}
+
+	ret append_unsigned_recursive(buf_ptr, len_ptr, cap_ptr, value :: u64);
+}
+
+fun append_unsigned(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, value: u64) u8 {
+	ret append_unsigned_recursive(buf_ptr, len_ptr, cap_ptr, value);
+}
+
+fun append_hex(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, value: u64, uppercase: u8) u8 {
+	if (value == 0) { ret append_byte(buf_ptr, len_ptr, cap_ptr, '0' :: u8); }
+	ret append_hex_recursive(buf_ptr, len_ptr, cap_ptr, value, uppercase);
+}
+
+fun append_bool(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, flag: u8) u8 {
+	val true_text: []u8 = "true";
+	val false_text: []u8 = "false";
+	if (flag != 0) {
+		ret append_slice(buf_ptr, len_ptr, cap_ptr, true_text.data, true_text.length);
+	}
+	ret append_slice(buf_ptr, len_ptr, cap_ptr, false_text.data, false_text.length);
+}
+
+fun append_escape(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, esc: u8) u8 {
+	var mapped: u8 = esc;
+	if (esc == 'n' :: u8) { mapped = 10 :: u8; }
+	or (esc == 't' :: u8) { mapped = 9 :: u8; }
+	or (esc == 'r' :: u8) { mapped = 13 :: u8; }
+	or (esc == '0' :: u8) { mapped = 0 :: u8; }
+	or (esc == '\\' :: u8) { mapped = '\\' :: u8; }
+	or (esc == '"' :: u8) { mapped = '"' :: u8; }
+	or (esc == '\'' :: u8) { mapped = '\'' :: u8; }
+
+	ret append_byte(buf_ptr, len_ptr, cap_ptr, mapped);
+}
+
+fun finalize_buffer(buffer: *u8, capacity: u64, length: u64) string {
+	if (length == 0) {
+		if (buffer != nil && capacity != 0) { deallocate(buffer, capacity); }
+		ret []u8{ nil, 0 };
+	}
+
+	if (buffer == nil) {
+		ret []u8{ nil, 0 };
+	}
+
+	if (capacity > length) {
+		val shrunk: *u8 = reallocate(buffer, capacity, length);
+		if (shrunk != nil) {
+			ret []u8{ shrunk, length };
+		}
+	}
+
+	ret []u8{ buffer, length };
+}
+
+pub fun string_free(value: string) {
+	if (value.data == nil || value.length == 0) { ret; }
+	deallocate(value.data, value.length);
+}
+
+pub fun format(pattern: string, ...) string {
+	if (pattern.length == 0 || pattern.data == nil) {
+		ret []u8{ nil, 0 };
+	}
+
+	var buffer: *u8 = nil;
+	var length: u64 = 0;
+	var capacity: u64 = 0;
+
+	val buffer_ptr: **u8 = (?buffer) :: **u8;
+	val length_ptr: *u64 = (?length) :: *u64;
+	val capacity_ptr: *u64 = (?capacity) :: *u64;
+
+	var i: u64 = 0;
+	var arg_index: u64 = 0;
+	val arg_total: u64 = va_count();
+	var ok: u8 = 1;
+
+	for (i < pattern.length) {
+		if (ok == 0) { brk; }
+
+		val ch: u8 = @(pattern.data + i);
+
+		if (ch == '\\' :: u8) {
+			if ((i + 1) < pattern.length) {
+				val next: u8 = @(pattern.data + i + 1);
+				ok = append_escape(buffer_ptr, length_ptr, capacity_ptr, next);
+				i = i + 2;
+			}
+			or {
+				ok = append_byte(buffer_ptr, length_ptr, capacity_ptr, ch);
+				i = i + 1;
+			}
+		}
+		or (ch == '%' :: u8) {
+			if ((i + 1) >= pattern.length) {
+				ok = append_byte(buffer_ptr, length_ptr, capacity_ptr, ch);
+				i = i + 1;
+			}
+			or {
+				val spec: u8 = @(pattern.data + i + 1);
+				if (spec == '%' :: u8) {
+					ok = append_byte(buffer_ptr, length_ptr, capacity_ptr, '%' :: u8);
+					i = i + 2;
+				}
+				or (arg_index >= arg_total) {
+					ok = append_byte(buffer_ptr, length_ptr, capacity_ptr, '%' :: u8);
+					if (ok != 0) { ok = append_byte(buffer_ptr, length_ptr, capacity_ptr, spec); }
+					i = i + 2;
+				}
+				or {
+					if (spec == 's' :: u8) {
+						val segment: string = va_arg(arg_index)::string;
+						arg_index = arg_index + 1;
+						ok = append_string(buffer_ptr, length_ptr, capacity_ptr, segment);
+					}
+					or (spec == 'c' :: u8) {
+						val ptr_c: *i32 = va_arg(arg_index)::*i32;
+						arg_index = arg_index + 1;
+						val ch_val: u8 = (@ptr_c) :: u8;
+						ok = append_byte(buffer_ptr, length_ptr, capacity_ptr, ch_val);
+					}
+					or (spec == 'd' :: u8) {
+						val ptr_d: *i64 = va_arg(arg_index)::*i64;
+						arg_index = arg_index + 1;
+						ok = append_signed(buffer_ptr, length_ptr, capacity_ptr, @ptr_d);
+					}
+					or (spec == 'i' :: u8) {
+						val ptr_i: *i64 = va_arg(arg_index)::*i64;
+						arg_index = arg_index + 1;
+						ok = append_signed(buffer_ptr, length_ptr, capacity_ptr, @ptr_i);
+					}
+					or (spec == 'u' :: u8) {
+						val ptr_u: *u64 = va_arg(arg_index)::*u64;
+						arg_index = arg_index + 1;
+						ok = append_unsigned(buffer_ptr, length_ptr, capacity_ptr, @ptr_u);
+					}
+					or (spec == 'x' :: u8) {
+						val ptr_x: *u64 = va_arg(arg_index)::*u64;
+						arg_index = arg_index + 1;
+						ok = append_hex(buffer_ptr, length_ptr, capacity_ptr, @ptr_x, 0 :: u8);
+					}
+					or (spec == 'X' :: u8) {
+						val ptr_X: *u64 = va_arg(arg_index)::*u64;
+						arg_index = arg_index + 1;
+						ok = append_hex(buffer_ptr, length_ptr, capacity_ptr, @ptr_X, 1 :: u8);
+					}
+					or (spec == 'b' :: u8) {
+						val ptr_b: *u8 = va_arg(arg_index)::*u8;
+						arg_index = arg_index + 1;
+						ok = append_bool(buffer_ptr, length_ptr, capacity_ptr, @ptr_b);
+					}
+					or (spec == 'p' :: u8) {
+						val ptr_p: *u8 = va_arg(arg_index)::*u8;
+						arg_index = arg_index + 1;
+						val prefix: []u8 = "0x";
+						ok = append_slice(buffer_ptr, length_ptr, capacity_ptr, prefix.data, prefix.length);
+						if (ok != 0) { ok = append_hex(buffer_ptr, length_ptr, capacity_ptr, (ptr_p :: u64), 0 :: u8); }
+					}
+					or {
+						ok = append_byte(buffer_ptr, length_ptr, capacity_ptr, '%' :: u8);
+						if (ok != 0) { ok = append_byte(buffer_ptr, length_ptr, capacity_ptr, spec); }
+					}
+
+					i = i + 2;
+				}
+			}
+		}
+		or {
+			ok = append_byte(buffer_ptr, length_ptr, capacity_ptr, ch);
+			i = i + 1;
+		}
+
+		if (ok == 0) { brk; }
+	}
+
+	if (ok == 0) {
+		if (buffer != nil && capacity != 0) { deallocate(buffer, capacity); }
+		ret []u8{ nil, 0 };
+	}
+
+	ret finalize_buffer(buffer, capacity, length);
+}

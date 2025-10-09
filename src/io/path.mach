@@ -1,4 +1,4 @@
-use std.mem;
+use std.system.memory;
 
 pub fun is_separator(b: u8) u8 {
     ret (b == '/');
@@ -60,9 +60,9 @@ pub fun join(a: []u8, b: []u8) []u8 {
         ret []u8{ nil, 0 };
     }
 
-    raw_copy(p, a.data, a.length);
+    memory_copy(p, a.data, a.length);
     @(p + a.length) = '/'::u8;
-    raw_copy(p + a.length + 1, b.data, b.length);
+    memory_copy(p + a.length + 1, b.data, b.length);
     
     ret []u8{ p, need };
 }

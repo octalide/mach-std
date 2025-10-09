@@ -1,0 +1,197 @@
+#! if (OS == OS_LINUX)
+use std.system.platform.linux.sys;
+#! or (OS == OS_DARWIN)
+use std.system.platform.darwin.sys;
+#! or (OS == OS_WINDOWS)
+use std.system.platform.windows.sys;
+#! end
+
+pub fun memory_zero(p: *u8, size: u64) {
+    if (p == nil || size == 0) {
+        ret;
+    }
+
+    var i: u64 = 0;
+    for (i < size) {
+        @(p + i) = 0;
+        i = i + 1;
+    }
+}
+
+pub fun memory_fill(p: *u8, value: u8, size: u64) {
+    if (p == nil || size == 0) {
+        ret;
+    }
+
+    var i: u64 = 0;
+    for (i < size) {
+        @(p + i) = value;
+        i = i + 1;
+    }
+}
+
+pub fun memory_copy(dst: *u8, src: *u8, size: u64) {
+    if (dst == nil || src == nil || size == 0) {
+        ret;
+    }
+
+    var i: u64 = 0;
+    for (i < size) {
+        val b: u8 = @(src + i);
+        @(dst + i) = b;
+        i = i + 1;
+    }
+}
+
+#! if (OS == OS_LINUX)
+pub val SYSTEM_PROT_READ:   i32 = 1;
+pub val SYSTEM_PROT_WRITE:  i32 = 2;
+pub val SYSTEM_MAP_PRIVATE: i32 = 2;
+pub val SYSTEM_MAP_ANON:    i32 = 32; # MAP_ANONYMOUS
+
+pub fun allocate(size: u64) *u8 {
+    if (size == 0) {
+        ret nil;
+    }
+
+    ret linux_mmap(nil, size, SYSTEM_PROT_READ | SYSTEM_PROT_WRITE, SYSTEM_MAP_PRIVATE | SYSTEM_MAP_ANON, -1, 0);
+}
+
+pub fun deallocate(p: *u8, size: u64) u8 {
+    if (p == nil || size == 0) {
+        ret 0;
+    }
+
+    val r: i32 = linux_munmap(p, size);
+    if (r == 0) {
+        ret 0;
+    }
+
+    ret 1;
+}
+
+pub fun reallocate(p: *u8, old_size: u64, new_size: u64) *u8 {
+    if (p == nil) {
+        ret allocate(new_size);
+    }
+
+    if (new_size == 0) {
+        deallocate(p, old_size);
+        ret nil;
+    }
+
+    val n: *u8 = allocate(new_size);
+    if (n == nil) {
+        ret nil;
+    }
+
+    var to_copy: u64 = old_size;
+    if (new_size < to_copy) {
+        to_copy = new_size;
+    }
+
+    memory_copy(n, p, to_copy);
+    deallocate(p, old_size);
+
+    ret n;
+}
+#! or (OS == OS_DARWIN)
+pub val SYSTEM_PROT_READ:   i32 = 1;
+pub val SYSTEM_PROT_WRITE:  i32 = 2;
+pub val SYSTEM_MAP_PRIVATE: i32 = 2;
+pub val SYSTEM_MAP_ANON:    i32 = 32; # MAP_ANONYMOUS
+
+pub fun allocate(size: u64) *u8 {
+    if (size == 0) {
+        ret nil;
+    }
+
+    ret darwin_mmap(nil, size, SYSTEM_PROT_READ | SYSTEM_PROT_WRITE, SYSTEM_MAP_PRIVATE | SYSTEM_MAP_ANON, -1, 0);
+}
+
+pub fun deallocate(p: *u8, size: u64) u8 {
+    if (p == nil || size == 0) {
+        ret 0;
+    }
+
+    val r: i32 = darwin_munmap(p, size);
+    if (r == 0) {
+        ret 0;
+    }
+
+    ret 1;
+}
+
+pub fun reallocate(p: *u8, old_size: u64, new_size: u64) *u8 {
+    if (p == nil) {
+        ret allocate(new_size);
+    }
+
+    if (new_size == 0) {
+        deallocate(p, old_size);
+        ret nil;
+    }
+
+    val n: *u8 = allocate(new_size);
+    if (n == nil) {
+        ret nil;
+    }
+
+    var to_copy: u64 = old_size;
+    if (new_size < to_copy) {
+        to_copy = new_size;
+    }
+
+    memory_copy(n, p, to_copy);
+    deallocate(p, old_size);
+
+    ret n;
+}
+#! or (OS == OS_WINDOWS)
+pub fun allocate(size: u64) *u8 {
+    if (size == 0) {
+        ret nil;
+    }
+
+    ret win_virt_alloc(size);
+}
+
+pub fun deallocate(p: *u8, size: u64) u8 {
+    if (p == nil || size == 0) {
+        ret 0;
+    }
+
+    val r: u32 = win_virt_free(p, size);
+    if (r != 0) {
+        ret 0;
+    }
+
+    ret 1;
+}
+
+pub fun reallocate(p: *u8, old_size: u64, new_size: u64) *u8 {
+    if (p == nil) {
+        ret allocate(new_size);
+    }
+
+    if (new_size == 0) {
+        deallocate(p, old_size);
+        ret nil;
+    }
+
+    val n: *u8 = allocate(new_size);
+    if (n == nil) {
+        ret nil;
+    }
+
+    var to_copy: u64 = old_size;
+    if (new_size < to_copy) {
+        to_copy = new_size;
+    }
+
+    memory_copy(n, p, to_copy);
+    deallocate(p, old_size);
+
+    ret n;
+}
+#! end

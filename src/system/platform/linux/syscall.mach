@@ -64,10 +64,10 @@ syscall6:
 	ret
 };
 
-pub ext syscall0: fun(u64) i64;
-pub ext syscall1: fun(u64, u64) i64;
-pub ext syscall2: fun(u64, u64, u64) i64;
-pub ext syscall3: fun(u64, u64, u64, u64) i64;
-pub ext syscall4: fun(u64, u64, u64, u64, u64) i64;
-pub ext syscall5: fun(u64, u64, u64, u64, u64, u64) i64;
-pub ext syscall6: fun(u64, u64, u64, u64, u64, u64, u64) i64;
+pub ext "syscall0" syscall0: fun(u64) i64;
+pub ext "syscall1" syscall1: fun(u64, u64) i64;
+pub ext "syscall2" syscall2: fun(u64, u64, u64) i64;
+pub ext "syscall3" syscall3: fun(u64, u64, u64, u64) i64;
+pub ext "syscall4" syscall4: fun(u64, u64, u64, u64, u64) i64;
+pub ext "syscall5" syscall5: fun(u64, u64, u64, u64, u64, u64) i64;
+pub ext "syscall6" syscall6: fun(u64, u64, u64, u64, u64, u64, u64) i64;

@@ -1,57 +1,153 @@
-use target;
-use std.os.linux.sys;
 use std.types.string;
+
+#! if (OS == OS_LINUX)
+use std.system.platform.linux.sys;
+#! or (OS == OS_DARWIN)
+use std.system.platform.darwin.sys;
+#! or (OS == OS_WINDOWS)
+use std.system.platform.windows.sys;
+#! end
 
 pub val STDIN:  i32 = 0;
 pub val STDOUT: i32 = 1;
 pub val STDERR: i32 = 2;
 
-pub fun print(s: string) {
-    val size: u64 = s.length;
+#! if (OS == OS_LINUX)
 
-    if (size == 0) {
-        ret;
-    }
-
-    if (OS == OS_LINUX) {
-        sys_write(STDOUT, s.data, size);
-    }
+fun platform_write(fd: i32, data: *u8, size: u64) i64 {
+    ret linux_write(fd, data, size);
 }
 
-pub fun write_to(dest: i32, s: string) i64 {
-    val size: u64 = s.length;
-
-    if (size == 0) {
-        ret 0;
-    }
-
-    if (OS == OS_LINUX) {
-        ret sys_write(dest, s.data, size);
-    }
-
-    ret -1;
+fun platform_read(fd: i32, dest: *u8, max: u64) i64 {
+    ret linux_read(fd, dest, max);
 }
 
-pub fun read_into(dest: *u8, max: u64) i64 {
+#! or (OS == OS_DARWIN)
+
+fun platform_write(fd: i32, data: *u8, size: u64) i64 {
+    ret darwin_write(fd, data, size);
+}
+
+fun platform_read(fd: i32, dest: *u8, max: u64) i64 {
+    ret darwin_read(fd, dest, max);
+}
+
+#! or (OS == OS_WINDOWS)
+
+fun windows_handle(fd: i32) *u8 {
+    if (fd == STDIN) {
+        ret win_get_std_handle(WIN_STD_INPUT_HANDLE);
+    }
+    or (fd == STDOUT) {
+        ret win_get_std_handle(WIN_STD_OUTPUT_HANDLE);
+    }
+    or (fd == STDERR) {
+        ret win_get_std_handle(WIN_STD_ERROR_HANDLE);
+    }
+
+    ret nil;
+}
+
+fun platform_write(fd: i32, data: *u8, size: u64) i64 {
+    val handle: *u8 = windows_handle(fd);
+    if (handle == nil || (handle :: i64) == -1) {
+        ret -1;
+    }
+
+    var remaining: u64 = size;
+    var offset: u64 = 0;
+    var total: u64 = 0;
+
+    for (remaining > 0) {
+        var chunk: u64 = remaining;
+        if (chunk > 0xffff_ffff) {
+            chunk = 0xffff_ffff;
+        }
+
+        var written32: u32 = 0;
+        val ok: u32 = win_write_file(handle, (data + offset), chunk :: u32, (?written32) :: *u32);
+        if (ok == 0) {
+            ret -1;
+        }
+
+        val wrote: u64 = written32 :: u64;
+        if (wrote == 0) {
+            brk;
+        }
+
+        offset = offset + wrote;
+        total = total + wrote;
+        remaining = remaining - wrote;
+    }
+
+    ret total :: i64;
+}
+
+fun platform_read(fd: i32, dest: *u8, max: u64) i64 {
+    val handle: *u8 = windows_handle(fd);
+    if (handle == nil || (handle :: i64) == -1) {
+        ret -1;
+    }
+
+    var remaining: u64 = max;
+    var offset: u64 = 0;
+    var total: u64 = 0;
+
+    for (remaining > 0) {
+        var chunk: u64 = remaining;
+        if (chunk > 0xffff_ffff) {
+            chunk = 0xffff_ffff;
+        }
+
+        var read32: u32 = 0;
+        val ok: u32 = win_read_file(handle, (dest + offset), chunk :: u32, (?read32) :: *u32);
+        if (ok == 0) {
+            ret -1;
+        }
+
+        val got: u64 = read32 :: u64;
+        if (got == 0) {
+            brk;
+        }
+
+        offset = offset + got;
+        total = total + got;
+        remaining = remaining - got;
+    }
+
+    ret total :: i64;
+}
+
+#! end
+
+fun write_segment(fd: i32, part: string) i64 {
+    if (part.length == 0) { ret 0; }
+    ret platform_write(fd, part.data, part.length);
+}
+
+pub fun write(fd: i32, pattern: string, ...) i64 {
+    val extra: u64 = va_count();
+    if (extra == 0) {
+        ret write_segment(fd, pattern);
+    }
+
+    val rendered: string = format(pattern, ...);
+    val wrote: i64 = write_segment(fd, rendered);
+    string_free(rendered);
+    ret wrote;
+}
+
+pub fun print(pattern: string, ...) i64 {
+    ret write(STDOUT, pattern, ...);
+}
+
+pub fun read(fd: i32, dest: *u8, max: u64) i64 {
     if (dest == nil || max == 0) {
         ret 0;
     }
-
-    if (OS == OS_LINUX) {
-        ret sys_read(STDIN, dest, max);
-    }
-
-    ret -1;
+    ret platform_read(fd, dest, max);
 }
 
-pub fun read_from(src: i32, dest: *u8, max: u64) i64 {
-    if (dest == nil || max == 0) {
-        ret 0;
-    }
-
-    if (OS == OS_LINUX) {
-        ret sys_read(src, dest, max);
-    }
-
-    ret -1;
+pub fun read_stdin(dest: *u8, max: u64) i64 {
+    ret read(STDIN, dest, max);
 }
