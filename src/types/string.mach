@@ -209,8 +209,9 @@ pub fun format(pattern: string, ...) string {
 				}
 				or {
 					if (spec == 's' :: u8) {
-						val segment: string = va_arg(arg_index)::string;
+						val ptr_s: *string = va_arg(arg_index)::*string;
 						arg_index = arg_index + 1;
+						val segment: string = @ptr_s;
 						ok = append_string(buffer_ptr, length_ptr, capacity_ptr, segment);
 					}
 					or (spec == 'c' :: u8) {
