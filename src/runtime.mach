@@ -1,4 +1,146 @@
-#! if (OS == OS_LINUX)
+#! if (OS == OS_WINDOWS)
+
+use std.system.memory;
+
+pub ext main: fun([][]u8) i64;
+
+val WORD_BYTES:  u64  = 8;
+val WIN_CP_UTF8: u32 = 65001;
+
+ext "C:GetCommandLineW"     win32_get_command_line_w:      fun() *u16;
+ext "C:CommandLineToArgvW"  win32_command_line_to_argv_w:  fun(*u16, *i32) **u16;
+ext "C:LocalFree"           win32_local_free:              fun(*u8) *u8;
+ext "C:WideCharToMultiByte" win32_wide_char_to_multi_byte: fun(u32, u32, *u16, i32, *u8, i32, *u8, *u8) i32;
+ext "C:ExitProcess"         win32_exit_process:            fun(u32);
+
+fun wstring_length(ptr: *u16) u64 {
+    if (ptr == nil) {
+        ret 0;
+    }
+
+    var length: u64 = 0;
+    var cursor: *u16 = ptr;
+    for {
+        val ch: u16 = @cursor;
+        if (ch == 0::u16) {
+            brk;
+        }
+        length = length + 1;
+        cursor = cursor + 1;
+    }
+
+    ret length;
+}
+
+fun utf16_to_utf8(src: *u16) []u8 {
+    if (src == nil) {
+        ret []u8{ nil, 0 };
+    }
+
+    val char_count64: u64 = wstring_length(src);
+    if (char_count64 == 0) {
+        ret []u8{ nil, 0 };
+    }
+
+    val char_count: i32 = char_count64::i32;
+    val required: i32 = win32_wide_char_to_multi_byte(WIN_CP_UTF8, 0, src, char_count, nil, 0, nil, nil);
+    if (required <= 0) {
+        ret []u8{ nil, 0 };
+    }
+
+    val buffer_size: u64 = required::u64;
+    if (buffer_size == 0) {
+        ret []u8{ nil, 0 };
+    }
+
+    val buffer: *u8 = allocate(buffer_size);
+    if (buffer == nil) {
+        ret []u8{ nil, 0 };
+    }
+
+    val written: i32 = win32_wide_char_to_multi_byte(WIN_CP_UTF8, 0, src, char_count, buffer, required, nil, nil);
+    if (written <= 0) {
+        deallocate(buffer, buffer_size);
+        ret []u8{ nil, 0 };
+    }
+
+    ret []u8{ buffer, (written::u64) };
+}
+
+fun build_args(argc: u64, argv_wide: **u16) [][]u8 {
+    if (argc == 0 || argv_wide == nil) {
+        ret [][]u8{ nil, 0 };
+    }
+
+    val entry_size:  u64 = size_of([]u8{ nil, 0 });
+    val total_bytes: u64 = argc * entry_size;
+
+    val storage_bytes: *u8 = allocate(total_bytes);
+    if (storage_bytes == nil) {
+        ret [][]u8{ nil, 0 };
+    }
+
+    val storage: *u8 = storage_bytes;
+
+    var index: u64 = 0;
+    for (index < argc) {
+        val ptr_ptr: **u16 = argv_wide + index;
+        val wide_arg: *u16 = @ptr_ptr;
+
+        val utf8: []u8 = utf16_to_utf8(wide_arg);
+
+        val slot_offset: u64 = index * entry_size;
+        val slot_addr:   *u8 = storage + slot_offset;
+
+        val data_slot: **u8 = slot_addr::**u8;
+        @data_slot = utf8.data;
+
+        val length_addr: *u8  = slot_addr + WORD_BYTES;
+        val length_slot: *u64 = length_addr::*u64;
+        @length_slot = utf8.length;
+        index = index + 1;
+    }
+
+    val slices: *[]u8 = storage_bytes::*[]u8;
+    ret [][]u8{ slices, argc };
+}
+
+fun collect_windows_args() [][]u8 {
+    val cmd_line:  *u16  = win32_get_command_line_w();
+    var argc32:    i32   = 0;
+    val argv_wide: **u16 = win32_command_line_to_argv_w(cmd_line, (?argc32)::*i32);
+
+    if (argv_wide == nil || argc32 <= 0) {
+        if (argv_wide != nil) {
+            win32_local_free(argv_wide::*u8);
+        }
+        ret [][]u8{ nil, 0 };
+    }
+
+    val argc: u64    = argc32::u64;
+    val args: [][]u8 = build_args(argc, argv_wide);
+    win32_local_free(argv_wide::*u8);
+    ret args;
+}
+
+fun mach_runtime_start() {
+    val args:      [][]u8   = collect_windows_args();
+    val exit_code: i64      = main(args);
+    win32_exit_process(exit_code::u32);
+}
+
+asm {
+.text
+.globl _start
+_start:
+    and $-16, %rsp
+    sub $32, %rsp
+    call mach_runtime_start
+    hlt
+};
+
+#! or (OS == OS_LINUX)
+
 use std.system.memory;
 
 pub ext main: fun([][]u8) i64;
@@ -6,19 +148,19 @@ pub ext main: fun([][]u8) i64;
 val WORD_BYTES: u64 = 8;
 
 fun load_word(base: *u8, index: u64) u64 {
-    val offset: u64  = index * WORD_BYTES;
-    val addr:   *u8  = base + offset;
+    val offset: u64 = index * WORD_BYTES;
+    val addr:   *u8 = base + offset;
     val slot:   *u64 = addr::*u64;
     ret @slot;
 }
 
-fun cstring_length(p: *u8) u64 {
-    if (p == nil) {
+fun cstring_length(ptr: *u8) u64 {
+    if (ptr == nil) {
         ret 0;
     }
 
     var length: u64 = 0;
-    var cursor: *u8 = p;
+    var cursor: *u8 = ptr;
     for {
         val ch: u8 = @cursor;
         if (ch == 0::u8) {
@@ -44,10 +186,8 @@ fun build_args(argc: u64, stack_bytes: *u8) [][]u8 {
         ret [][]u8{ nil, 0 };
     }
 
-    val argv_base:       *u8 = stack_bytes + WORD_BYTES;
-    val storage:         *u8 = storage_bytes;
-    val slice_size:      u64 = entry_size;
-    val data_field_size: u64 = WORD_BYTES;
+    val argv_base: *u8 = stack_bytes + WORD_BYTES;
+    val storage:   *u8 = storage_bytes;
 
     var index: u64 = 0;
     for (index < argc) {
@@ -55,13 +195,13 @@ fun build_args(argc: u64, stack_bytes: *u8) [][]u8 {
         val arg_ptr: *u8 = raw::*u8;
         val length:  u64 = cstring_length(arg_ptr);
 
-        val slot_offset: u64 = index * slice_size;
+        val slot_offset: u64 = index * entry_size;
         val slot_addr:   *u8 = storage + slot_offset;
 
         val data_slot: **u8 = slot_addr::**u8;
         @data_slot = arg_ptr;
 
-        val length_addr: *u8  = slot_addr + data_field_size;
+        val length_addr: *u8  = slot_addr + WORD_BYTES;
         val length_slot: *u64 = length_addr::*u64;
         @length_slot = length;
         index = index + 1;
@@ -71,7 +211,7 @@ fun build_args(argc: u64, stack_bytes: *u8) [][]u8 {
     ret [][]u8{ slices, argc };
 }
 
-fun __mach_runtime_entry(stack_bytes: *u8) i64 {
+fun mach_runtime_entry(stack_bytes: *u8) i64 {
     val argc_word: *u64 = stack_bytes::*u64;
     val argc:      u64  = @argc_word;
 
@@ -84,9 +224,101 @@ asm {
 .globl _start
 _start:
     mov %rsp, %rdi
-    call __mach_runtime_entry
+    call mach_runtime_entry
     mov %rax, %rdi
     mov $60, %rax
+    syscall
+    hlt
+};
+
+#! or (OS == OS_DARWIN)
+
+use std.system.memory;
+
+pub ext main: fun([][]u8) i64;
+
+val WORD_BYTES: u64 = 8;
+
+fun load_word(base: *u8, index: u64) u64 {
+    val offset: u64 = index * WORD_BYTES;
+    val addr:   *u8 = base + offset;
+    val slot:   *u64 = addr::*u64;
+    ret @slot;
+}
+
+fun cstring_length(ptr: *u8) u64 {
+    if (ptr == nil) {
+        ret 0;
+    }
+
+    var length: u64 = 0;
+    var cursor: *u8 = ptr;
+    for {
+        val ch: u8 = @cursor;
+        if (ch == 0::u8) {
+            brk;
+        }
+        length = length + 1;
+        cursor = cursor + 1;
+    }
+
+    ret length;
+}
+
+fun build_args(argc: u64, stack_bytes: *u8) [][]u8 {
+    if (argc == 0) {
+        ret [][]u8{ nil, 0 };
+    }
+
+    val entry_size:  u64 = size_of([]u8{ nil, 0 });
+    val total_bytes: u64 = argc * entry_size;
+
+    val storage_bytes: *u8 = allocate(total_bytes);
+    if (storage_bytes == nil) {
+        ret [][]u8{ nil, 0 };
+    }
+
+    val argv_base: *u8 = stack_bytes + WORD_BYTES;
+    val storage:   *u8 = storage_bytes;
+
+    var index: u64 = 0;
+    for (index < argc) {
+        val raw:     u64 = load_word(argv_base, index);
+        val arg_ptr: *u8 = raw::*u8;
+        val length:  u64 = cstring_length(arg_ptr);
+
+        val slot_offset: u64 = index * entry_size;
+        val slot_addr:   *u8 = storage + slot_offset;
+
+        val data_slot: **u8 = slot_addr::**u8;
+        @data_slot = arg_ptr;
+
+        val length_addr: *u8  = slot_addr + WORD_BYTES;
+        val length_slot: *u64 = length_addr::*u64;
+        @length_slot = length;
+        index = index + 1;
+    }
+
+    val slices: *[]u8 = storage_bytes::*[]u8;
+    ret [][]u8{ slices, argc };
+}
+
+fun mach_runtime_entry(stack_bytes: *u8) i64 {
+    val argc_word: *u64 = stack_bytes::*u64;
+    val argc:      u64  = @argc_word;
+
+    val args: [][]u8 = build_args(argc, stack_bytes);
+    ret main(args);
+}
+
+asm {
+.text
+.globl _start
+_start:
+    mov %rsp, %rdi
+    call mach_runtime_entry
+    mov %rax, %rdi
+    mov $0x2000001, %rax
     syscall
     hlt
 };
