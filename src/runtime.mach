@@ -1,0 +1,94 @@
+#! if (OS == OS_LINUX)
+use std.system.memory;
+
+pub ext main: fun([][]u8) i64;
+
+val WORD_BYTES: u64 = 8;
+
+fun load_word(base: *u8, index: u64) u64 {
+    val offset: u64  = index * WORD_BYTES;
+    val addr:   *u8  = base + offset;
+    val slot:   *u64 = addr::*u64;
+    ret @slot;
+}
+
+fun cstring_length(p: *u8) u64 {
+    if (p == nil) {
+        ret 0;
+    }
+
+    var length: u64 = 0;
+    var cursor: *u8 = p;
+    for {
+        val ch: u8 = @cursor;
+        if (ch == 0::u8) {
+            brk;
+        }
+        length = length + 1;
+        cursor = cursor + 1;
+    }
+
+    ret length;
+}
+
+fun build_args(argc: u64, stack_bytes: *u8) [][]u8 {
+    if (argc == 0) {
+        ret [][]u8{ nil, 0 };
+    }
+
+    val entry_size:  u64 = size_of([]u8{ nil, 0 });
+    val total_bytes: u64 = argc * entry_size;
+
+    val storage_bytes: *u8 = allocate(total_bytes);
+    if (storage_bytes == nil) {
+        ret [][]u8{ nil, 0 };
+    }
+
+    val argv_base:       *u8 = stack_bytes + WORD_BYTES;
+    val storage:         *u8 = storage_bytes;
+    val slice_size:      u64 = entry_size;
+    val data_field_size: u64 = WORD_BYTES;
+
+    var index: u64 = 0;
+    for (index < argc) {
+        val raw:     u64 = load_word(argv_base, index);
+        val arg_ptr: *u8 = raw::*u8;
+        val length:  u64 = cstring_length(arg_ptr);
+
+        val slot_offset: u64 = index * slice_size;
+        val slot_addr:   *u8 = storage + slot_offset;
+
+        val data_slot: **u8 = slot_addr::**u8;
+        @data_slot = arg_ptr;
+
+        val length_addr: *u8  = slot_addr + data_field_size;
+        val length_slot: *u64 = length_addr::*u64;
+        @length_slot = length;
+        index = index + 1;
+    }
+
+    val slices: *[]u8 = storage_bytes::*[]u8;
+    ret [][]u8{ slices, argc };
+}
+
+fun __mach_runtime_entry(stack_bytes: *u8) i64 {
+    val argc_word: *u64 = stack_bytes::*u64;
+    val argc:      u64  = @argc_word;
+
+    val args: [][]u8 = build_args(argc, stack_bytes);
+    ret main(args);
+}
+
+asm {
+.text
+.globl _start
+_start:
+    mov %rsp, %rdi
+    call __mach_runtime_entry
+    mov %rax, %rdi
+    mov $60, %rax
+    syscall
+    hlt
+};
+
+#! end

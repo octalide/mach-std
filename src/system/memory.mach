@@ -18,6 +18,21 @@ pub fun memory_zero(p: *u8, size: u64) {
     }
 }
 
+pub fun memset(dest: *u8, value: i32, count: u64) *u8 {
+    if (dest == nil || count == 0) {
+        ret dest;
+    }
+
+    var i: u64 = 0;
+    val byte: u8 = (value :: u8);
+    for (i < count) {
+        @(dest + i) = byte;
+        i = i + 1;
+    }
+
+    ret dest;
+}
+
 pub fun memory_fill(p: *u8, value: u8, size: u64) {
     if (p == nil || size == 0) {
         ret;
@@ -41,6 +56,21 @@ pub fun memory_copy(dst: *u8, src: *u8, size: u64) {
         @(dst + i) = b;
         i = i + 1;
     }
+}
+
+pub fun memcpy(dst: *u8, src: *u8, count: u64) *u8 {
+    if (dst == nil || src == nil || count == 0) {
+        ret dst;
+    }
+
+    var i: u64 = 0;
+    for (i < count) {
+        val b: u8 = @(src + i);
+        @(dst + i) = b;
+        i = i + 1;
+    }
+
+    ret dst;
 }
 
 #! if (OS == OS_LINUX)
