@@ -1,4 +1,5 @@
 use std.system.memory;
+use std.types.bool;
 
 pub def char:   u8;
 pub def string: []char;
@@ -150,6 +151,22 @@ fun finalize_buffer(buffer: *u8, capacity: u64, length: u64) string {
 	}
 
 	ret []u8{ buffer, length };
+}
+
+pub fun string_equal(a: string, b: string) bool {
+	if (a.length != b.length)           { ret false; }
+	if (a.length == 0)                  { ret true; }
+	if (a.data == nil || b.data == nil) { ret false; }
+
+	var i: u64 = 0;
+	for (i < a.length) {
+		val ac: u8 = @(a.data + i);
+		val bc: u8 = @(b.data + i);
+		if (ac != bc) { ret false; }
+		i = i + 1;
+	}
+
+	ret true;
 }
 
 pub fun string_free(value: string) {

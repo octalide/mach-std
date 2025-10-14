@@ -1,3 +1,5 @@
+use std.io.console;
+
 #! if (OS == OS_WINDOWS)
 
 use std.system.memory;
@@ -126,7 +128,7 @@ fun collect_windows_args() [][]u8 {
 fun mach_runtime_start() {
     val args:      [][]u8   = collect_windows_args();
     val exit_code: i64      = main(args);
-    win32_exit_process(exit_code::u32);
+    mach_runtime_exit(exit_code);
 }
 
 asm {
@@ -138,6 +140,11 @@ _start:
     call mach_runtime_start
     hlt
 };
+
+pub fun mach_runtime_exit(code: i64) i64 {
+    win32_exit_process(code::u32);
+    ret 0;
+}
 
 #! or (OS == OS_LINUX)
 
@@ -219,6 +226,8 @@ fun mach_runtime_entry(stack_bytes: *u8) i64 {
     ret main(args);
 }
 
+pub ext "mach_runtime_exit" mach_runtime_exit: fun(i64);
+
 asm {
 .text
 .globl _start
@@ -226,6 +235,14 @@ _start:
     mov %rsp, %rdi
     call mach_runtime_entry
     mov %rax, %rdi
+    call mach_runtime_exit
+    hlt
+};
+
+asm {
+.text
+.globl mach_runtime_exit
+mach_runtime_exit:
     mov $60, %rax
     syscall
     hlt
@@ -311,6 +328,8 @@ fun mach_runtime_entry(stack_bytes: *u8) i64 {
     ret main(args);
 }
 
+pub ext "mach_runtime_exit" mach_runtime_exit: fun(i64);
+
 asm {
 .text
 .globl _start
@@ -318,9 +337,30 @@ _start:
     mov %rsp, %rdi
     call mach_runtime_entry
     mov %rax, %rdi
+    call mach_runtime_exit
+    hlt
+;
+.globl mach_runtime_exit
+mach_runtime_exit:
     mov $0x2000001, %rax
     syscall
     hlt
 };
 
 #! end
+
+pub fun mach_panic(message: []u8) i64 {
+    if (message.data == nil || message.length == 0) {
+        write(STDERR, "panic: abort\n");
+    }
+    or {
+        write(STDERR, "panic: %s\n", message);
+    }
+
+    mach_runtime_exit(255);
+    ret 255;
+}
+
+pub fun abort() i64 {
+    ret mach_panic("abort");
+}
