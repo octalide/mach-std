@@ -141,6 +141,10 @@ pub fun print(pattern: string, ...) i64 {
     ret write(STDOUT, pattern, ...);
 }
 
+pub fun error(pattern: string, ...) i64 {
+    ret write(STDERR, pattern, ...);
+}
+
 pub fun read(fd: i32, dest: *u8, max: u64) i64 {
     if (dest == nil || max == 0) {
         ret 0;

@@ -169,6 +169,103 @@ pub fun string_equal(a: string, b: string) bool {
 	ret true;
 }
 
+pub fun string_copy(value: string) string {
+	if (value.length == 0 || value.data == nil) { ret []u8{ nil, 0 }; }
+
+	val fresh: *u8 = allocate(value.length);
+	if (fresh == nil) { ret []u8{ nil, 0 }; }
+
+	memory_copy(fresh, value.data, value.length);
+	ret []u8{ fresh, value.length };
+}
+
+pub fun string_ends_with(value: string, suffix: string) bool {
+	if (suffix.length == 0) { ret true; }
+	if (value.length < suffix.length) { ret false; }
+	if (value.data == nil || suffix.data == nil) { ret false; }
+
+	val start: u64 = value.length - suffix.length;
+	var i: u64 = 0;
+	for (i < suffix.length) {
+		val vc: u8 = @(value.data + start + i);
+		val sc: u8 = @(suffix.data + i);
+		if (vc != sc) { ret false; }
+		i = i + 1;
+	}
+
+	ret true;
+}
+
+pub fun string_starts_with(value: string, prefix: string) bool {
+	if (prefix.length == 0) { ret true; }
+	if (value.length < prefix.length) { ret false; }
+	if (value.data == nil || prefix.data == nil) { ret false; }
+
+	var i: u64 = 0;
+	for (i < prefix.length) {
+		val vc: u8 = @(value.data + i);
+		val pc: u8 = @(prefix.data + i);
+		if (vc != pc) { ret false; }
+		i = i + 1;
+	}
+
+	ret true;
+}
+
+pub fun string_contains(value: string, segment: string) bool {
+	if (segment.length == 0) { ret true; }
+	if (value.length < segment.length) { ret false; }
+	if (value.data == nil || segment.data == nil) { ret false; }
+
+	var i: u64 = 0;
+	val limit: u64 = value.length - segment.length + 1;
+	for (i < limit) {
+		var j: u64 = 0;
+		for (j < segment.length) {
+			val vc: u8 = @(value.data + i + j);
+			val sc: u8 = @(segment.data + j);
+			if (vc != sc) { brk; }
+			j = j + 1;
+		}
+		if (j == segment.length) { ret true; }
+		i = i + 1;
+	}
+
+	ret false;
+}
+
+pub fun string_last_index_of(value: string, ch: u8) i64 {
+	if (value.length == 0 || value.data == nil) { ret -1; }
+
+	var i: i64 = (value.length::i64) - 1;
+	for (i >= 0) {
+		val current: u8 = @(value.data + (i::u64));
+		if (current == ch) { ret i; }
+		i = i - 1;
+	}
+
+	ret -1;
+}
+
+pub fun string_substring(value: string, start: u64, end: u64) string {
+	if (value.length == 0 || value.data == nil) { ret []u8{ nil, 0 }; }
+	if (start >= value.length) { ret []u8{ nil, 0 }; }
+	if (end > value.length)   { end = value.length; }
+	if (start >= end)         { ret []u8{ nil, 0 }; }
+
+	val size: u64 = end - start;
+	val fresh: *u8 = allocate(size);
+	if (fresh == nil) { ret []u8{ nil, 0 }; }
+
+	memory_copy(fresh, value.data + start, size);
+	ret []u8{ fresh, size };
+}
+
+pub fun string_length(value: string) u64 {
+	if (value.data == nil) { ret 0; }
+	ret value.length;
+}
+
 pub fun string_free(value: string) {
 	if (value.data == nil || value.length == 0) { ret; }
 	deallocate(value.data, value.length);
