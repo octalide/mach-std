@@ -111,6 +111,52 @@ fun append_hex(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, value: u64, uppercas
 	ret append_hex_recursive(buf_ptr, len_ptr, cap_ptr, value, uppercase);
 }
 
+fun append_float(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, value: f64, precision: u64) u8 {
+	# normalize special cases
+	if (value != value) {
+		val nan_text: []u8 = "nan";
+		ret append_slice(buf_ptr, len_ptr, cap_ptr, nan_text.data, nan_text.length);
+	}
+
+	var local_precision: u64 = precision;
+	if (local_precision == 0) {
+		local_precision = 6;
+	}
+
+	var local_value: f64 = value;
+	if (local_value < 0.0) {
+		if (append_byte(buf_ptr, len_ptr, cap_ptr, '-' :: u8) == 0) { ret 0; }
+		local_value = -local_value;
+	}
+
+	val integral_part: u64 = local_value :: u64;
+	if (append_unsigned(buf_ptr, len_ptr, cap_ptr, integral_part) == 0) {
+		ret 0;
+	}
+
+	if (append_byte(buf_ptr, len_ptr, cap_ptr, '.' :: u8) == 0) {
+		ret 0;
+	}
+
+	var fractional: f64 = local_value - (integral_part :: f64);
+	var index: u64 = 0;
+	for (index < local_precision) {
+		fractional = fractional * 10.0;
+		val digit: u64 = fractional :: u64;
+		if (append_byte(buf_ptr, len_ptr, cap_ptr, ('0' :: u8) + (digit :: u8)) == 0) {
+			ret 0;
+		}
+		fractional = fractional - (digit :: f64);
+		index = index + 1;
+	}
+
+	ret 1;
+}
+
+fun append_float_default(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, value: f64) u8 {
+	ret append_float(buf_ptr, len_ptr, cap_ptr, value, 6);
+}
+
 fun append_bool(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, flag: u8) u8 {
 	val true_text: []u8 = "true";
 	val false_text: []u8 = "false";
@@ -358,6 +404,16 @@ pub fun format(pattern: string, ...) string {
 						val ptr_X: *u64 = va_arg(arg_index)::*u64;
 						arg_index = arg_index + 1;
 						ok = append_hex(buffer_ptr, length_ptr, capacity_ptr, @ptr_X, 1 :: u8);
+					}
+					or (spec == 'f' :: u8) {
+						val ptr_f: *f64 = va_arg(arg_index)::*f64;
+						arg_index = arg_index + 1;
+						ok = append_float_default(buffer_ptr, length_ptr, capacity_ptr, @ptr_f);
+					}
+					or (spec == 'F' :: u8) {
+						val ptr_F: *f64 = va_arg(arg_index)::*f64;
+						arg_index = arg_index + 1;
+						ok = append_float_default(buffer_ptr, length_ptr, capacity_ptr, @ptr_F);
 					}
 					or (spec == 'b' :: u8) {
 						val ptr_b: *u8 = va_arg(arg_index)::*u8;
