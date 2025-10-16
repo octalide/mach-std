@@ -1,10 +1,10 @@
-#! if (OS == OS_LINUX)
+#@if (OS == OS_LINUX)
 use std.system.platform.linux.sys;
-#! or (OS == OS_DARWIN)
+#@or (OS == OS_DARWIN)
 use std.system.platform.darwin.sys;
-#! or (OS == OS_WINDOWS)
+#@or (OS == OS_WINDOWS)
 use std.system.platform.windows.sys;
-#! end
+#@end
 
 pub fun memory_zero(p: *u8, size: u64) {
     if (p == nil || size == 0) {
@@ -18,6 +18,7 @@ pub fun memory_zero(p: *u8, size: u64) {
     }
 }
 
+#@symbol("memset")
 pub fun memset(dest: *u8, value: i32, count: u64) *u8 {
     if (dest == nil || count == 0) {
         ret dest;
@@ -58,6 +59,7 @@ pub fun memory_copy(dst: *u8, src: *u8, size: u64) {
     }
 }
 
+#@symbol("memcpy")
 pub fun memcpy(dst: *u8, src: *u8, count: u64) *u8 {
     if (dst == nil || src == nil || count == 0) {
         ret dst;
@@ -73,7 +75,7 @@ pub fun memcpy(dst: *u8, src: *u8, count: u64) *u8 {
     ret dst;
 }
 
-#! if (OS == OS_LINUX)
+#@if (OS == OS_LINUX)
 pub val SYSTEM_PROT_READ:   i32 = 1;
 pub val SYSTEM_PROT_WRITE:  i32 = 2;
 pub val SYSTEM_MAP_PRIVATE: i32 = 2;
@@ -125,7 +127,7 @@ pub fun reallocate(p: *u8, old_size: u64, new_size: u64) *u8 {
 
     ret n;
 }
-#! or (OS == OS_DARWIN)
+#@or (OS == OS_DARWIN)
 pub val SYSTEM_PROT_READ:   i32 = 1;
 pub val SYSTEM_PROT_WRITE:  i32 = 2;
 pub val SYSTEM_MAP_PRIVATE: i32 = 2;
@@ -177,7 +179,7 @@ pub fun reallocate(p: *u8, old_size: u64, new_size: u64) *u8 {
 
     ret n;
 }
-#! or (OS == OS_WINDOWS)
+#@or (OS == OS_WINDOWS)
 pub fun allocate(size: u64) *u8 {
     if (size == 0) {
         ret nil;
@@ -224,4 +226,4 @@ pub fun reallocate(p: *u8, old_size: u64, new_size: u64) *u8 {
 
     ret n;
 }
-#! end
+#@end

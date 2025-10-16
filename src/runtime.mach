@@ -1,6 +1,6 @@
 use std.io.console;
 
-#! if (OS == OS_WINDOWS)
+#@if (OS == OS_WINDOWS)
 
 use std.system.memory;
 
@@ -125,6 +125,7 @@ fun collect_windows_args() [][]u8 {
     ret args;
 }
 
+#@symbol("mach_runtime_start")
 fun mach_runtime_start() {
     val args:      [][]u8   = collect_windows_args();
     val exit_code: i64      = main(args);
@@ -141,12 +142,13 @@ _start:
     hlt
 };
 
+#@symbol("mach_runtime_exit")
 pub fun mach_runtime_exit(code: i64) i64 {
     win32_exit_process(code::u32);
     ret 0;
 }
 
-#! or (OS == OS_LINUX)
+#@or (OS == OS_LINUX)
 
 use std.system.memory;
 
@@ -218,6 +220,7 @@ fun build_args(argc: u64, stack_bytes: *u8) [][]u8 {
     ret [][]u8{ slices, argc };
 }
 
+#@symbol("mach_runtime_entry")
 fun mach_runtime_entry(stack_bytes: *u8) i64 {
     val argc_word: *u64 = stack_bytes::*u64;
     val argc:      u64  = @argc_word;
@@ -248,7 +251,7 @@ mach_runtime_exit:
     hlt
 };
 
-#! or (OS == OS_DARWIN)
+#@or (OS == OS_DARWIN)
 
 use std.system.memory;
 
@@ -320,6 +323,7 @@ fun build_args(argc: u64, stack_bytes: *u8) [][]u8 {
     ret [][]u8{ slices, argc };
 }
 
+#@symbol("mach_runtime_entry")
 fun mach_runtime_entry(stack_bytes: *u8) i64 {
     val argc_word: *u64 = stack_bytes::*u64;
     val argc:      u64  = @argc_word;
@@ -347,7 +351,7 @@ mach_runtime_exit:
     hlt
 };
 
-#! end
+#@end
 
 pub fun mach_panic(message: []u8) i64 {
     if (message.data == nil || message.length == 0) {

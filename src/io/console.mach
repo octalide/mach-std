@@ -1,18 +1,18 @@
 use std.types.string;
 
-#! if (OS == OS_LINUX)
+#@if (OS == OS_LINUX)
 use std.system.platform.linux.sys;
-#! or (OS == OS_DARWIN)
+#@or (OS == OS_DARWIN)
 use std.system.platform.darwin.sys;
-#! or (OS == OS_WINDOWS)
+#@or (OS == OS_WINDOWS)
 use std.system.platform.windows.sys;
-#! end
+#@end
 
 pub val STDIN:  i32 = 0;
 pub val STDOUT: i32 = 1;
 pub val STDERR: i32 = 2;
 
-#! if (OS == OS_LINUX)
+#@if (OS == OS_LINUX)
 
 fun platform_write(fd: i32, data: *u8, size: u64) i64 {
     ret linux_write(fd, data, size);
@@ -22,7 +22,7 @@ fun platform_read(fd: i32, dest: *u8, max: u64) i64 {
     ret linux_read(fd, dest, max);
 }
 
-#! or (OS == OS_DARWIN)
+#@or (OS == OS_DARWIN)
 
 fun platform_write(fd: i32, data: *u8, size: u64) i64 {
     ret darwin_write(fd, data, size);
@@ -32,7 +32,7 @@ fun platform_read(fd: i32, dest: *u8, max: u64) i64 {
     ret darwin_read(fd, dest, max);
 }
 
-#! or (OS == OS_WINDOWS)
+#@or (OS == OS_WINDOWS)
 
 fun windows_handle(fd: i32) *u8 {
     if (fd == STDIN) {
@@ -118,7 +118,7 @@ fun platform_read(fd: i32, dest: *u8, max: u64) i64 {
     ret total :: i64;
 }
 
-#! end
+#@end
 
 fun write_segment(fd: i32, part: string) i64 {
     if (part.length == 0) { ret 0; }

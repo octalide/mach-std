@@ -1,15 +1,15 @@
 use std.system.memory;
 use std.types.string;
 
-#! if (OS == OS_LINUX)
+#@if (OS == OS_LINUX)
 use std.system.platform.linux.sys;
-#! or (OS == OS_DARWIN)
+#@or (OS == OS_DARWIN)
 use std.system.platform.darwin.sys;
-#! or (OS == OS_WINDOWS)
+#@or (OS == OS_WINDOWS)
 use std.system.platform.windows.sys;
-#! end
+#@end
 
-#! if ((OS == OS_LINUX) || (OS == OS_DARWIN))
+#@if ((OS == OS_LINUX) || (OS == OS_DARWIN))
 fun path_to_cstr(path: string) []u8 {
     val size: u64 = path.length + 1;
     val buf: *u8 = allocate(size);
@@ -25,9 +25,9 @@ fun path_to_cstr(path: string) []u8 {
     ret []u8{ buf, size };
 }
 
-#! end
+#@end
 
-#! if (OS == OS_WINDOWS)
+#@if (OS == OS_WINDOWS)
 fun path_to_utf16(path: string) []u16 {
     val units: u64 = path.length + 1;
     val bytes: u64 = units * 2;
@@ -52,7 +52,7 @@ fun path_to_utf16(path: string) []u16 {
 
     ret []u16{ buf16, units };
 }
-#! end
+#@end
 
 # basic posix flags subset for open(2)
 pub val O_RDONLY: i32 = 0;
@@ -65,7 +65,7 @@ pub val O_TRUNC:  i32 = 512;  # 0o1000
 pub val MODE_644: i32 = 420;  # 0644
 pub val MODE_600: i32 = 384;  # 0600
 
-#! if (OS == OS_LINUX)
+#@if (OS == OS_LINUX)
 
 pub fun fs_read_all(path: string) []u8 {
     val c_path: []u8 = path_to_cstr(path);
@@ -154,7 +154,7 @@ pub fun fs_write_all(path: string, data: []u8) i32 {
     ret 0;
 }
 
-#! or (OS == OS_DARWIN)
+#@or (OS == OS_DARWIN)
 
 pub fun fs_read_all(path: string) []u8 {
     val c_path: []u8 = path_to_cstr(path);
@@ -243,7 +243,7 @@ pub fun fs_write_all(path: string, data: []u8) i32 {
     ret 0;
 }
 
-#! or (OS == OS_WINDOWS)
+#@or (OS == OS_WINDOWS)
 
 pub fun fs_read_all(path: string) []u8 {
     val w_path: []u16 = path_to_utf16(path);
@@ -339,4 +339,4 @@ pub fun fs_write_all(path: string, data: []u8) i32 {
     ret 0;
 }
 
-#! end
+#@end

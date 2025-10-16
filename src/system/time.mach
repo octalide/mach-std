@@ -1,24 +1,24 @@
-#! if (OS == OS_LINUX)
+#@if (OS == OS_LINUX)
 use std.system.platform.linux.sys;
-#! or (OS == OS_DARWIN)
+#@or (OS == OS_DARWIN)
 use std.system.platform.darwin.sys;
-#! or (OS == OS_WINDOWS)
+#@or (OS == OS_WINDOWS)
 use std.system.platform.windows.sys;
-#! end
+#@end
 
-#! if (OS != OS_WINDOWS)
+#@if (OS != OS_WINDOWS)
 str Timespec {
     tv_sec:  i64;
     tv_nsec: i64;
 }
-#! end
+#@end
 
 pub val SECONDS: u64 = 1000000000;
 pub val MILLISECONDS: u64 = 1000000;
 pub val MICROSECONDS: u64 = 1000;
 pub val NANOSECONDS: u64 = 1;
 
-#! if (OS == OS_LINUX)
+#@if (OS == OS_LINUX)
 pub val SYSTEM_CLOCK_MONOTONIC: i32 = 1;
 
 pub fun now() u64 {
@@ -33,7 +33,7 @@ pub fun now() u64 {
 
     ret (ts.tv_sec :: u64) * SECONDS + (ts.tv_nsec :: u64);
 }
-#! or (OS == OS_DARWIN)
+#@or (OS == OS_DARWIN)
 pub val SYSTEM_CLOCK_MONOTONIC: i32 = 6;
 
 pub fun now() u64 {
@@ -48,7 +48,7 @@ pub fun now() u64 {
 
     ret (ts.tv_sec :: u64) * SECONDS + (ts.tv_nsec :: u64);
 }
-#! or (OS == OS_WINDOWS)
+#@or (OS == OS_WINDOWS)
 pub val SYSTEM_CLOCK_MONOTONIC: i32 = 1;
 
 var win_perf_freq: u64;
@@ -84,4 +84,4 @@ pub fun now() u64 {
     val value: u64 = counter :: u64;
     ret (value * SECONDS) / win_perf_freq;
 }
-#! end
+#@end
