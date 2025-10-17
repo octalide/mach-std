@@ -1,4 +1,5 @@
-use std.types.string;
+use          std.types.string;
+use strings: std.types.util.strings;
 
 #@if (OS == OS_LINUX)
 use sys: std.system.platform.linux.sys;
@@ -104,9 +105,9 @@ pub fun write_to(fd: i32, pattern: string, ...) i64 {
         ret write_segment(fd, pattern);
     }
 
-    val rendered: string = format(pattern, ...);
+    val rendered: string = strings.format(pattern, ...);
     val wrote: i64 = write_segment(fd, rendered);
-    string_free(rendered);
+    strings.free(rendered);
     ret wrote;
 }
 

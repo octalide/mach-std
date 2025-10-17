@@ -1,5 +1,5 @@
 use console: std.io.console;
-use mem: std.system.memory;
+use mem:     std.system.memory;
 
 pub ext main: fun([][]u8) i64;
 
