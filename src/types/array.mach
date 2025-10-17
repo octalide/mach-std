@@ -1,43 +1,43 @@
 use mem: std.system.memory;
 
-fun array_header_size() u64 {
+fun header_size() u64 {
     ret (2 :: u64) * size_of(0 :: u64);
 }
 
-fun array_raw_from_data(data: *u8) *u8 {
+fun raw_from_data(data: *u8) *u8 {
     if (data == nil) { ret nil; }
-    ret data - array_header_size();
+    ret data - header_size();
 }
 
-fun array_raw_from_slice<T>(arr: []T) *u8 {
+fun raw_from_slice<T>(arr: []T) *u8 {
     if (arr.data == nil) { ret nil; }
-    ret array_raw_from_data((arr.data :: *u8));
+    ret raw_from_data((arr.data :: *u8));
 }
 
-fun array_element_stride<T>() u64 {
+fun element_stride<T>() u64 {
     var ptr: *T = nil;
     ret size_of(@ptr);
 }
 
-fun array_data_from_raw(raw: *u8) *u8 {
+fun data_from_raw(raw: *u8) *u8 {
     if (raw == nil) { ret nil; }
-    ret raw + array_header_size();
+    ret raw + header_size();
 }
 
-fun array_read_capacity(raw: *u8) u64 {
+fun read_capacity(raw: *u8) u64 {
     if (raw == nil) { ret 0; }
     val cap_ptr: *u64 = (raw :: *u64);
     ret @cap_ptr;
 }
 
-fun array_read_stride(raw: *u8) u64 {
+fun read_stride(raw: *u8) u64 {
     if (raw == nil) { ret 0; }
     val offset: u64 = size_of(0 :: u64);
     val stride_ptr: *u64 = ((raw + offset) :: *u64);
     ret @stride_ptr;
 }
 
-fun array_write_header(raw: *u8, capacity: u64, stride: u64) {
+fun write_header(raw: *u8, capacity: u64, stride: u64) {
     val cap_ptr: *u64 = (raw :: *u64);
     @cap_ptr = capacity;
     val offset: u64 = size_of(0 :: u64);
@@ -45,30 +45,30 @@ fun array_write_header(raw: *u8, capacity: u64, stride: u64) {
     @stride_ptr = stride;
 }
 
-fun array_bytes(stride: u64, capacity: u64) u64 {
-    if (stride == 0 || capacity == 0) { ret array_header_size(); }
-    val header: u64 = array_header_size();
+fun bytes(stride: u64, capacity: u64) u64 {
+    if (stride == 0 || capacity == 0) { ret header_size(); }
+    val header: u64 = header_size();
     val max_bytes: u64 = 0xffff_ffff_ffff_ffff;
     if (stride > 0 && capacity > ((max_bytes - header) / stride)) { ret 0; }
     ret header + (stride * capacity);
 }
 
-fun array_reserve_internal<T>(arr: []T, min_capacity: u64) []T {
-    var stride: u64 = array_element_stride<T>();
+fun reserve_internal<T>(arr: []T, min_capacity: u64) []T {
+    var stride: u64 = element_stride<T>();
     if (stride == 0) {
         ret []T{ arr.data, arr.length };
     }
 
-    var raw: *u8 = array_raw_from_slice<T>(arr);
-    var capacity: u64 = array_read_capacity(raw);
-    var stored_stride: u64 = array_read_stride(raw);
+    var raw: *u8 = raw_from_slice<T>(arr);
+    var capacity: u64 = read_capacity(raw);
+    var stored_stride: u64 = read_stride(raw);
 
     if (stored_stride == 0) { stored_stride = stride; }
     stride = stored_stride;
 
     if (capacity >= min_capacity) {
-        if (raw != nil && array_read_stride(raw) == 0) {
-            array_write_header(raw, capacity, stride);
+        if (raw != nil && read_stride(raw) == 0) {
+            write_header(raw, capacity, stride);
         }
         ret []T{ arr.data, arr.length };
     }
@@ -84,8 +84,8 @@ fun array_reserve_internal<T>(arr: []T, min_capacity: u64) []T {
     }
     if (target < min_capacity) { target = min_capacity; }
 
-    val current_bytes: u64 = array_bytes(stride, capacity);
-    val desired_bytes: u64 = array_bytes(stride, target);
+    val current_bytes: u64 = bytes(stride, capacity);
+    val desired_bytes: u64 = bytes(stride, target);
     if (desired_bytes == 0) { ret arr; }
 
     if (raw == nil) {
@@ -99,60 +99,60 @@ fun array_reserve_internal<T>(arr: []T, min_capacity: u64) []T {
         ret arr;
     }
 
-    array_write_header(raw, target, stride);
-    val data: *u8 = array_data_from_raw(raw);
+    write_header(raw, target, stride);
+    val data: *u8 = data_from_raw(raw);
     ret []T{ (data :: *T), arr.length };
 }
 
-pub fun array_capacity<T>(arr: []T) u64 {
-    val raw: *u8 = array_raw_from_slice<T>(arr);
+pub fun capacity<T>(arr: []T) u64 {
+    val raw: *u8 = raw_from_slice<T>(arr);
     if (raw == nil) { ret 0; }
-    ret array_read_capacity(raw);
+    ret read_capacity(raw);
 }
 
-pub fun array_ensure_capacity<T>(arr: []T, min_capacity: u64) []T {
-    ret array_reserve_internal<T>(arr, min_capacity);
+pub fun ensure_capacity<T>(arr: []T, min_capacity: u64) []T {
+    ret reserve_internal<T>(arr, min_capacity);
 }
 
-pub fun array_reserve<T>(arr: []T, additional: u64) []T {
+pub fun reserve<T>(arr: []T, additional: u64) []T {
     val required: u64 = arr.length + additional;
     if (required < arr.length) { ret arr; }
-    ret array_reserve_internal<T>(arr, required);
+    ret reserve_internal<T>(arr, required);
 }
 
-pub fun array_shrink_to_fit<T>(arr: []T) []T {
-    val stride: u64 = array_element_stride<T>();
-    var raw: *u8 = array_raw_from_slice<T>(arr);
+pub fun shrink_to_fit<T>(arr: []T) []T {
+    val stride: u64 = element_stride<T>();
+    var raw: *u8 = raw_from_slice<T>(arr);
     if (raw == nil) { ret arr; }
 
-    val capacity: u64 = array_read_capacity(raw);
-    val stored_stride: u64 = array_read_stride(raw);
+    val capacity: u64 = read_capacity(raw);
+    val stored_stride: u64 = read_stride(raw);
     var stride_use: u64 = stored_stride;
     if (stride_use == 0) { stride_use = stride; }
 
     if (capacity == arr.length) { ret arr; }
 
-    val desired_bytes: u64 = array_bytes(stride_use, arr.length);
+    val desired_bytes: u64 = bytes(stride_use, arr.length);
     if (desired_bytes == 0) { ret arr; }
 
-    raw = mem.reallocate(raw, array_bytes(stride_use, capacity), desired_bytes);
+    raw = mem.reallocate(raw, bytes(stride_use, capacity), desired_bytes);
     if (raw == nil) { ret arr; }
 
-    array_write_header(raw, arr.length, stride_use);
-    val data: *u8 = array_data_from_raw(raw);
+    write_header(raw, arr.length, stride_use);
+    val data: *u8 = data_from_raw(raw);
     ret []T{ (data :: *T), arr.length };
 }
 
-pub fun array_clear<T>(arr: []T) []T {
+pub fun clear<T>(arr: []T) []T {
     ret []T{ arr.data, 0 };
 }
 
-pub fun array_free<T>(arr: []T) []T {
-    val raw: *u8 = array_raw_from_slice<T>(arr);
+pub fun free<T>(arr: []T) []T {
+    val raw: *u8 = raw_from_slice<T>(arr);
     if (raw != nil) {
-        val stride: u64 = array_read_stride(raw);
-        val cap: u64 = array_read_capacity(raw);
-        val bytes: u64 = array_bytes(stride, cap);
+        val stride: u64 = read_stride(raw);
+        val cap: u64 = read_capacity(raw);
+        val bytes: u64 = bytes(stride, cap);
         if (bytes != 0) {
             mem.deallocate(raw, bytes);
         }
@@ -160,13 +160,13 @@ pub fun array_free<T>(arr: []T) []T {
     ret []T{ nil, 0 };
 }
 
-pub fun array_append<T>(arr: []T, item: T) []T {
-    val stride: u64 = array_element_stride<T>();
+pub fun append<T>(arr: []T, item: T) []T {
+    val stride: u64 = element_stride<T>();
     val old_len: u64 = arr.length;
     val next_len: u64 = old_len + 1;
     if (next_len < old_len) { ret arr; }
 
-    var grown: []T = array_reserve_internal<T>(arr, next_len);
+    var grown: []T = reserve_internal<T>(arr, next_len);
 
     if (stride != 0) {
         val dst_offset: u64 = old_len * stride;
@@ -179,47 +179,47 @@ pub fun array_append<T>(arr: []T, item: T) []T {
     ret []T{ grown.data, next_len };
 }
 
-pub fun array_append_slice<T>(arr: []T, values: []T) []T {
+pub fun append_slice<T>(arr: []T, values: []T) []T {
     if (values.length == 0) { ret arr; }
-    val stride: u64 = array_element_stride<T>();
+    val stride: u64 = element_stride<T>();
     val old_len: u64 = arr.length;
     val next_len: u64 = old_len + values.length;
     if (next_len < old_len) { ret arr; }
 
-    var grown: []T = array_reserve_internal<T>(arr, next_len);
+    var grown: []T = reserve_internal<T>(arr, next_len);
 
     if (stride != 0 && values.data != nil) {
         val dst: *u8 = (grown.data :: *u8) + (old_len * stride);
         val src: *u8 = (values.data :: *u8);
-    mem.memory_copy(dst, src, values.length * stride);
+        mem.memory_copy(dst, src, values.length * stride);
     }
 
     ret []T{ grown.data, next_len };
 }
 
-pub fun array_append_array<T>(arr: []T, data: *T, count: u64) []T {
+pub fun append_array<T>(arr: []T, data: *T, count: u64) []T {
     if (count == 0 || data == nil) { ret arr; }
-    val stride: u64 = array_element_stride<T>();
+    val stride: u64 = element_stride<T>();
     val old_len: u64 = arr.length;
     val next_len: u64 = old_len + count;
     if (next_len < old_len) { ret arr; }
 
-    var grown: []T = array_reserve_internal<T>(arr, next_len);
+    var grown: []T = reserve_internal<T>(arr, next_len);
 
     if (stride != 0) {
         val dst: *u8 = (grown.data :: *u8) + (old_len * stride);
-    mem.memory_copy(dst, (data :: *u8), count * stride);
+        mem.memory_copy(dst, (data :: *u8), count * stride);
     }
 
     ret []T{ grown.data, next_len };
 }
 
-pub fun array_pop<T>(arr: []T) []T {
+pub fun pop<T>(arr: []T) []T {
     if (arr.length == 0) { ret arr; }
     ret []T{ arr.data, arr.length - 1 };
 }
 
-pub fun array_trim<T>(arr: []T, new_length: u64) []T {
+pub fun trim<T>(arr: []T, new_length: u64) []T {
     if (new_length >= arr.length) { ret arr; }
     ret []T{ arr.data, new_length };
 }
