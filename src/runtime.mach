@@ -1,5 +1,5 @@
-use std.io.console;
-use std.system.memory;
+use console: std.io.console;
+use mem: std.system.memory;
 
 pub ext main: fun([][]u8) i64;
 
@@ -50,14 +50,14 @@ fun utf16_to_utf8(src: *u16) []u8 {
     }
 
     val buffer_size: u64 = required::u64;
-    val buffer: *u8 = allocate(buffer_size);
+    val buffer: *u8 = mem.allocate(buffer_size);
     if (buffer == nil) {
         ret []u8{ nil, 0 };
     }
 
     val written: i32 = win32_wide_char_to_multi_byte(WIN_CP_UTF8, 0, src, char_count, buffer, required, nil, nil);
     if (written <= 0) {
-        deallocate(buffer, buffer_size);
+        mem.deallocate(buffer, buffer_size);
         ret []u8{ nil, 0 };
     }
 
@@ -71,7 +71,7 @@ fun build_args_windows(argc: u64, argv_wide: **u16) [][]u8 {
 
     val entry_size: u64 = size_of([]u8{ nil, 0 });
     val total_bytes: u64 = argc * entry_size;
-    val storage: *u8 = allocate(total_bytes);
+    val storage: *u8 = mem.allocate(total_bytes);
     if (storage == nil) {
         ret [][]u8{ nil, 0 };
     }
@@ -90,7 +90,7 @@ fun build_args_windows(argc: u64, argv_wide: **u16) [][]u8 {
         val length_addr: *u8 = slot_addr + WORD_BYTES;
         val length_slot: *u64 = length_addr::*u64;
         @length_slot = utf8.length;
-        
+
         index = index + 1;
     }
 
@@ -167,7 +167,7 @@ fun build_args_posix(argc: u64, stack: *u8) [][]u8 {
 
     val entry_size: u64 = size_of([]u8{ nil, 0 });
     val total_bytes: u64 = argc * entry_size;
-    val storage: *u8 = allocate(total_bytes);
+    val storage: *u8 = mem.allocate(total_bytes);
     if (storage == nil) {
         ret [][]u8{ nil, 0 };
     }
@@ -191,7 +191,7 @@ fun build_args_posix(argc: u64, stack: *u8) [][]u8 {
         val length_addr: *u8 = slot_addr + WORD_BYTES;
         val length_slot: *u64 = length_addr::*u64;
         @length_slot = length;
-        
+
         index = index + 1;
     }
 
@@ -250,10 +250,10 @@ mach_runtime_exit:
 
 pub fun mach_panic(message: []u8) i64 {
     if (message.data == nil || message.length == 0) {
-        write(STDERR, "panic: abort\n");
+        console.error("panic: abort\n");
     }
     or {
-        write(STDERR, "panic: %s\n", message);
+        console.error("panic: %s\n", message);
     }
 
     mach_runtime_exit(255);

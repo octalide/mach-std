@@ -1,4 +1,4 @@
-use std.system.memory;
+use mem: std.system.memory;
 use std.types.bool;
 
 pub def char:   u8;
@@ -20,10 +20,10 @@ fun ensure_capacity(buf_ptr: **u8, cap_ptr: *u64, len: u64, needed: u64) u8 {
 
 	var fresh: *u8 = nil;
 	if (current == nil) {
-		fresh = allocate(new_cap);
+		fresh = mem.allocate(new_cap);
 	}
 	or {
-		fresh = reallocate(current, cap, new_cap);
+		fresh = mem.reallocate(current, cap, new_cap);
 	}
 
 	if (fresh == nil) { ret 0; }
@@ -51,7 +51,7 @@ fun append_slice(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, data: *u8, size: u
 	if (ensure_capacity(buf_ptr, cap_ptr, len, size) == 0) { ret 0; }
 
 	val buf: *u8 = @buf_ptr;
-	memory_copy(buf + len, data, size);
+	mem.memory_copy(buf + len, data, size);
 	@len_ptr = len + size;
 	ret 1;
 }
@@ -181,7 +181,7 @@ fun append_escape(buf_ptr: **u8, len_ptr: *u64, cap_ptr: *u64, esc: u8) u8 {
 
 fun finalize_buffer(buffer: *u8, capacity: u64, length: u64) string {
 	if (length == 0) {
-		if (buffer != nil && capacity != 0) { deallocate(buffer, capacity); }
+		if (buffer != nil && capacity != 0) { mem.deallocate(buffer, capacity); }
 		ret []u8{ nil, 0 };
 	}
 
@@ -190,7 +190,7 @@ fun finalize_buffer(buffer: *u8, capacity: u64, length: u64) string {
 	}
 
 	if (capacity > length) {
-		val shrunk: *u8 = reallocate(buffer, capacity, length);
+		val shrunk: *u8 = mem.reallocate(buffer, capacity, length);
 		if (shrunk != nil) {
 			ret []u8{ shrunk, length };
 		}
@@ -218,10 +218,10 @@ pub fun string_equal(a: string, b: string) bool {
 pub fun string_copy(value: string) string {
 	if (value.length == 0 || value.data == nil) { ret []u8{ nil, 0 }; }
 
-	val fresh: *u8 = allocate(value.length);
+	val fresh: *u8 = mem.allocate(value.length);
 	if (fresh == nil) { ret []u8{ nil, 0 }; }
 
-	memory_copy(fresh, value.data, value.length);
+	mem.memory_copy(fresh, value.data, value.length);
 	ret []u8{ fresh, value.length };
 }
 
@@ -300,10 +300,10 @@ pub fun string_substring(value: string, start: u64, end: u64) string {
 	if (start >= end)         { ret []u8{ nil, 0 }; }
 
 	val size: u64 = end - start;
-	val fresh: *u8 = allocate(size);
+	val fresh: *u8 = mem.allocate(size);
 	if (fresh == nil) { ret []u8{ nil, 0 }; }
 
-	memory_copy(fresh, value.data + start, size);
+	mem.memory_copy(fresh, value.data + start, size);
 	ret []u8{ fresh, size };
 }
 
@@ -314,7 +314,7 @@ pub fun string_length(value: string) u64 {
 
 pub fun string_free(value: string) {
 	if (value.data == nil || value.length == 0) { ret; }
-	deallocate(value.data, value.length);
+	mem.deallocate(value.data, value.length);
 }
 
 pub fun format(pattern: string, ...) string {
@@ -445,7 +445,7 @@ pub fun format(pattern: string, ...) string {
 	}
 
 	if (ok == 0) {
-		if (buffer != nil && capacity != 0) { deallocate(buffer, capacity); }
+			   if (buffer != nil && capacity != 0) { mem.deallocate(buffer, capacity); }
 		ret []u8{ nil, 0 };
 	}
 

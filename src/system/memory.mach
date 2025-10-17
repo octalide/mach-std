@@ -1,9 +1,9 @@
 #@if (OS == OS_LINUX)
-use std.system.platform.linux.sys;
+use sys: std.system.platform.linux.sys;
 #@or (OS == OS_DARWIN)
-use std.system.platform.darwin.sys;
+use sys: std.system.platform.darwin.sys;
 #@or (OS == OS_WINDOWS)
-use std.system.platform.windows.sys;
+use sys: std.system.platform.windows.sys;
 #@end
 
 pub fun memory_zero(p: *u8, size: u64) {
@@ -86,7 +86,7 @@ pub fun allocate(size: u64) *u8 {
         ret nil;
     }
 
-    ret linux_mmap(nil, size, SYSTEM_PROT_READ | SYSTEM_PROT_WRITE, SYSTEM_MAP_PRIVATE | SYSTEM_MAP_ANON, -1, 0);
+    ret sys.mmap(nil, size, SYSTEM_PROT_READ | SYSTEM_PROT_WRITE, SYSTEM_MAP_PRIVATE | SYSTEM_MAP_ANON, -1, 0);
 }
 
 pub fun deallocate(p: *u8, size: u64) u8 {
@@ -94,7 +94,7 @@ pub fun deallocate(p: *u8, size: u64) u8 {
         ret 0;
     }
 
-    val r: i32 = linux_munmap(p, size);
+    val r: i32 = sys.munmap(p, size);
     if (r == 0) {
         ret 0;
     }
@@ -138,7 +138,7 @@ pub fun allocate(size: u64) *u8 {
         ret nil;
     }
 
-    ret darwin_mmap(nil, size, SYSTEM_PROT_READ | SYSTEM_PROT_WRITE, SYSTEM_MAP_PRIVATE | SYSTEM_MAP_ANON, -1, 0);
+    ret sys.mmap(nil, size, SYSTEM_PROT_READ | SYSTEM_PROT_WRITE, SYSTEM_MAP_PRIVATE | SYSTEM_MAP_ANON, -1, 0);
 }
 
 pub fun deallocate(p: *u8, size: u64) u8 {
@@ -146,7 +146,7 @@ pub fun deallocate(p: *u8, size: u64) u8 {
         ret 0;
     }
 
-    val r: i32 = darwin_munmap(p, size);
+    val r: i32 = sys.munmap(p, size);
     if (r == 0) {
         ret 0;
     }
@@ -185,7 +185,7 @@ pub fun allocate(size: u64) *u8 {
         ret nil;
     }
 
-    ret win_virt_alloc(size);
+    ret sys.virt_alloc(size);
 }
 
 pub fun deallocate(p: *u8, size: u64) u8 {
@@ -193,7 +193,7 @@ pub fun deallocate(p: *u8, size: u64) u8 {
         ret 0;
     }
 
-    val r: u32 = win_virt_free(p, size);
+    val r: u32 = sys.virt_free(p, size);
     if (r != 0) {
         ret 0;
     }

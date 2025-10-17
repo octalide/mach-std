@@ -1,4 +1,4 @@
-use std.system.memory;
+use mem: std.system.memory;
 
 pub fun is_separator(b: u8) u8 {
     ret (b == '/');
@@ -54,15 +54,15 @@ pub fun join(a: []u8, b: []u8) []u8 {
     if (b.length == 0) { ret a; }
 
     val need: u64 = a.length + 1 + b.length;
-    val p:    *u8 = allocate(need);
+    val p:    *u8 = mem.allocate(need);
 
     if (p == nil) {
         ret []u8{ nil, 0 };
     }
 
-    memory_copy(p, a.data, a.length);
+    mem.memory_copy(p, a.data, a.length);
     @(p + a.length) = '/'::u8;
-    memory_copy(p + a.length + 1, b.data, b.length);
+    mem.memory_copy(p + a.length + 1, b.data, b.length);
     
     ret []u8{ p, need };
 }

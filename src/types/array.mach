@@ -1,4 +1,4 @@
-use std.system.memory;
+use mem: std.system.memory;
 
 fun array_header_size() u64 {
     ret (2 :: u64) * size_of(0 :: u64);
@@ -89,10 +89,10 @@ fun array_reserve_internal<T>(arr: []T, min_capacity: u64) []T {
     if (desired_bytes == 0) { ret arr; }
 
     if (raw == nil) {
-        raw = allocate(desired_bytes);
+        raw = mem.allocate(desired_bytes);
     }
     or {
-        raw = reallocate(raw, current_bytes, desired_bytes);
+        raw = mem.reallocate(raw, current_bytes, desired_bytes);
     }
 
     if (raw == nil) {
@@ -135,7 +135,7 @@ pub fun array_shrink_to_fit<T>(arr: []T) []T {
     val desired_bytes: u64 = array_bytes(stride_use, arr.length);
     if (desired_bytes == 0) { ret arr; }
 
-    raw = reallocate(raw, array_bytes(stride_use, capacity), desired_bytes);
+    raw = mem.reallocate(raw, array_bytes(stride_use, capacity), desired_bytes);
     if (raw == nil) { ret arr; }
 
     array_write_header(raw, arr.length, stride_use);
@@ -154,7 +154,7 @@ pub fun array_free<T>(arr: []T) []T {
         val cap: u64 = array_read_capacity(raw);
         val bytes: u64 = array_bytes(stride, cap);
         if (bytes != 0) {
-            deallocate(raw, bytes);
+            mem.deallocate(raw, bytes);
         }
     }
     ret []T{ nil, 0 };
@@ -172,7 +172,7 @@ pub fun array_append<T>(arr: []T, item: T) []T {
         val dst_offset: u64 = old_len * stride;
         val data_bytes: *u8 = (grown.data :: *u8);
         if (data_bytes != nil) {
-            memory_copy(data_bytes + dst_offset, ((?item) :: *u8), stride);
+            mem.memory_copy(data_bytes + dst_offset, ((?item) :: *u8), stride);
         }
     }
 
@@ -191,7 +191,7 @@ pub fun array_append_slice<T>(arr: []T, values: []T) []T {
     if (stride != 0 && values.data != nil) {
         val dst: *u8 = (grown.data :: *u8) + (old_len * stride);
         val src: *u8 = (values.data :: *u8);
-        memory_copy(dst, src, values.length * stride);
+    mem.memory_copy(dst, src, values.length * stride);
     }
 
     ret []T{ grown.data, next_len };
@@ -208,7 +208,7 @@ pub fun array_append_array<T>(arr: []T, data: *T, count: u64) []T {
 
     if (stride != 0) {
         val dst: *u8 = (grown.data :: *u8) + (old_len * stride);
-        memory_copy(dst, (data :: *u8), count * stride);
+    mem.memory_copy(dst, (data :: *u8), count * stride);
     }
 
     ret []T{ grown.data, next_len };
