@@ -1,0 +1,233 @@
+use mem: std.system.memory;
+
+pub str List<T> {
+    data: *T;
+    len:  u64;
+    cap:  u64;
+}
+
+pub fun with_capacity<T>(cap: u64) List<T> {
+    if (cap == 0) {
+        var empty: List<T>;
+        empty.data = nil;
+        empty.len = 0;
+        empty.cap = 0;
+        ret empty;
+    }
+    
+    val data: *T = mem.alloc<T>(cap);
+    if (data == nil) {
+        var empty: List<T>;
+        empty.data = nil;
+        empty.len = 0;
+        empty.cap = 0;
+        ret empty;
+    }
+    
+    var list: List<T>;
+    list.data = data;
+    list.len = 0;
+    list.cap = cap;
+    ret list;
+}
+
+pub fun from_slice<T>(slice: []T) List<T> {
+    if (slice.length == 0 || slice.data == nil) {
+        var empty: List<T>;
+        empty.data = nil;
+        empty.len = 0;
+        empty.cap = 0;
+        ret empty;
+    }
+    
+    val data: *T = mem.alloc<T>(slice.length);
+    if (data == nil) {
+        var empty: List<T>;
+        empty.data = nil;
+        empty.len = 0;
+        empty.cap = 0;
+        ret empty;
+    }
+    
+    mem.memory_copy((data :: ptr), (slice.data :: ptr), slice.length * size_of(0 :: T));
+    var list: List<T>;
+    list.data = data;
+    list.len = slice.length;
+    list.cap = slice.length;
+    ret list;
+}
+
+pub fun as_slice<T>(list: List<T>) []T {
+    ret []T{ list.data, list.len };
+}
+
+pub fun capacity<T>(list: List<T>) u64 {
+    ret list.cap;
+}
+
+pub fun length<T>(list: List<T>) u64 {
+    ret list.len;
+}
+
+pub fun is_empty<T>(list: List<T>) u8 {
+    if (list.len == 0) { ret 1; }
+    ret 0;
+}
+
+pub fun reserve<T>(list: List<T>, additional: u64) List<T> {
+    val required: u64 = list.len + additional;
+    if (required <= list.cap) {
+        ret list;
+    }
+    
+    if (required < list.len) {
+        ret list;
+    }
+    
+    var new_cap: u64 = list.cap;
+    if (new_cap == 0) { new_cap = 8; }
+    
+    for (new_cap < required) {
+        if (new_cap >= (0xffff_ffff_ffff_ffff / 2)) {
+            new_cap = required;
+            brk;
+        }
+        new_cap = new_cap * 2;
+    }
+    
+    val new_data: *T = mem.realloc<T>(list.data, list.cap, new_cap);
+    if (new_data == nil) {
+        ret list;
+    }
+    
+    var result: List<T>;
+    result.data = new_data;
+    result.len = list.len;
+    result.cap = new_cap;
+    ret result;
+}
+
+pub fun ensure_capacity<T>(list: List<T>, min_capacity: u64) List<T> {
+    if (min_capacity <= list.cap) {
+        ret list;
+    }
+    
+    val additional: u64 = min_capacity - list.cap;
+    ret reserve<T>(list, additional);
+}
+
+pub fun shrink_to_fit<T>(list: List<T>) List<T> {
+    if (list.cap == list.len) {
+        ret list;
+    }
+    
+    if (list.len == 0) {
+        if (list.data != nil && list.cap > 0) {
+            mem.dealloc<T>(list.data, list.cap);
+        }
+        var empty: List<T>;
+        empty.data = nil;
+        empty.len = 0;
+        empty.cap = 0;
+        ret empty;
+    }
+    
+    val new_data: *T = mem.realloc<T>(list.data, list.cap, list.len);
+    if (new_data == nil) {
+        ret list;
+    }
+    
+    var result: List<T>;
+    result.data = new_data;
+    result.len = list.len;
+    result.cap = list.len;
+    ret result;
+}
+
+pub fun push<T>(list: List<T>, item: T) List<T> {
+    var result: List<T> = list;
+    
+    if (result.len >= result.cap) {
+        result = reserve<T>(result, 1);
+        if (result.len >= result.cap) {
+            ret result;
+        }
+    }
+    
+    @(result.data + result.len) = item;
+    var updated: List<T>;
+    updated.data = result.data;
+    updated.len = result.len + 1;
+    updated.cap = result.cap;
+    ret updated;
+}
+
+pub fun pop<T>(list: List<T>) List<T> {
+    if (list.len == 0) {
+        ret list;
+    }
+    
+    var result: List<T>;
+    result.data = list.data;
+    result.len = list.len - 1;
+    result.cap = list.cap;
+    ret result;
+}
+
+pub fun append<T>(list: List<T>, slice: []T) List<T> {
+    if (slice.length == 0 || slice.data == nil) {
+        ret list;
+    }
+    
+    var result: List<T> = reserve<T>(list, slice.length);
+    if (result.len + slice.length < result.len) {
+        ret result;
+    }
+    
+    if (result.len + slice.length > result.cap) {
+        ret result;
+    }
+    
+    val dst: ptr = ((result.data + result.len) :: ptr);
+    val src: ptr = (slice.data :: ptr);
+    mem.memory_copy(dst, src, slice.length * size_of(0 :: T));
+    
+    var updated: List<T>;
+    updated.data = result.data;
+    updated.len = result.len + slice.length;
+    updated.cap = result.cap;
+    ret updated;
+}
+
+pub fun clear<T>(list: List<T>) List<T> {
+    var result: List<T>;
+    result.data = list.data;
+    result.len = 0;
+    result.cap = list.cap;
+    ret result;
+}
+
+pub fun free<T>(list: List<T>) List<T> {
+    if (list.data != nil && list.cap > 0) {
+        mem.dealloc<T>(list.data, list.cap);
+    }
+    var empty: List<T>;
+    empty.data = nil;
+    empty.len = 0;
+    empty.cap = 0;
+    ret empty;
+}
+
+pub fun get<T>(list: List<T>, index: u64) *T {
+    if (index >= list.len) {
+        ret nil;
+    }
+    ret list.data + index;
+}
+
+pub fun set<T>(list: List<T>, index: u64, item: T) {
+    if (index >= list.len) {
+        ret;
+    }
+    @(list.data + index) = item;
+}

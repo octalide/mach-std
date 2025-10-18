@@ -1,5 +1,5 @@
-use          std.types.string;
-use strings: std.types.util.strings;
+use std.types.string;
+use std.types.result;
 
 #@if (OS == OS_LINUX)
 use sys: std.system.platform.linux.sys;
@@ -105,9 +105,22 @@ pub fun write_to(fd: i32, pattern: string, ...) i64 {
         ret write_segment(fd, pattern);
     }
 
-    val rendered: string = strings.format(pattern, ...);
+    val res: Result<string, string> = pattern.format(...);
+    if (res.is_err()) {
+        # TODO: cascade result
+        ret -1;
+    }
+    val rendered: string = res.unwrap_ok(string{ nil, 0 });
+    if (rendered.len == 0) {
+        ret 0;
+    }
+
     val wrote: i64 = write_segment(fd, rendered);
-    strings.free(rendered);
+
+    if (rendered.data != nil) {
+        mem.dealloc<u8>(rendered.data, rendered.len);
+    }
+
     ret wrote;
 }
 

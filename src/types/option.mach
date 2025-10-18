@@ -1,0 +1,21 @@
+use std.types.bool;
+
+pub str Option<T> {
+    is_some: bool;
+    value:   T;
+}
+
+pub fun Option<T>.unwrap(this: Option<T>, default: T) T {
+    if (this.is_some == 0) {
+        ret default;
+    }
+    ret this.value;
+}
+
+pub fun Option<T>.is_none(this: Option<T>) bool {
+    ret this.is_some == 0;
+}
+
+pub fun Option<T>.is_some(this: Option<T>) bool {
+    ret this.is_some != 0;
+}
