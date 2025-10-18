@@ -1,6 +1,7 @@
-use std.types.bool;
-use std.types.option;
-use std.types.result;
+use      std.types.bool;
+use      std.types.option;
+use      std.types.result;
+use mem: std.system.memory;
 
 pub def char:   u8;
 pub def string: []char;
@@ -248,7 +249,7 @@ fun append_unsigned(buf: *u8, len: *u64, cap: *u64, value: u64) bool {
         i = i / 10;
     }
 
-    var i: u64 = 0;
+    i = 0;
     for (i < digit_count) {
         val ch: u8   = digits[digit_count - i - 1];
         val ok: bool = append_byte(buf, len, cap, ch);
@@ -301,7 +302,7 @@ fun append_hex(buf: *u8, len: *u64, cap: *u64, value: u64, uppercase: bool) bool
         i = i / 16;
     }
 
-    var i: u64 = 0;
+    i = 0;
     for (i < digit_count) {
         val ch: u8   = digits[digit_count - i - 1];
         val ok: bool = append_byte(buf, len, cap, ch);
@@ -332,7 +333,7 @@ fun append_pointer(buf: *u8, len: *u64, cap: *u64, value: ptr) bool {
         ret false;
     }
 
-    val addr: u64 = @(value::*u8)::u64;
+    val addr: u64 = @(value::*u8)::*u64;
     ret append_hex(buf, len, cap, addr, false);
 }
 
