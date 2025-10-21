@@ -32,7 +32,7 @@ pub fun with_capacity<T>(cap: u64) List<T> {
 }
 
 pub fun from_slice<T>(slice: []T) List<T> {
-    if (slice.length == 0 || slice.data == nil) {
+    if (slice.len == 0 || slice.data == nil) {
         var empty: List<T>;
         empty.data = nil;
         empty.len = 0;
@@ -40,7 +40,7 @@ pub fun from_slice<T>(slice: []T) List<T> {
         ret empty;
     }
     
-    val data: *T = mem.alloc<T>(slice.length);
+    val data: *T = mem.alloc<T>(slice.len);
     if (data == nil) {
         var empty: List<T>;
         empty.data = nil;
@@ -49,11 +49,11 @@ pub fun from_slice<T>(slice: []T) List<T> {
         ret empty;
     }
     
-    mem.memory_copy((data :: ptr), (slice.data :: ptr), slice.length * size_of(0 :: T));
+    mem.memory_copy((data :: ptr), (slice.data :: ptr), slice.len * size_of(0 :: T));
     var list: List<T>;
     list.data = data;
-    list.len = slice.length;
-    list.cap = slice.length;
+    list.len = slice.len;
+    list.cap = slice.len;
     ret list;
 }
 
@@ -65,7 +65,7 @@ pub fun List<T>.capacity(list: List<T>) u64 {
     ret list.cap;
 }
 
-pub fun List<T>.length(list: List<T>) u64 {
+pub fun List<T>.len(list: List<T>) u64 {
     ret list.len;
 }
 
@@ -148,7 +148,7 @@ pub fun List<T>.push(list: List<T>, item: T) List<T> {
     var result: List<T> = list;
     
     if (result.len >= result.cap) {
-        result = reserve<T>(result, 1);
+        result = list.reserve(1);
         if (result.len >= result.cap) {
             ret result;
         }
@@ -175,26 +175,26 @@ pub fun List<T>.pop(list: List<T>) List<T> {
 }
 
 pub fun List<T>.append(list: List<T>, slice: []T) List<T> {
-    if (slice.length == 0 || slice.data == nil) {
+    if (slice.len == 0 || slice.data == nil) {
         ret list;
     }
     
-    var result: List<T> = reserve<T>(list, slice.length);
-    if (result.len + slice.length < result.len) {
+    var result: List<T> = list.reserve(slice.len);
+    if (result.len + slice.len < result.len) {
         ret result;
     }
     
-    if (result.len + slice.length > result.cap) {
+    if (result.len + slice.len > result.cap) {
         ret result;
     }
     
     val dst: ptr = ((result.data + result.len) :: ptr);
     val src: ptr = (slice.data :: ptr);
-    mem.memory_copy(dst, src, slice.length * size_of(0 :: T));
+    mem.memory_copy(dst, src, slice.len * size_of(0 :: T));
     
     var updated: List<T>;
     updated.data = result.data;
-    updated.len = result.len + slice.length;
+    updated.len = result.len + slice.len;
     updated.cap = result.cap;
     ret updated;
 }
