@@ -5,15 +5,15 @@ pub fun is_separator(b: u8) u8 {
 }
 
 pub fun basename(p: []u8) []u8 {
-    if (p.length == 0) {
+    if (p.len == 0) {
         ret p;
     }
 
-    var i: u64 = p.length;
+    var i: u64 = p.len;
     for (i > 0) {
         i = i - 1;
         if (p[i] == '/') {
-            ret []u8{ p.data + i + 1, p.length - i - 1 };
+            ret []u8{ p.data + i + 1, p.len - i - 1 };
         }
     }
 
@@ -21,11 +21,11 @@ pub fun basename(p: []u8) []u8 {
 }
 
 pub fun dirname(p: []u8) []u8 {
-    if (p.length == 0) {
+    if (p.len == 0) {
         ret p;
     }
 
-    var i: u64 = p.length;
+    var i: u64 = p.len;
     for (i > 0) {
         i = i - 1;
         if (p[i] == '/') {
@@ -37,32 +37,32 @@ pub fun dirname(p: []u8) []u8 {
 }
 
 pub fun extname(p: []u8) []u8 {
-    var i: u64 = p.length;
+    var i: u64 = p.len;
 
     for (i > 0) {
         i = i - 1;
 
-        if (p[i] == '.') { ret []u8{ p.data + i + 1, p.length - i - 1 }; }
+        if (p[i] == '.') { ret []u8{ p.data + i + 1, p.len - i - 1 }; }
         if (p[i] == '/') { brk; }
     }
     
-    ret []u8{ p.data + p.length, 0 };
+    ret []u8{ p.data + p.len, 0 };
 }
 
 pub fun join(a: []u8, b: []u8) []u8 {
-    if (a.length == 0) { ret b; }
-    if (b.length == 0) { ret a; }
+    if (a.len == 0) { ret b; }
+    if (b.len == 0) { ret a; }
 
-    val need: u64 = a.length + 1 + b.length;
+    val need: u64 = a.len + 1 + b.len;
     val p:    *u8 = mem.allocate(need);
 
     if (p == nil) {
         ret []u8{ nil, 0 };
     }
 
-    mem.memory_copy(p, a.data, a.length);
-    @(p + a.length) = '/'::u8;
-    mem.memory_copy(p + a.length + 1, b.data, b.length);
+    mem.memory_copy(p, a.data, a.len);
+    @(p + a.len) = '/'::u8;
+    mem.memory_copy(p + a.len + 1, b.data, b.len);
     
     ret []u8{ p, need };
 }

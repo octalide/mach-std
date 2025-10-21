@@ -4,7 +4,7 @@ use std.text.ascii;
 pub fun parse_u64_dec(s: []u8) u64 {
     var i: u64 = 0;
     var v: u64 = 0;
-    for (i < s.length) {
+    for (i < s.len) {
         val d: i32 = digit_val(s[i]);
 
         if (d < 0) { brk; }
@@ -20,7 +20,7 @@ pub fun parse_u64_dec(s: []u8) u64 {
 pub fun parse_u64_hex(s: []u8) u64 {
     var i: u64 = 0;
     var v: u64 = 0;
-    for (i < s.length) {
+    for (i < s.len) {
         val d: i32 = digit_val(s[i]);
 
         if (d < 0)  { brk; }

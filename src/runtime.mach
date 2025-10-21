@@ -1,5 +1,4 @@
 use mem:     std.system.memory;
-use console: std.io.console;
 
 pub ext main: fun([][]u8) i64;
 
@@ -89,7 +88,7 @@ fun build_args_windows(argc: u64, argv_wide: **u16) [][]u8 {
 
         val length_addr: *u8 = slot_addr + WORD_BYTES;
         val length_slot: *u64 = length_addr::*u64;
-        @length_slot = utf8.length;
+        @length_slot = utf8.len;
 
         index = index + 1;
     }
@@ -249,11 +248,13 @@ mach_runtime_exit:
 #@end
 
 pub fun mach_panic(message: []u8) i64 {
-    if (message.data == nil || message.length == 0) {
-        console.error("panic: abort\n");
+    if (message.data == nil || message.len == 0) {
+        # console.error("panic: abort\n");
+        # placeholder
     }
     or {
-        console.error("panic: %s\n", message);
+        # console.error("panic: %s\n", message);
+        # placeholder
     }
 
     mach_runtime_exit(255);
