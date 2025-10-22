@@ -107,7 +107,7 @@ pub fun write_to(fd: i32, pattern: string, ...) i64 {
         ret write_segment(fd, pattern);
     }
 
-    val res: Result<string, string> = format(pattern, ...);
+    val res: Result<string, string> = pattern.format(...);
     if (res.is_err()) {
         # TODO: cascade result
         ret -1;

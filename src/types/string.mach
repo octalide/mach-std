@@ -458,13 +458,13 @@ fun append_pointer(sb: *StringBuilder, value: ptr) bool {
     ret append_hex(sb, addr, false);
 }
 
-pub fun format(pattern: string, ...) Result<string, string> {
+pub fun string.format(pattern: string, ...) Result<string, string> {
     if (pattern.data == nil && pattern.len > 0) {
         ret err<string, string>("invalid pattern: null data with non-zero length");
     }
 
+    # if no format specifiers needed, return pattern as-is or clone it
     val arg_count: u64 = va_count();
-
     if (arg_count == 0) {
         # no arguments - just return the pattern
         # check if pattern needs escaping
@@ -541,10 +541,8 @@ pub fun format(pattern: string, ...) Result<string, string> {
                 pos = pos + 2;
             }
             or (spec == 'u') {
-                # DEBUG: We hit the %u handler
                 val arg_uint: *u64 = va_arg(arg_index)::*u64;
-                val val_copy: u64 = @arg_uint;
-                if (append_unsigned_decimal(?sb, val_copy) == false) {
+                if (append_unsigned_decimal(?sb, @arg_uint) == false) {
                     sb.free();
                     ret err<string, string>("allocation failed during unsigned decimal");
                 }
