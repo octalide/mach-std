@@ -64,7 +64,7 @@ fun utf16_to_utf8(src: *u16) []u8 {
 }
 
 fun build_args_windows(argc: u64, argv_wide: **u16) [][]u8 {
-    if (argc == 0 || argv_wide == nil) {
+    if (argv_wide == nil) {
         ret [][]u8{ nil, 0 };
     }
 
@@ -164,7 +164,7 @@ fun build_args_posix(argc: u64, stack: *u8) [][]u8 {
         ret [][]u8{ nil, 0 };
     }
 
-    val entry_size: u64 = size_of([]u8{ nil, 0 });
+    val entry_size: u64 = size_of([]u8);
     val total_bytes: u64 = argc * entry_size;
     val storage: *u8 = mem.allocate(total_bytes);
     if (storage == nil) {
@@ -247,21 +247,8 @@ mach_runtime_exit:
 #@end
 #@end
 
-pub fun mach_panic(message: []u8) i64 {
-    if (message.data == nil || message.len == 0) {
-        # console.error("panic: abort\n");
-        # placeholder
-    }
-    or {
-        # console.error("panic: %s\n", message);
-        # placeholder
-    }
-
-    mach_runtime_exit(255);
-    ret 255;
-}
-
 #@symbol("abort")
 pub fun abort() i64 {
-    ret mach_panic("abort");
+    mach_runtime_exit(255);
+    ret 255;
 }

@@ -6,19 +6,6 @@ use sys: std.system.platform.darwin.sys;
 use sys: std.system.platform.windows.sys;
 #@end
 
-pub fun memory_zero(p: ptr, size: u64) {
-    if (p == nil || size == 0) {
-        ret;
-    }
-
-    var i: u64 = 0;
-    val bytes: *u8 = (p :: *u8);
-    for (i < size) {
-        @(bytes + i) = 0;
-        i = i + 1;
-    }
-}
-
 #@symbol("memset")
 pub fun memset(dest: ptr, value: i32, count: u64) ptr {
     if (dest == nil || count == 0) {
@@ -34,34 +21,6 @@ pub fun memset(dest: ptr, value: i32, count: u64) ptr {
     }
 
     ret dest;
-}
-
-pub fun memory_fill(p: ptr, value: u8, size: u64) {
-    if (p == nil || size == 0) {
-        ret;
-    }
-
-    var i: u64 = 0;
-    val bytes: *u8 = (p :: *u8);
-    for (i < size) {
-        @(bytes + i) = value;
-        i = i + 1;
-    }
-}
-
-pub fun memory_copy(dst: ptr, src: ptr, size: u64) {
-    if (dst == nil || src == nil || size == 0) {
-        ret;
-    }
-
-    var i: u64 = 0;
-    val dst_bytes: *u8 = (dst :: *u8);
-    val src_bytes: *u8 = (src :: *u8);
-    for (i < size) {
-        val b: u8 = @(src_bytes + i);
-        @(dst_bytes + i) = b;
-        i = i + 1;
-    }
 }
 
 #@symbol("memcpy")
@@ -80,6 +39,38 @@ pub fun memcpy(dst: ptr, src: ptr, count: u64) ptr {
     }
 
     ret dst;
+}
+
+pub fun raw_fill(p: ptr, value: u8, size: u64) {
+    if (p == nil || size == 0) {
+        ret;
+    }
+
+    var i: u64 = 0;
+    val bytes: *u8 = (p :: *u8);
+    for (i < size) {
+        @(bytes + i) = value;
+        i = i + 1;
+    }
+}
+
+pub fun raw_copy(dst: ptr, src: ptr, size: u64) {
+    if (dst == nil || src == nil || size == 0) {
+        ret;
+    }
+
+    var i: u64 = 0;
+    val dst_bytes: *u8 = (dst :: *u8);
+    val src_bytes: *u8 = (src :: *u8);
+    for (i < size) {
+        val b: u8 = @(src_bytes + i);
+        @(dst_bytes + i) = b;
+        i = i + 1;
+    }
+}
+
+pub fun raw_zero(p: ptr, size: u64) {
+    raw_fill(p, 0, size);
 }
 
 #@if (OS == OS_LINUX)
@@ -129,7 +120,7 @@ pub fun reallocate(p: ptr, old_size: u64, new_size: u64) ptr {
         to_copy = new_size;
     }
 
-    memory_copy(n, p, to_copy);
+    raw_copy(n, p, to_copy);
     deallocate(p, old_size);
 
     ret n;
@@ -181,7 +172,7 @@ pub fun reallocate(p: ptr, old_size: u64, new_size: u64) ptr {
         to_copy = new_size;
     }
 
-    memory_copy(n, p, to_copy);
+    raw_copy(n, p, to_copy);
     deallocate(p, old_size);
 
     ret n;
@@ -228,7 +219,7 @@ pub fun reallocate(p: ptr, old_size: u64, new_size: u64) ptr {
         to_copy = new_size;
     }
 
-    memory_copy(n, p, to_copy);
+    raw_copy(n, p, to_copy);
     deallocate(p, old_size);
 
     ret n;
@@ -240,7 +231,7 @@ pub fun alloc<T>(count: u64) *T {
         ret nil;
     }
 
-    val size: u64 = size_of(0 :: T);
+    val size: u64 = size_of(T);
     val total: u64 = size * count;
     if (size != 0 && total / size != count) {
         ret nil;
@@ -254,7 +245,7 @@ pub fun dealloc<T>(p: *T, count: u64) u8 {
         ret 0;
     }
 
-    val size: u64 = size_of(0 :: T);
+    val size: u64 = size_of(T);
     val total: u64 = size * count;
     ret deallocate((p :: ptr), total);
 }
@@ -269,7 +260,7 @@ pub fun realloc<T>(p: *T, old_count: u64, new_count: u64) *T {
         ret nil;
     }
 
-    val size: u64 = size_of(0 :: T);
+    val size: u64 = size_of(T);
     val old_total: u64 = size * old_count;
     val new_total: u64 = size * new_count;
 
@@ -279,3 +270,16 @@ pub fun realloc<T>(p: *T, old_count: u64, new_count: u64) *T {
 
     ret (reallocate((p :: ptr), old_total, new_total) :: *T);
 }
+
+
+# pub fun fill<T>(p: *T, value: T, count: u64) {
+#     raw_fill((p :: ptr), (value :: u8), count * size_of(T));
+# }
+
+# pub fun copy<T>(dst: *T, src: *T, count: u64) {
+#     raw_copy((dst :: ptr), (src :: ptr), count * size_of(T));
+# }
+
+# pub fun zero<T>(p: *T, count: u64) {
+#     raw_zero((p :: ptr), count * size_of(T));
+# }

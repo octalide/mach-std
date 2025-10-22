@@ -60,9 +60,9 @@ pub fun join(a: []u8, b: []u8) []u8 {
         ret []u8{ nil, 0 };
     }
 
-    mem.memory_copy(p, a.data, a.len);
+    mem.raw_copy(p, a.data, a.len);
     @(p + a.len) = '/'::u8;
-    mem.memory_copy(p + a.len + 1, b.data, b.len);
+    mem.raw_copy(p + a.len + 1, b.data, b.len);
     
     ret []u8{ p, need };
 }

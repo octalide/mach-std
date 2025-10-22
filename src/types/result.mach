@@ -1,9 +1,9 @@
 use std.types.bool;
 
 pub str Result<T, E> {
-    tag: u32;
+    tag:  u32;
     data: uni {
-        ok_value: T;
+        ok_value:  T;
         err_value: E;
     };
 }
@@ -19,18 +19,12 @@ pub fun Result<T, E>.is_err(this: Result<T, E>) bool {
     ret this.tag == TAG_ERR;
 }
 
-pub fun Result<T, E>.unwrap_ok(this: Result<T, E>, default: T) T {
-    if (this.tag == TAG_OK) {
-        ret this.data.ok_value;
-    }
-    ret default;
+pub fun Result<T, E>.unwrap_ok(this: Result<T, E>) T {
+    ret this.data.ok_value;
 }
 
-pub fun Result<T, E>.unwrap_err(this: Result<T, E>, default: E) E {
-    if (this.tag == TAG_ERR) {
-        ret this.data.err_value;
-    }
-    ret default;
+pub fun Result<T, E>.unwrap_err(this: Result<T, E>) E {
+    ret this.data.err_value;
 }
 
 pub fun ok<T, E>(value: T) Result<T, E> {

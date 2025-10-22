@@ -18,7 +18,7 @@ fun path_to_cstr(path: string) []u8 {
     }
 
     if (path.len > 0) {
-        mem.memory_copy(buf, path.data, path.len);
+        mem.raw_copy(buf, path.data, path.len);
     }
     @(buf + path.len) = 0;
 

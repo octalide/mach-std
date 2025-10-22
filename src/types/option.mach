@@ -5,17 +5,27 @@ pub str Option<T> {
     value:   T;
 }
 
-pub fun Option<T>.unwrap(this: Option<T>, default: T) T {
-    if (this.is_some == 0) {
-        ret default;
-    }
+pub fun Option<T>.unwrap(this: Option<T>) T {
     ret this.value;
 }
 
 pub fun Option<T>.is_none(this: Option<T>) bool {
-    ret this.is_some == 0;
+    ret this.is_some == false;
 }
 
 pub fun Option<T>.is_some(this: Option<T>) bool {
-    ret this.is_some != 0;
+    ret this.is_some == true;
+}
+
+pub fun some<T>(value: T) Option<T> {
+    var opt: Option<T>;
+    opt.is_some = true;
+    opt.value   = value;
+    ret opt;
+}
+
+pub fun none<T>() Option<T> {
+    var opt: Option<T>;
+    opt.is_some = false;
+    ret opt;
 }
