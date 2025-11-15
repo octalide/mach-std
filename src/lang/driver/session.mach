@@ -1,0 +1,735 @@
+use          std.types.bool;
+use          std.types.list;
+use          std.types.option;
+use          std.types.result;
+use          std.types.size;
+use          std.types.string;
+use mem:     std.system.memory;
+
+use std.io.path;
+use fs: std.io.filesystem;
+
+use std.lang.config;
+use std.lang.diagnostics;
+use std.lang.frontend.lexical.tokens;
+
+fun session_find_target(config: *Config, target_name: str) Option[*ConfigTarget] {
+    if (config == nil || config.targets.data == nil || config.targets.len == 0) {
+        ret none[*ConfigTarget]();
+    }
+
+    var i: usize = 0;
+    for (i < config.targets.len) {
+        val candidate: *ConfigTarget = config.targets.data + i;
+        if (candidate.name.equals(target_name)) {
+            ret some[*ConfigTarget](candidate);
+        }
+        i = i + 1;
+    }
+
+    ret none[*ConfigTarget]();
+}
+
+pub rec SessionDepState {
+    name:       String;
+    dep_dir:    Path;
+    project_id: String;
+    source_dir: Path;
+    loaded:     bool;
+}
+
+pub fun (this: *SessionDepState) init(name: str, dep_root: Path) Option[str] {
+    mem.zero[SessionDepState](this, 1);
+
+    val name_clone_res: Result[String, str] = name.clone();
+    if (name_clone_res.is_err()) {
+        ret some[str](name_clone_res.unwrap_err());
+    }
+    this.name = name_clone_res.unwrap_ok();
+
+    val dep_dir_res: Result[Path, str] = build_dependency_dir(dep_root, name);
+    if (dep_dir_res.is_err()) {
+        this.name.dnit();
+        mem.zero[SessionDepState](this, 1);
+        ret some[str](dep_dir_res.unwrap_err());
+    }
+
+    this.dep_dir = dep_dir_res.unwrap_ok();
+    this.loaded  = false;
+
+    ret none[str]();
+}
+
+pub fun (this: *SessionDepState) dnit() {
+    if (this.name.data != nil) {
+        this.name.dnit();
+    }
+    if (this.project_id.data != nil) {
+        this.project_id.dnit();
+    }
+    if (this.source_dir.len > 0 && this.source_dir.data != nil) {
+        this.source_dir.dnit();
+    }
+    if (this.dep_dir.len > 0 && this.dep_dir.data != nil) {
+        this.dep_dir.dnit();
+    }
+
+    mem.zero[SessionDepState](this, 1);
+}
+
+pub rec DepInfo {
+    alias:        String;
+    project_id:   String;
+    root:         Path;
+    source_root:  Path;
+    is_dependency: bool;
+}
+
+pub fun (this: *DepInfo) dnit() {
+    if (this.alias.data != nil) {
+        this.alias.dnit();
+    }
+    if (this.project_id.data != nil) {
+        this.project_id.dnit();
+    }
+    if (this.root.len > 0 && this.root.data != nil) {
+        this.root.dnit();
+    }
+    if (this.source_root.len > 0 && this.source_root.data != nil) {
+        this.source_root.dnit();
+    }
+
+    mem.zero[DepInfo](this, 1);
+}
+
+pub rec Session {
+    config:        Config;
+    diagnostics:   List[Diagnostic];
+    project_root:  Path;
+    source_root:   Path;
+    dep_root:      Path;
+    dependencies:  List[SessionDepState];
+    target_mode:   str;
+    target_debug:  bool;
+    target_optimize: bool;
+}
+
+pub fun (this: *Session) init_from_config(config: *Config, project_root: *Path) Option[str] {
+    mem.zero[Session](this, 1);
+
+    if (config == nil) {
+        ret some[str]("invalid project config");
+    }
+
+    if (project_root == nil || project_root.data == nil || project_root.len == 0) {
+        ret some[str]("invalid project root");
+    }
+
+    this.config = @config;
+    mem.zero[Config](config, 1);
+
+    this.project_root = @project_root;
+    mem.zero[Path](project_root, 1);
+
+    val source_root_res: Result[Path, str] = build_source_root(this.project_root, this.config.dir_source);
+    if (source_root_res.is_err()) {
+        val err_msg: str = source_root_res.unwrap_err();
+        this.dnit();
+        ret some[str](err_msg);
+    }
+    this.source_root = source_root_res.unwrap_ok();
+
+    val opt_diag_init: Option[str] = this.diagnostics.init(8);
+    if (opt_diag_init.is_some()) {
+        val err_msg: str = opt_diag_init.unwrap();
+        this.dnit();
+        ret some[str](err_msg);
+    }
+
+    # use configured dep directory
+    val dep_root_res: Result[Path, str] = build_dependency_root_from_config(this.project_root, this.config.dir_dep);
+    if (dep_root_res.is_err()) {
+        val err_msg: str = dep_root_res.unwrap_err();
+        this.dnit();
+        ret some[str](err_msg);
+    }
+    this.dep_root = dep_root_res.unwrap_ok();
+
+    var dep_capacity: usize = this.config.dependencies.len;
+    if (dep_capacity == 0) {
+        dep_capacity = 1;
+    }
+
+    val deps_init_err: Option[str] = this.dependencies.init(dep_capacity);
+    if (deps_init_err.is_some()) {
+        val err_msg: str = deps_init_err.unwrap();
+        this.dnit();
+        ret some[str](err_msg);
+    }
+
+    var dep_index: usize = 0;
+    for (dep_index < this.config.dependencies.len) {
+        val dep_opt: Option[ConfigDependency] = this.config.dependencies.get(dep_index);
+        if (dep_opt.is_none()) {
+            dep_index = dep_index + 1;
+            cnt;
+        }
+
+        val dep_value: ConfigDependency = dep_opt.unwrap();
+
+        var state: SessionDepState;
+        val state_err: Option[str] = state.init(dep_value.name, this.dep_root);
+        if (state_err.is_some()) {
+            this.dnit();
+            ret state_err;
+        }
+
+        val push_err: Option[str] = this.dependencies.push(state);
+        if (push_err.is_some()) {
+            state.dnit();
+            this.dnit();
+            ret push_err;
+        }
+
+        dep_index = dep_index + 1;
+    }
+
+    val target_opt: Option[*ConfigTarget] = session_find_target(?this.config, this.config.target);
+    if (target_opt.is_none()) {
+        this.dnit();
+        ret some[str]("selected target not found in configuration");
+    }
+
+    val selected_target: *ConfigTarget = target_opt.unwrap();
+    this.target_mode      = selected_target.mode;
+    this.target_debug     = selected_target.debug;
+    this.target_optimize  = selected_target.optimize;
+
+    ret none[str]();
+}
+
+pub fun (this: *Session) dnit() {
+    this.config.dnit();
+    this.project_root.dnit();
+    this.source_root.dnit();
+    this.dep_root.dnit();
+
+    if (this.dependencies.data != nil) {
+        var dep_index: usize = 0;
+        for (dep_index < this.dependencies.len) {
+            val dep_state: *SessionDepState = this.dependencies.data + dep_index;
+            dep_state.dnit();
+            dep_index = dep_index + 1;
+        }
+    }
+    this.dependencies.dnit();
+
+    if (this.diagnostics.data != nil) {
+        var i: usize = 0;
+        for (i < this.diagnostics.len) {
+            val diag: *Diagnostic = this.diagnostics.data + i;
+            diag.dnit();
+            i = i + 1;
+        }
+    }
+
+    this.diagnostics.dnit();
+    mem.zero[Session](this, 1);
+}
+
+pub fun (this: *Session) push_diagnostic(diag: Diagnostic) Option[str] {
+    ret this.diagnostics.push(diag);
+}
+
+pub fun (this: *Session) emit_diagnostic(level: DiagnosticLevel, token: Token, message: str) Option[str] {
+    val diag: Diagnostic = diag_make(level, token, message);
+    val push_err: Option[str] = this.diagnostics.push(diag);
+    if (push_err.is_some()) {
+        var cleanup: Diagnostic = diag;
+        cleanup.dnit();
+        ret push_err;
+    }
+
+    ret none[str]();
+}
+
+pub fun (this: *Session) diagnostics_len() usize {
+    ret this.diagnostics.len;
+}
+
+pub fun (this: *Session) has_errors() bool {
+    var i: usize = 0;
+    for (i < this.diagnostics.len) {
+        val opt_diag: Option[Diagnostic] = this.diagnostics.get(i);
+        if (opt_diag.is_none()) {
+            i = i + 1;
+            cnt;
+        }
+
+        val diag: Diagnostic = opt_diag.unwrap();
+        if (diag.level == DIAGNOSTIC_ERROR) {
+            ret true;
+        }
+        i = i + 1;
+    }
+
+    ret false;
+}
+
+pub fun (this: *Session) lookup_project_prefix(prefix: str) Result[DepInfo, str] {
+    if (prefix.data == nil || prefix.len == 0) {
+        ret err[DepInfo, str]("unknown_module_prefix");
+    }
+
+    var effective: str = prefix;
+    if (prefix.equals("self")) {
+        effective = this.config.project_id;
+    }
+
+    if (effective.equals(this.config.project_id)) {
+        ret session_make_self_info(this);
+    }
+
+    val dep_opt: Option[*SessionDepState] = session_find_dep_state(this, effective);
+    if (dep_opt.is_none()) {
+        ret err[DepInfo, str]("unknown_module_prefix");
+    }
+
+    val dep_state: *SessionDepState = dep_opt.unwrap();
+    val ensure_res: Result[bool, str] = session_ensure_dep_loaded(this, dep_state);
+    if (ensure_res.is_err()) {
+        ret err[DepInfo, str](ensure_res.unwrap_err());
+    }
+
+    ret session_make_dependency_info(dep_state);
+}
+
+pub fun session_lookup_project_prefix(session: *Session, prefix: str) Option[DepInfo] {
+    if (session == nil) {
+        ret none[DepInfo]();
+    }
+
+    val res: Result[DepInfo, str] = session.lookup_project_prefix(prefix);
+    if (res.is_err()) {
+        ret none[DepInfo]();
+    }
+
+    ret some[DepInfo](res.unwrap_ok());
+}
+
+pub fun (this: *Session) resolve_module_path(prefix: str, relative_segments: []str) Result[Path, str] {
+    val info_res: Result[DepInfo, str] = this.lookup_project_prefix(prefix);
+    if (info_res.is_err()) {
+        ret err[Path, str](info_res.unwrap_err());
+    }
+
+    var info: DepInfo = info_res.unwrap_ok();
+
+    val rel_file_res: Result[Path, str] = build_module_file_relative(relative_segments);
+    if (rel_file_res.is_err()) {
+        info.dnit();
+        ret err[Path, str](rel_file_res.unwrap_err());
+    }
+
+    var rel_file: Path = rel_file_res.unwrap_ok();
+
+    val source_clone_res: Result[Path, str] = info.source_root.clone();
+    if (source_clone_res.is_err()) {
+        rel_file.dnit();
+        info.dnit();
+        ret err[Path, str](source_clone_res.unwrap_err());
+    }
+
+    var source_clone: Path = source_clone_res.unwrap_ok();
+    val joined_res: Result[Path, str] = path_join(source_clone, rel_file);
+    source_clone.dnit();
+    rel_file.dnit();
+
+    if (joined_res.is_err()) {
+        info.dnit();
+        ret err[Path, str](joined_res.unwrap_err());
+    }
+
+    info.dnit();
+    ret ok[Path, str](joined_res.unwrap_ok());
+}
+
+    pub fun session_resolve_module_path(session: *Session, prefix: str, relative_segments: []str) Result[Path, str] {
+        if (session == nil) {
+            ret err[Path, str]("invalid_session");
+        }
+
+        ret session.resolve_module_path(prefix, relative_segments);
+    }
+
+fun build_source_root(project_root: Path, dir_source: str) Result[Path, str] {
+    val dir_res: Result[Path, str] = path_from_string(dir_source);
+    if (dir_res.is_err()) {
+        ret err[Path, str](dir_res.unwrap_err());
+    }
+
+    var dir_path: Path = dir_res.unwrap_ok();
+
+    if (path_is_absolute_str(dir_source)) {
+        ret ok[Path, str](dir_path);
+    }
+
+    val root_clone_res: Result[Path, str] = project_root.clone();
+    if (root_clone_res.is_err()) {
+        dir_path.dnit();
+        ret err[Path, str](root_clone_res.unwrap_err());
+    }
+
+    var root_clone: Path = root_clone_res.unwrap_ok();
+    val joined_res: Result[Path, str] = path_join(root_clone, dir_path);
+    root_clone.dnit();
+    dir_path.dnit();
+
+    if (joined_res.is_err()) {
+        ret err[Path, str](joined_res.unwrap_err());
+    }
+
+    ret ok[Path, str](joined_res.unwrap_ok());
+}
+
+pub fun path_is_absolute_str(value: str) bool {
+    if (value.data == nil || value.len == 0) {
+        ret false;
+    }
+
+    val first: char = @(value.data);
+    if (first == '/') {
+        ret true;
+    }
+
+    if (first == '\\') {
+        ret true;
+    }
+
+    if (value.len >= 3) {
+        val second: char = @(value.data + 1);
+        val third:  char = @(value.data + 2);
+        if (second == ':' && (third == '/' || third == '\\')) {
+            ret true;
+        }
+    }
+
+    ret false;
+}
+
+fun build_dependency_root_from_config(project_root: Path, dep_dir: str) Result[Path, str] {
+    val dep_segment_res: Result[Path, str] = path_from_string(dep_dir);
+    if (dep_segment_res.is_err()) {
+        ret err[Path, str](dep_segment_res.unwrap_err());
+    }
+
+    var dep_segment: Path = dep_segment_res.unwrap_ok();
+    val root_clone_res: Result[Path, str] = project_root.clone();
+    if (root_clone_res.is_err()) {
+        dep_segment.dnit();
+        ret err[Path, str](root_clone_res.unwrap_err());
+    }
+
+    var root_clone: Path = root_clone_res.unwrap_ok();
+    val joined_res: Result[Path, str] = path_join(root_clone, dep_segment);
+    root_clone.dnit();
+    dep_segment.dnit();
+
+    if (joined_res.is_err()) {
+        ret err[Path, str](joined_res.unwrap_err());
+    }
+
+    ret ok[Path, str](joined_res.unwrap_ok());
+}
+
+fun build_dependency_dir(dep_root: Path, name: str) Result[Path, str] {
+    val name_res: Result[Path, str] = path_from_string(name);
+    if (name_res.is_err()) {
+        ret err[Path, str](name_res.unwrap_err());
+    }
+
+    var name_path: Path = name_res.unwrap_ok();
+    val root_clone_res: Result[Path, str] = dep_root.clone();
+    if (root_clone_res.is_err()) {
+        name_path.dnit();
+        ret err[Path, str](root_clone_res.unwrap_err());
+    }
+
+    var root_clone: Path = root_clone_res.unwrap_ok();
+    val joined_res: Result[Path, str] = path_join(root_clone, name_path);
+    root_clone.dnit();
+    name_path.dnit();
+
+    if (joined_res.is_err()) {
+        ret err[Path, str](joined_res.unwrap_err());
+    }
+
+    ret ok[Path, str](joined_res.unwrap_ok());
+}
+
+fun session_find_dep_state(session: *Session, name: str) Option[*SessionDepState] {
+    if (session == nil || session.dependencies.data == nil || session.dependencies.len == 0) {
+        ret none[*SessionDepState]();
+    }
+
+    var i: usize = 0;
+    for (i < session.dependencies.len) {
+        val dep_state: *SessionDepState = session.dependencies.data + i;
+        if (dep_state.name.as_str().equals(name)) {
+            ret some[*SessionDepState](dep_state);
+        }
+        i = i + 1;
+    }
+
+    ret none[*SessionDepState]();
+}
+
+fun session_make_self_info(session: *Session) Result[DepInfo, str] {
+    var info: DepInfo;
+    mem.zero[DepInfo](?info, 1);
+
+    val alias_clone_res: Result[String, str] = session.config.project_id.clone();
+    if (alias_clone_res.is_err()) {
+        ret err[DepInfo, str](alias_clone_res.unwrap_err());
+    }
+    info.alias = alias_clone_res.unwrap_ok();
+
+    val project_clone_res: Result[String, str] = session.config.project_id.clone();
+    if (project_clone_res.is_err()) {
+        info.alias.dnit();
+        ret err[DepInfo, str](project_clone_res.unwrap_err());
+    }
+    info.project_id = project_clone_res.unwrap_ok();
+
+    val root_clone_res: Result[Path, str] = session.project_root.clone();
+    if (root_clone_res.is_err()) {
+        info.alias.dnit();
+        info.project_id.dnit();
+        ret err[DepInfo, str](root_clone_res.unwrap_err());
+    }
+    info.root = root_clone_res.unwrap_ok();
+
+    val source_clone_res: Result[Path, str] = session.source_root.clone();
+    if (source_clone_res.is_err()) {
+        info.alias.dnit();
+        info.project_id.dnit();
+        info.root.dnit();
+        ret err[DepInfo, str](source_clone_res.unwrap_err());
+    }
+    info.source_root = source_clone_res.unwrap_ok();
+    info.is_dependency = false;
+
+    ret ok[DepInfo, str](info);
+}
+
+fun session_make_dependency_info(dep: *SessionDepState) Result[DepInfo, str] {
+    var info: DepInfo;
+    mem.zero[DepInfo](?info, 1);
+
+    val alias_clone_res: Result[String, str] = dep.name.as_str().clone();
+    if (alias_clone_res.is_err()) {
+        ret err[DepInfo, str](alias_clone_res.unwrap_err());
+    }
+    info.alias = alias_clone_res.unwrap_ok();
+
+    val id_clone_res: Result[String, str] = dep.project_id.as_str().clone();
+    if (id_clone_res.is_err()) {
+        info.alias.dnit();
+        ret err[DepInfo, str](id_clone_res.unwrap_err());
+    }
+    info.project_id = id_clone_res.unwrap_ok();
+
+    val root_clone_res: Result[Path, str] = dep.dep_dir.clone();
+    if (root_clone_res.is_err()) {
+        info.alias.dnit();
+        info.project_id.dnit();
+        ret err[DepInfo, str](root_clone_res.unwrap_err());
+    }
+    info.root = root_clone_res.unwrap_ok();
+
+    val source_clone_res: Result[Path, str] = dep.source_dir.clone();
+    if (source_clone_res.is_err()) {
+        info.alias.dnit();
+        info.project_id.dnit();
+        info.root.dnit();
+        ret err[DepInfo, str](source_clone_res.unwrap_err());
+    }
+    info.source_root   = source_clone_res.unwrap_ok();
+    info.is_dependency = true;
+
+    ret ok[DepInfo, str](info);
+}
+
+fun session_ensure_dep_loaded(session: *Session, dep: *SessionDepState) Result[bool, str] {
+    if (dep.loaded) {
+        ret ok[bool, str](true);
+    }
+
+    if (fs.is_dir(dep.dep_dir) == false) {
+        ret err[bool, str]("dependency_not_vendored");
+    }
+
+    val mach_name_res: Result[Path, str] = path_from_string("mach.toml");
+    if (mach_name_res.is_err()) {
+        ret err[bool, str](mach_name_res.unwrap_err());
+    }
+
+    var mach_name: Path = mach_name_res.unwrap_ok();
+    val dep_root_clone_res: Result[Path, str] = dep.dep_dir.clone();
+    if (dep_root_clone_res.is_err()) {
+        mach_name.dnit();
+        ret err[bool, str](dep_root_clone_res.unwrap_err());
+    }
+
+    var dep_root_clone: Path = dep_root_clone_res.unwrap_ok();
+    val config_path_res: Result[Path, str] = path_join(dep_root_clone, mach_name);
+    dep_root_clone.dnit();
+    mach_name.dnit();
+
+    if (config_path_res.is_err()) {
+        ret err[bool, str](config_path_res.unwrap_err());
+    }
+
+    var config_path: Path = config_path_res.unwrap_ok();
+    if (fs.exists(config_path) == false) {
+        config_path.dnit();
+        ret err[bool, str]("dependency_mach_toml_missing");
+    }
+
+    val config_res: Result[Config, str] = config_read(config_path.as_str());
+    if (config_res.is_err()) {
+        config_path.dnit();
+        ret err[bool, str](config_res.unwrap_err());
+    }
+
+    var dep_config: Config = config_res.unwrap_ok();
+
+    val id_clone_res: Result[String, str] = dep_config.project_id.clone();
+    if (id_clone_res.is_err()) {
+        dep_config.dnit();
+        config_path.dnit();
+        ret err[bool, str](id_clone_res.unwrap_err());
+    }
+
+    if (dep.project_id.data != nil) {
+        dep.project_id.dnit();
+    }
+    dep.project_id = id_clone_res.unwrap_ok();
+
+    val dep_root_again_res: Result[Path, str] = dep.dep_dir.clone();
+    if (dep_root_again_res.is_err()) {
+        dep.project_id.dnit();
+        dep_config.dnit();
+        config_path.dnit();
+        ret err[bool, str](dep_root_again_res.unwrap_err());
+    }
+
+    var dep_root_again: Path = dep_root_again_res.unwrap_ok();
+    val source_res: Result[Path, str] = build_source_root(dep_root_again, dep_config.dir_source);
+    dep_root_again.dnit();
+
+    if (source_res.is_err()) {
+        dep.project_id.dnit();
+        dep_config.dnit();
+        config_path.dnit();
+        ret err[bool, str](source_res.unwrap_err());
+    }
+
+    if (dep.source_dir.len > 0 && dep.source_dir.data != nil) {
+        dep.source_dir.dnit();
+    }
+    dep.source_dir = source_res.unwrap_ok();
+    dep.loaded     = true;
+
+    dep_config.dnit();
+    config_path.dnit();
+
+    ret ok[bool, str](true);
+}
+
+fun build_relative_segments_path(segments: []str) Result[Path, str] {
+    val first_res: Result[Path, str] = path_from_string(segments[0]);
+    if (first_res.is_err()) {
+        ret err[Path, str](first_res.unwrap_err());
+    }
+
+    var current: Path = first_res.unwrap_ok();
+    var index: usize = 1;
+    for (index < segments.len) {
+        val seg_res: Result[Path, str] = path_from_string(segments[index]);
+        if (seg_res.is_err()) {
+            current.dnit();
+            ret err[Path, str](seg_res.unwrap_err());
+        }
+
+        var seg_path: Path = seg_res.unwrap_ok();
+        val joined_res: Result[Path, str] = path_join(current, seg_path);
+        current.dnit();
+        seg_path.dnit();
+
+        if (joined_res.is_err()) {
+            ret err[Path, str](joined_res.unwrap_err());
+        }
+
+        current = joined_res.unwrap_ok();
+        index   = index + 1;
+    }
+
+    ret ok[Path, str](current);
+}
+
+fun build_module_file_relative(segments: []str) Result[Path, str] {
+    if (segments.len == 0 || segments.data == nil) {
+        val fallback_res: Result[Path, str] = path_from_string("main");
+        if (fallback_res.is_err()) {
+            ret err[Path, str](fallback_res.unwrap_err());
+        }
+
+        var fallback_path: Path = fallback_res.unwrap_ok();
+        val appended_res: Result[Path, str] = append_mach_extension(fallback_path);
+        fallback_path.dnit();
+
+        if (appended_res.is_err()) {
+            ret err[Path, str](appended_res.unwrap_err());
+        }
+
+        ret ok[Path, str](appended_res.unwrap_ok());
+    }
+
+    val rel_path_res: Result[Path, str] = build_relative_segments_path(segments);
+    if (rel_path_res.is_err()) {
+        ret err[Path, str](rel_path_res.unwrap_err());
+    }
+
+    var rel_path: Path = rel_path_res.unwrap_ok();
+    val appended_res: Result[Path, str] = append_mach_extension(rel_path);
+    rel_path.dnit();
+
+    if (appended_res.is_err()) {
+        ret err[Path, str](appended_res.unwrap_err());
+    }
+
+    ret ok[Path, str](appended_res.unwrap_ok());
+}
+
+fun append_mach_extension(base: Path) Result[Path, str] {
+    val str_clone_res: Result[String, str] = base.as_str().clone();
+    if (str_clone_res.is_err()) {
+        ret err[Path, str](str_clone_res.unwrap_err());
+    }
+
+    var builder: String = str_clone_res.unwrap_ok();
+    if (builder.append(".mach") == false) {
+        builder.dnit();
+        ret err[Path, str]("failed_to_format_module_path");
+    }
+
+    val path_res: Result[Path, str] = path_from_string(builder.as_str());
+    builder.dnit();
+
+    if (path_res.is_err()) {
+        ret err[Path, str](path_res.unwrap_err());
+    }
+
+    ret ok[Path, str](path_res.unwrap_ok());
+}

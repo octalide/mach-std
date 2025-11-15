@@ -1,33 +1,30 @@
-# mach-std build (cmach)
+# Mach Standard Library
 
-This Makefile builds the standard library using the `cmach` compiler from the sibling `mach-c` repository.
+This repository contains the cannonical standard library for the Mach programming language.
 
-## prerequisites
-- `mach-c` built at `../mach-c/bin/cmach` (or set `CMACH` to your path)
+## Installation
 
-## build
-```bash
-# from mach-std directory
-make
-```
-Artifacts:
-- Static library: `out/lib/libmachstd.a`
-- Objects: `out/obj/**/*.o`
+To use the standard library in your Mach project, you can include it as a dependency in your project's configuration file:
 
-## options
-- `OPT` (default `2`): optimization level (0–3)
-- `CMACH`: path to the compiler (default `../mach-c/bin/cmach`)
-
-## clean
-```bash
-make clean
+```mach
+[dep.std]
+type="remote"
+path="https://github.com/octalide/mach-std"
 ```
 
-## link example
-When building your program with `cmach`, pass `-I src -M std=src` to resolve `std.*` modules and link with `out/lib/libmachstd.a`:
+You can also use the Mach dependency manager to add it to your project:
+
 ```bash
-# compile your app to object
-../mach-c/bin/cmach build app.mach --emit-obj -O2 -I src -M std=src -o app.o
-# link with the std library
-cc -o app app.o out/lib/libmachstd.a
+mach dep add https://github.com/octalide/mach-std
 ```
+
+## Documentation
+
+The documentation for the Mach Standard Library can be found in the [docs](./docs) directory.
+
+> NOTE: The documentation is currently a work in progress and the API is rapidly changing.
+> Please refer to the source code for the most up-to-date information.
+
+## Contributing
+
+Contributions are welcome! If you find a bug or have a feature request, please open an issue on GitHub. If you'd like to contribute code, please fork the repository and submit a pull request.
