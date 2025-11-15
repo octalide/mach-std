@@ -33,4 +33,4 @@ use std.types.result;
 use std.types.size;
 use std.types.string;
 
-use std.runtime;
+use std.system.runtime;
