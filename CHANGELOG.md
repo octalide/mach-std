@@ -1,0 +1,36 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.0] - 2025-11-15
+
+### Added
+- Initial release of mach-std as a standalone standard library
+- Core type system with List, Option, Result, and String types
+- Platform-specific runtime support for Linux, Darwin, and Windows
+- System modules including memory management, time, and environment handling
+- I/O modules for console, filesystem, and path operations
+- Text processing utilities (ASCII, parsing)
+- Data serialization support (JSON, TOML)
+- Cryptographic hashing functionality
+- Language tooling modules (lexer, parser, AST, compiler driver)
+- Cross-platform system call abstractions
+- Memory manipulation functions (memset, memcpy)
+- Runtime entry points and panic mechanisms for all supported platforms
+
+### Changed
+- Migrated from main mach repository to dedicated mach-std repository
+- Standardized string type usage to `String` across the codebase
+- Refactored function naming for consistency (e.g., `length` to `len`)
+- Updated to use instance method syntax for string formatting
+- Improved error handling patterns with Result and Option types
+- Enhanced platform-specific implementations for better consistency
+
+### Fixed
+- String handling in format functions with proper pointer dereferencing
+- Environment variable retrieval to use direct file reading on Linux
+- UTF-16 to UTF-8 conversion for Windows argument handling
+- Conditional compilation directives for platform-specific code

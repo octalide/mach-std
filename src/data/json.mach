@@ -20,14 +20,14 @@ pub rec JsonValue {
     data: uni {
         bool_val:   bool;
         number_val: f64;
-        string_val: str;
+        string_val: String;
         array_val:  List[JsonValue];
         object_val: List[JsonProperty];
     };
 }
 
 pub rec JsonProperty {
-    key:   str;
+    key:   String;
     value: JsonValue;
 }
 
@@ -57,7 +57,7 @@ pub fun json_number(value: f64) JsonValue {
     ret v;
 }
 
-pub fun json_string(value: str) JsonValue {
+pub fun json_string(value: String) JsonValue {
     var v: JsonValue;
     v.tag             = JSON_STRING;
     v.data.string_val = value;
@@ -85,7 +85,11 @@ pub fun (this: *JsonValue) init() {
 }
 
 pub fun (this: *JsonValue) dnit() {
-    if (this.tag == JSON_ARRAY) {
+    if (this.tag == JSON_STRING) {
+        var s: *String = ?this.data.string_val;
+        s.dnit();
+    }
+    or (this.tag == JSON_ARRAY) {
         var i: usize = 0;
         for (i < this.data.array_val.len) {
             val item: *JsonValue = this.data.array_val.data + i;
@@ -99,6 +103,8 @@ pub fun (this: *JsonValue) dnit() {
         var i: usize = 0;
         for (i < this.data.object_val.len) {
             val item: *JsonProperty = this.data.object_val.data + i;
+            var k: *String = ?item.key;
+            k.dnit();
             item.value.dnit();
             i = i + 1;
         }
@@ -150,11 +156,12 @@ pub fun (this: JsonValue) as_number() Option[f64] {
     ret none[f64]();
 }
 
-pub fun (this: JsonValue) as_string() Option[string] {
+pub fun (this: JsonValue) as_string() Option[str] {
     if (this.tag == JSON_STRING) {
-        ret some[string](this.data.string_val);
+        var s: *String = ?this.data.string_val;
+        ret some[str](s.as_str());
     }
-    ret none[string]();
+    ret none[str]();
 }
 
 pub fun (this: JsonValue) as_array() Option[*List[JsonValue]] {
@@ -218,7 +225,7 @@ fun (this: *JsonParser) match_keyword(keyword: str) bool {
     ret true;
 }
 
-fun (this: *JsonParser) parse_string_content() Result[str, str] {
+fun (this: *JsonParser) parse_string_content() Result[String, str] {
     val start: usize = this.pos;
     var len:   usize = 0;
 
@@ -231,13 +238,13 @@ fun (this: *JsonParser) parse_string_content() Result[str, str] {
         or (ch == '\\') {
             this.advance();
             if (this.pos >= this.input.len) {
-                ret err[str, str]("unexpected end in escape sequence");
+                ret err[String, str]("unexpected end in escape sequence");
             }
             this.advance();
             len = len + 1;
         }
         or (ch < 32) {
-            ret err[str, str]("invalid control character in string");
+            ret err[String, str]("invalid control character in str");
         }
         or {
             this.advance();
@@ -245,14 +252,18 @@ fun (this: *JsonParser) parse_string_content() Result[str, str] {
         }
     }
 
-    var buffer: *char = nil;
+    var result: String;
     if (len > 0) {
-        val alloc_res: Option[*char] = mem.allocate[char](len);
-        if (alloc_res.is_none()) {
-            ret err[str, str]("allocation failed");
+        val init_err: Option[str] = result.init(len);
+        if (init_err.is_some()) {
+            ret err[String, str]("allocation failed");
         }
-
-        buffer = alloc_res.unwrap();
+    } or {
+        val init_err: Option[str] = result.init(1);
+        if (init_err.is_some()) {
+            ret err[String, str]("allocation failed");
+        }
+        ret ok[String, str](result);
     }
 
     # copy and process escapes
@@ -270,47 +281,44 @@ fun (this: *JsonParser) parse_string_content() Result[str, str] {
 
             val esc: char = @(this.input.data + read_pos);
             if (esc == 'n') {
-                @(buffer + write_pos) = 10;
+                @(result.data + write_pos) = 10;
             }
             or (esc == 't') {
-                @(buffer + write_pos) = 9;
+                @(result.data + write_pos) = 9;
             }
             or (esc == 'r') {
-                @(buffer + write_pos) = 13;
+                @(result.data + write_pos) = 13;
             }
             or (esc == '\\') {
-                @(buffer + write_pos) = '\\';
+                @(result.data + write_pos) = '\\';
             }
             or (esc == '"') {
-                @(buffer + write_pos) = '"';
+                @(result.data + write_pos) = '"';
             }
             or (esc == '/') {
-                @(buffer + write_pos) = '/';
+                @(result.data + write_pos) = '/';
             }
             or (esc == 'b') {
-                @(buffer + write_pos) = 8;
+                @(result.data + write_pos) = 8;
             }
             or (esc == 'f') {
-                @(buffer + write_pos) = 12;
+                @(result.data + write_pos) = 12;
             }
             or {
-                @(buffer + write_pos) = esc;
+                @(result.data + write_pos) = esc;
             }
 
             write_pos = write_pos + 1;
             read_pos  = read_pos + 1;
         }
         or {
-            @(buffer + write_pos) = ch;
+            @(result.data + write_pos) = ch;
             write_pos = write_pos + 1;
             read_pos  = read_pos + 1;
         }
     }
 
-    var result: str;
-    result.data = buffer;
-    result.len  = len;
-    ret ok[str, str](result);
+    ret ok[String, str](result);
 }
 
 fun (this: *JsonParser) parse_string() Result[JsonValue, str] {
@@ -320,14 +328,16 @@ fun (this: *JsonParser) parse_string() Result[JsonValue, str] {
 
     this.advance();
 
-    val str_result: Result[str, str] = this.parse_string_content();
+    val str_result: Result[String, str] = this.parse_string_content();
     if (str_result.is_err()) {
         ret err[JsonValue, str](str_result.unwrap_err());
     }
 
     if (this.current() != '"') {
-        str_result.unwrap_ok().dnit();
-        ret err[JsonValue, str]("unterminated string");
+        var s: String = str_result.unwrap_ok();
+        var sp: *String = ?s;
+        sp.dnit();
+        ret err[JsonValue, str]("unterminated str");
     }
 
     this.advance();
@@ -453,7 +463,7 @@ fun (this: *JsonParser) parse_array() Result[JsonValue, str] {
         ret err[JsonValue, str]("failed to allocate array list");
     }
 
-    val list: List[JsonValue];
+    var list: List[JsonValue];
     val res_init: Option[str] = list.init(4);
     if (res_init.is_some()) {
         ret err[JsonValue, str](res_init.unwrap());
@@ -472,10 +482,10 @@ fun (this: *JsonParser) parse_array() Result[JsonValue, str] {
             ret err[JsonValue, str](elem_result.unwrap_err());
         }
 
-        val push_ok: bool = list.push(elem_result.unwrap_ok());
-        if (push_ok == false) {
+        val push_err: Option[str] = list.push(elem_result.unwrap_ok());
+        if (push_err.is_some()) {
             list.dnit();
-            ret err[JsonValue, str]("failed to push array element");
+            ret err[JsonValue, str](push_err.unwrap());
         }
 
         this.skip_whitespace();
@@ -505,7 +515,7 @@ fun (this: *JsonParser) parse_object() Result[JsonValue, str] {
     this.advance();
     this.skip_whitespace();
 
-    val list: List[JsonProperty];
+    var list: List[JsonProperty];
     val res_init: Option[str] = list.init(4);
     if (res_init.is_some()) {
         ret err[JsonValue, str](res_init.unwrap());
@@ -522,25 +532,26 @@ fun (this: *JsonParser) parse_object() Result[JsonValue, str] {
         # expect opening quote for key
         if (this.current() != '"') {
             list.dnit();
-            ret err[JsonValue, str]("expected string key");
+            ret err[JsonValue, str]("expected str key");
         }
 
         this.advance();
 
-        # parse key string content
-        val key_result: Result[string, string] = this.parse_string_content();
+        # parse key str content
+        val key_result: Result[String, str] = this.parse_string_content();
         if (key_result.is_err()) {
             list.dnit();
-            ret err[JsonValue, string](key_result.unwrap_err());
+            ret err[JsonValue, str](key_result.unwrap_err());
         }
 
-        var key: string = key_result.unwrap_ok();
+        var key: String = key_result.unwrap_ok();
+        var key_ptr: *String = ?key;
 
         # expect closing quote for key
         if (this.current() != '"') {
-            key.dnit();
+            key_ptr.dnit();
             list.dnit();
-            ret err[JsonValue, string]("unterminated key string");
+            ret err[JsonValue, str]("unterminated key str");
         }
 
         this.advance();
@@ -548,20 +559,20 @@ fun (this: *JsonParser) parse_object() Result[JsonValue, str] {
 
         # expect colon
         if (this.current() != ':') {
-            key.dnit();
+            key_ptr.dnit();
             list.dnit();
-            ret err[JsonValue, string]("expected ':' after key");
+            ret err[JsonValue, str]("expected ':' after key");
         }
 
         this.advance();
         this.skip_whitespace();
 
         # parse value
-        val val_result: Result[JsonValue, string] = this.parse_value();
+        val val_result: Result[JsonValue, str] = this.parse_value();
         if (val_result.is_err()) {
-            key.dnit();
+            key_ptr.dnit();
             list.dnit();
-            ret err[JsonValue, string](val_result.unwrap_err());
+            ret err[JsonValue, str](val_result.unwrap_err());
         }
 
         var value: JsonValue = val_result.unwrap_ok();
@@ -572,12 +583,14 @@ fun (this: *JsonParser) parse_object() Result[JsonValue, str] {
         prop.value = value;
 
         # push property to list
-        val push_ok: bool = list.push(prop);
-        if (push_ok == false) {
-            prop.key.dnit();
-            prop.value.dnit();
+        val push_err: Option[str] = list.push(prop);
+        if (push_err.is_some()) {
+            var prop_key_ptr: *String = ?prop.key;
+            var prop_val_ptr: *JsonValue = ?prop.value;
+            prop_key_ptr.dnit();
+            prop_val_ptr.dnit();
             list.dnit();
-            ret err[JsonValue, string]("failed to push property");
+            ret err[JsonValue, str](push_err.unwrap());
         }
 
         # property ownership transferred to list
@@ -594,11 +607,11 @@ fun (this: *JsonParser) parse_object() Result[JsonValue, str] {
         }
         or {
             list.dnit();
-            ret err[JsonValue, string]("expected ',' or '}' in object");
+            ret err[JsonValue, str]("expected ',' or '}' in object");
         }
     }
 
-    ret ok[JsonValue, string](json_object(list));
+    ret ok[JsonValue, str](json_object(list));
 }
 
 fun (this: *JsonParser) parse_value() Result[JsonValue, str] {
@@ -647,9 +660,9 @@ pub fun parse_json(input: str) Result[JsonValue, str] {
         ret err[JsonValue, str]("input is null");
     }
 
-    val cloned: Option[String] = input.clone();
-    if (cloned.is_none()) {
-        ret err[JsonValue, str]("failed to clone input string");
+    val cloned: Result[String, str] = input.clone();
+    if (cloned.is_err()) {
+        ret err[JsonValue, str]("failed to clone input str");
     }
 
     var parser: JsonParser;
@@ -665,7 +678,9 @@ pub fun parse_json(input: str) Result[JsonValue, str] {
     parser.skip_whitespace();
 
     if (parser.pos < input.len) {
-        result.unwrap_ok().dnit();
+        var v: JsonValue = result.unwrap_ok();
+        var vp: *JsonValue = ?v;
+        vp.dnit();
         ret err[JsonValue, str]("unexpected data after json value");
     }
 
@@ -674,14 +689,15 @@ pub fun parse_json(input: str) Result[JsonValue, str] {
 
 # object lookup helper
 pub fun (this: JsonValue) get_property(key: str) Option[JsonValue] {
-    if (this.tag != JSON_OBJECT || this.data.object_val == nil) {
+    if (this.tag != JSON_OBJECT || this.data.object_val.data == nil) {
         ret none[JsonValue]();
     }
 
     var i: usize = 0;
     for (i < this.data.object_val.len) {
         val prop: *JsonProperty = this.data.object_val.data + i;
-        if (prop.key.equals(key)) {
+        var k: *String = ?prop.key;
+        if (k.as_str().equals(key)) {
             ret some[JsonValue](prop.value);
         }
         i = i + 1;
@@ -692,7 +708,7 @@ pub fun (this: JsonValue) get_property(key: str) Option[JsonValue] {
 
 # array index helper
 pub fun (this: JsonValue) get_index(index: usize) Option[JsonValue] {
-    if (this.tag != JSON_ARRAY || this.data.array_val == nil) {
+    if (this.tag != JSON_ARRAY || this.data.array_val.data == nil) {
         ret none[JsonValue]();
     }
 
