@@ -9,6 +9,11 @@ pub val SYS_MMAP:          usize = 0x20000c5;
 pub val SYS_MUNMAP:        usize = 0x2000049;
 pub val SYS_OPENAT:        usize = 0x20001cf;
 pub val SYS_CLOCK_GETTIME: usize = 0x2000126;
+pub val SYS_UNLINKAT:      usize = 0x20001d4;
+pub val SYS_RENAMEAT:      usize = 0x20001d8;
+pub val SYS_MKDIRAT:       usize = 0x20001d3;
+pub val SYS_FSTATAT64:     usize = 0x20001dd;
+pub val SYS_FACCESSAT:     usize = 0x20001e8;
 
 pub val AT_FDCWD: i32 = -100;
 
@@ -67,4 +72,24 @@ pub fun clock_gettime(clock_id: i32, ts: *u8) i32 {
     }
 
     ret 0;
+}
+
+pub fun newfstatat(dirfd: i32, path: *u8, statbuf: *u8, flags: i32) i64 {
+    ret syscall4(SYS_FSTATAT64, dirfd::isize::usize, path::usize, statbuf::usize, flags::usize);
+}
+
+pub fun unlinkat(dirfd: i32, path: *u8, flags: i32) i64 {
+    ret syscall3(SYS_UNLINKAT, dirfd::isize::usize, path::usize, flags::usize);
+}
+
+pub fun renameat(olddirfd: i32, oldpath: *u8, newdirfd: i32, newpath: *u8) i64 {
+    ret syscall4(SYS_RENAMEAT, olddirfd::isize::usize, oldpath::usize, newdirfd::isize::usize, newpath::usize);
+}
+
+pub fun mkdirat(dirfd: i32, path: *u8, mode: i32) i64 {
+    ret syscall3(SYS_MKDIRAT, dirfd::isize::usize, path::usize, mode::usize);
+}
+
+pub fun faccessat(dirfd: i32, path: *u8, mode: i32, flags: i32) i64 {
+    ret syscall4(SYS_FACCESSAT, dirfd::isize::usize, path::usize, mode::usize, flags::usize);
 }

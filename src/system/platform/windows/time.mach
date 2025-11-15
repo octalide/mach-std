@@ -78,7 +78,7 @@ pub fun realtime_timespec(ts_ptr: *Timespec) i32 {
         ret -1;
     }
 
-    @ts_ptr.tv_sec  = (nanos / 1000000000) :: i64;
-    @ts_ptr.tv_nsec = (nanos % 1000000000) :: i64;
+    ts_ptr.tv_sec  = (nanos / 1000000000) :: i64;
+    ts_ptr.tv_nsec = (nanos % 1000000000) :: i64;
     ret 0;
 }
