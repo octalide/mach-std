@@ -5,15 +5,15 @@ use std.types.result;
 use std.types.string;
 use std.text.ascii;
 
-$if (OS == OS_LINUX) {
+$if (target.os == OS_LINUX) {
     use ptime: std.system.platform.linux.time;
 }
 
-$if (OS == OS_DARWIN) {
+$if (target.os == OS_DARWIN) {
     use ptime: std.system.platform.darwin.time;
 }
 
-$if (OS == OS_WINDOWS) {
+$if (target.os == OS_WINDOWS) {
     use ptime: std.system.platform.windows.time;
 }
 

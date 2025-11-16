@@ -3,15 +3,15 @@ use std.types.result;
 use std.types.bool;
 use std.io.path;
 
-$if (OS == OS_LINUX) {
+$if (target.os == OS_LINUX) {
     use platform: std.system.platform.linux.filesystem;
 }
 
-$if (OS == OS_DARWIN) {
+$if (target.os == OS_DARWIN) {
     use platform: std.system.platform.darwin.filesystem;
 }
 
-$if (OS == OS_WINDOWS) {
+$if (target.os == OS_WINDOWS) {
     use platform: std.system.platform.windows.filesystem;
 }
 

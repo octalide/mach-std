@@ -1,12 +1,12 @@
-$if (OS == OS_LINUX) {
+$if (target.os == OS_LINUX) {
     use memory: std.system.platform.linux.memory;
 }
 
-$if (OS == OS_DARWIN) {
+$if (target.os == OS_DARWIN) {
     use memory: std.system.platform.darwin.memory;
 }
 
-$if (OS == OS_WINDOWS) {
+$if (target.os == OS_WINDOWS) {
     use memory: std.system.platform.windows.memory;
 }
 
