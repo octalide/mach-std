@@ -3,15 +3,15 @@ use std.types.string;
 use std.types.result;
 use std.types.size;
 
-$if (OS == OS_LINUX) {
+$if (target.os == OS_LINUX) {
     use console: std.system.platform.linux.console;
 }
 
-$if (OS == OS_DARWIN) {
+$if (target.os == OS_DARWIN) {
     use console: std.system.platform.darwin.console;
 }
 
-$if (OS == OS_WINDOWS) {
+$if (target.os == OS_WINDOWS) {
     use console: std.system.platform.windows.console;
 }
 

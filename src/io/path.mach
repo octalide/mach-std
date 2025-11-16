@@ -5,7 +5,7 @@ use      std.types.option;
 use      std.types.result;
 use mem: std.system.memory;
 
-$if(OS == OS_WINDOWS) {
+$if(target.os == OS_WINDOWS) {
     val PATH_SEPARATOR: u8 = '\\';
 }
 or {

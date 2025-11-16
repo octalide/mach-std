@@ -2,22 +2,22 @@ use std.types.string;
 use std.types.size;
 use std.types.option;
 
-$if (OS == OS_LINUX) {
+$if (target.os == OS_LINUX) {
     use platform: std.system.platform.linux.runtime;
 }
 
-$if (OS == OS_DARWIN) {
+$if (target.os == OS_DARWIN) {
     use platform: std.system.platform.darwin.runtime;
 }
 
-$if (OS == OS_WINDOWS) {
+$if (target.os == OS_WINDOWS) {
     use platform: std.system.platform.windows.runtime;
 }
 
 pub ext main: fun([]str) i64;
 pub ext "mach_runtime_exit" mach_runtime_exit: fun(i64);
 
-$if (OS == OS_WINDOWS) {
+$if (target.os == OS_WINDOWS) {
     $mach_runtime_entry.symbol = "mach_runtime_entry";
     fun mach_runtime_entry() {
         val args_opt:  Option[[]str] = platform.collect_args();
@@ -41,7 +41,7 @@ $if (OS == OS_WINDOWS) {
     }
 }
 
-$if (OS == OS_LINUX || OS == OS_DARWIN) {
+$if (target.os == OS_LINUX || target.os == OS_DARWIN) {
     $mach_runtime_entry.symbol = "mach_runtime_entry";
     fun mach_runtime_entry(stack: *u8) i64 {
         val argc:     usize         = platform.get_argc(stack);
@@ -56,7 +56,7 @@ $if (OS == OS_LINUX || OS == OS_DARWIN) {
 
     }
 
-    $if (OS == OS_LINUX) {
+    $if (target.os == OS_LINUX) {
 
     asm {
     .text
@@ -70,7 +70,7 @@ $if (OS == OS_LINUX || OS == OS_DARWIN) {
     }
 }
 
-$if (OS == OS_DARWIN) {
+$if (target.os == OS_DARWIN) {
     asm {
     .text
     .globl _start
@@ -83,7 +83,7 @@ $if (OS == OS_DARWIN) {
     }
 }
 
-$if (OS == OS_LINUX || OS == OS_DARWIN) {
+$if (target.os == OS_LINUX || target.os == OS_DARWIN) {
     $abort.symbol = "abort";
     pub fun abort() i64 {
         mach_runtime_exit(255);
@@ -91,7 +91,7 @@ $if (OS == OS_LINUX || OS == OS_DARWIN) {
     }
 }
 
-$if (OS == OS_WINDOWS) {
+$if (target.os == OS_WINDOWS) {
     $abort.symbol = "abort";
     pub fun abort() i64 {
         mach_runtime_exit(255);
