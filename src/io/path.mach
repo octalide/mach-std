@@ -25,7 +25,13 @@ pub fun path_from_string(s: str) Result[Path, str] {
         ret err[Path, str](res_clone.unwrap_err());
     }
 
-    ret ok[Path, str](res_clone.unwrap_ok()::Path);
+    val cloned: String = res_clone.unwrap_ok();
+
+    var path: Path;
+    path.data = cloned.data;
+    path.len  = cloned.len;
+
+    ret ok[Path, str](path);
 }
 
 pub fun (this: *Path) init(len: usize) Option[str] {
