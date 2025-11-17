@@ -375,7 +375,7 @@ pub fun (this: *Driver) stage_setup() Option[str] {
     # TODO: leverage this.options.target_mode/debug/optimize to drive backend configuration
     # once code generation stages are implemented.
 
-    val target_opt: Option[ConfigTarget] = this.session.config.target_get(this.session.config.target);
+    val target_opt: Option[ConfigTarget] = this.session.options.config.target_get(this.session.options.config.target);
     if (target_opt.is_none()) {
         ret some[str]("selected target not found in configuration");
     }
@@ -391,7 +391,7 @@ pub fun (this: *Driver) stage_setup() Option[str] {
         ret some[str]("library builds without entrypoint require multi-file compilation (not yet implemented)");
     }
 
-    val module_id_res: Result[String, str] = make_module_id(this.session.config.project_id, target.entrypoint);
+    val module_id_res: Result[String, str] = make_module_id(this.session.options.config.project_id, target.entrypoint);
     if (module_id_res.is_err()) {
         ret some[str](module_id_res.unwrap_err());
     }

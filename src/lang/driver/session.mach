@@ -11,24 +11,8 @@ use fs: std.io.filesystem;
 
 use std.lang.config;
 use std.lang.diagnostics;
+use std.lang.driver.options;
 use std.lang.frontend.lexical.tokens;
-
-fun session_find_target(config: *Config, target_name: str) Option[*ConfigTarget] {
-    if (config == nil || config.targets.data == nil || config.targets.len == 0) {
-        ret none[*ConfigTarget]();
-    }
-
-    var i: usize = 0;
-    for (i < config.targets.len) {
-        val candidate: *ConfigTarget = config.targets.data + i;
-        if (candidate.name.equals(target_name)) {
-            ret some[*ConfigTarget](candidate);
-        }
-        i = i + 1;
-    }
-
-    ret none[*ConfigTarget]();
-}
 
 pub rec SessionDepState {
     name:       String;
@@ -103,35 +87,24 @@ pub fun (this: *DepInfo) dnit() {
 }
 
 pub rec Session {
-    config:        Config;
-    diagnostics:   List[Diagnostic];
-    project_root:  Path;
-    source_root:   Path;
-    dep_root:      Path;
-    dependencies:  List[SessionDepState];
-    target_mode:   str;
-    target_debug:  bool;
-    target_optimize: bool;
+    options:      Options;
+    diagnostics:  List[Diagnostic];
+    source_root:  Path;
+    dep_root:     Path;
+    dependencies: List[SessionDepState];
 }
 
-pub fun (this: *Session) init_from_config(config: *Config, project_root: *Path) Option[str] {
+pub fun (this: *Session) init(options: *Options) Option[str] {
     mem.zero[Session](this, 1);
 
-    if (config == nil) {
-        ret some[str]("invalid project config");
+    if (options == nil) {
+        ret some[str]("invalid build options");
     }
 
-    if (project_root == nil || project_root.data == nil || project_root.len == 0) {
-        ret some[str]("invalid project root");
-    }
+    this.options = @options;
+    mem.zero[Options](options, 1);
 
-    this.config = @config;
-    mem.zero[Config](config, 1);
-
-    this.project_root = @project_root;
-    mem.zero[Path](project_root, 1);
-
-    val source_root_res: Result[Path, str] = build_source_root(this.project_root, this.config.dir_source);
+    val source_root_res: Result[Path, str] = build_source_root(this.options.project_root, this.options.config.dir_source);
     if (source_root_res.is_err()) {
         val err_msg: str = source_root_res.unwrap_err();
         this.dnit();
@@ -147,7 +120,7 @@ pub fun (this: *Session) init_from_config(config: *Config, project_root: *Path) 
     }
 
     # use configured dep directory
-    val dep_root_res: Result[Path, str] = build_dependency_root_from_config(this.project_root, this.config.dir_dep);
+    val dep_root_res: Result[Path, str] = build_dependency_root_from_config(this.options.project_root, this.options.config.dir_dep);
     if (dep_root_res.is_err()) {
         val err_msg: str = dep_root_res.unwrap_err();
         this.dnit();
@@ -155,7 +128,7 @@ pub fun (this: *Session) init_from_config(config: *Config, project_root: *Path) 
     }
     this.dep_root = dep_root_res.unwrap_ok();
 
-    var dep_capacity: usize = this.config.dependencies.len;
+    var dep_capacity: usize = this.options.config.dependencies.len;
     if (dep_capacity == 0) {
         dep_capacity = 1;
     }
@@ -168,8 +141,8 @@ pub fun (this: *Session) init_from_config(config: *Config, project_root: *Path) 
     }
 
     var dep_index: usize = 0;
-    for (dep_index < this.config.dependencies.len) {
-        val dep_opt: Option[ConfigDependency] = this.config.dependencies.get(dep_index);
+    for (dep_index < this.options.config.dependencies.len) {
+        val dep_opt: Option[ConfigDependency] = this.options.config.dependencies.get(dep_index);
         if (dep_opt.is_none()) {
             dep_index = dep_index + 1;
             cnt;
@@ -194,23 +167,17 @@ pub fun (this: *Session) init_from_config(config: *Config, project_root: *Path) 
         dep_index = dep_index + 1;
     }
 
-    val target_opt: Option[*ConfigTarget] = session_find_target(?this.config, this.config.target);
+    val target_opt: Option[*ConfigTarget] = options_selected_target(?this.options);
     if (target_opt.is_none()) {
         this.dnit();
         ret some[str]("selected target not found in configuration");
     }
 
-    val selected_target: *ConfigTarget = target_opt.unwrap();
-    this.target_mode      = selected_target.mode;
-    this.target_debug     = selected_target.debug;
-    this.target_optimize  = selected_target.optimize;
-
     ret none[str]();
 }
 
 pub fun (this: *Session) dnit() {
-    this.config.dnit();
-    this.project_root.dnit();
+    this.options.dnit();
     this.source_root.dnit();
     this.dep_root.dnit();
 
@@ -283,10 +250,10 @@ pub fun (this: *Session) lookup_project_prefix(prefix: str) Result[DepInfo, str]
 
     var effective: str = prefix;
     if (prefix.equals("self")) {
-        effective = this.config.project_id;
+        effective = this.options.config.project_id;
     }
 
-    if (effective.equals(this.config.project_id)) {
+    if (effective.equals(this.options.config.project_id)) {
         ret session_make_self_info(this);
     }
 
@@ -488,20 +455,20 @@ fun session_make_self_info(session: *Session) Result[DepInfo, str] {
     var info: DepInfo;
     mem.zero[DepInfo](?info, 1);
 
-    val alias_clone_res: Result[String, str] = session.config.project_id.clone();
+    val alias_clone_res: Result[String, str] = session.options.config.project_id.clone();
     if (alias_clone_res.is_err()) {
         ret err[DepInfo, str](alias_clone_res.unwrap_err());
     }
     info.alias = alias_clone_res.unwrap_ok();
 
-    val project_clone_res: Result[String, str] = session.config.project_id.clone();
+    val project_clone_res: Result[String, str] = session.options.config.project_id.clone();
     if (project_clone_res.is_err()) {
         info.alias.dnit();
         ret err[DepInfo, str](project_clone_res.unwrap_err());
     }
     info.project_id = project_clone_res.unwrap_ok();
 
-    val root_clone_res: Result[Path, str] = session.project_root.clone();
+    val root_clone_res: Result[Path, str] = session.options.project_root.clone();
     if (root_clone_res.is_err()) {
         info.alias.dnit();
         info.project_id.dnit();
