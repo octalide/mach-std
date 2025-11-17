@@ -1,0 +1,417 @@
+use      std.text.ascii;
+use      std.types.bool;
+use      std.types.option;
+use      std.types.result;
+use      std.types.string;
+use mem: std.system.memory;
+
+## Semantic version record following semver 2.0.0 spec
+pub rec Semver {
+    major:      u64;
+    patch:      u64;
+    minor:      u64;
+    prerelease: str;
+    build:      str;
+}
+
+## Parse a version string into a semver
+## ---
+## input: major.minor.patch[-prerelease][+build]
+pub fun semver_parse(input: str) Result[Semver, str] {
+    if (input.is_empty()) {
+        ret err[Semver, str]("empty version string");
+    }
+
+    var v:   Semver;
+    var pos: usize = 0;
+    
+    # parse major
+    var major_result: Option[u64] = parse_number(input, ?pos);
+    if (major_result.is_none()) {
+        ret err[Semver, str]("invalid major version");
+    }
+    v.major = major_result.unwrap();
+    
+    if (pos >= input.len || input[pos] != '.') {
+        ret err[Semver, str]("expected '.' after major");
+    }
+    pos = pos + 1;
+    
+    # parse minor
+    var minor_result: Option[u64] = parse_number(input, ?pos);
+    if (minor_result.is_none()) {
+        ret err[Semver, str]("invalid minor version");
+    }
+    v.minor = minor_result.unwrap();
+    
+    if (pos >= input.len || input[pos] != '.') {
+        ret err[Semver, str]("expected '.' after minor");
+    }
+    pos = pos + 1;
+    
+    # parse patch
+    var patch_result: Option[u64] = parse_number(input, ?pos);
+    if (patch_result.is_none()) {
+        ret err[Semver, str]("invalid patch version");
+    }
+    v.patch = patch_result.unwrap();
+    
+    # parse optional prerelease (starts with '-')
+    if (pos < input.len && input[pos] == '-') {
+        pos = pos + 1;
+        val start: usize = pos;
+        
+        # prerelease can contain alphanumerics, dots, and hyphens
+        for (pos < input.len) {
+            val c: u8 = input[pos];
+            if (c == '+') {
+                brk;
+            }
+            if (!is_valid_prerelease_char(c)) {
+                ret err[Semver, str]("invalid prerelease character");
+            }
+            pos = pos + 1;
+        }
+        
+        v.prerelease.data = input.data + start;
+        v.prerelease.len  = pos - start;
+    }
+    
+    # parse optional build metadata (starts with '+')
+    if (pos < input.len && input[pos] == '+') {
+        pos = pos + 1;
+        val start: usize = pos;
+        
+        # build can contain alphanumerics, dots, and hyphens
+        for (pos < input.len) {
+            val c: u8 = input[pos];
+            if (!is_valid_build_char(c)) {
+                ret err[Semver, str]("invalid build character");
+            }
+            pos = pos + 1;
+        }
+        
+        v.build.data = input.data + start;
+        v.build.len  = pos - start;
+    }
+
+    ret ok[Semver, str](v);
+}
+
+## Validate that a semver is well-formed
+## ---
+## ret: true if valid, false otherwise
+pub fun (this: *Semver) is_valid() bool {
+    # check prerelease characters if present
+    if (!this.prerelease.is_empty()) {
+        var i: usize = 0;
+        for (i < this.prerelease.len) {
+            val c: u8 = this.prerelease[i];
+            if (!is_valid_prerelease_char(c)) {
+                ret false;
+            }
+            i = i + 1;
+        }
+    }
+    
+    # check build characters if present
+    if (!this.build.is_empty()) {
+        var i: usize = 0;
+        for (i < this.build.len) {
+            val c: u8 = this.build[i];
+            if (!is_valid_build_char(c)) {
+                ret false;
+            }
+            i = i + 1;
+        }
+    }
+    
+    ret true;
+}
+
+## Compare two semvers for precedence (ignores build metadata per spec)
+## ---
+## ret: <0 if this < other, 0 if equal, >0 if this > other
+pub fun (this: *Semver) compare(other: *Semver) i64 {
+    # compare major
+    if (this.major < other.major) {
+        ret -1;
+    }
+    if (this.major > other.major) {
+        ret 1;
+    }
+    
+    # compare minor
+    if (this.minor < other.minor) {
+        ret -1;
+    }
+    if (this.minor > other.minor) {
+        ret 1;
+    }
+    
+    # compare patch
+    if (this.patch < other.patch) {
+        ret -1;
+    }
+    if (this.patch > other.patch) {
+        ret 1;
+    }
+    
+    # compare prerelease
+    # no prerelease (release) > prerelease
+    val this_has_pre:  bool = !this.prerelease.is_empty();
+    val other_has_pre: bool = !other.prerelease.is_empty();
+    
+    if (!this_has_pre && other_has_pre) {
+        ret 1;
+    }
+    if (this_has_pre && !other_has_pre) {
+        ret -1;
+    }
+    
+    if (this_has_pre && other_has_pre) {
+        ret compare_prerelease(?this.prerelease, ?other.prerelease);
+    }
+    
+    ret 0;
+}
+
+## Check if this version is less than other
+## ---
+## ret: true if less, false otherwise
+pub fun (this: *Semver) is_less(other: *Semver) bool {
+    ret this.compare(other) < 0;
+}
+
+## Check if this version is greater than other
+## ---
+## ret: true if greater, false otherwise
+pub fun (this: *Semver) is_greater(other: *Semver) bool {
+    ret this.compare(other) > 0;
+}
+
+## Check if this version equals other (ignores build metadata)
+## ---
+## ret: true if equal, false otherwise
+pub fun (this: *Semver) equals(other: *Semver) bool {
+    ret this.compare(other) == 0;
+}
+
+## Check if this is a stable release (no prerelease)
+## ---
+## ret: true if stable, false otherwise
+pub fun (this: *Semver) is_stable() bool {
+    ret this.prerelease.is_empty();
+}
+
+## Check if this is a prerelease version
+## ---
+## ret: true if prerelease, false otherwise
+pub fun (this: *Semver) is_prerelease() bool {
+    ret !this.prerelease.is_empty();
+}
+
+## Check if this has build metadata
+## ---
+## ret: true if has build metadata, false otherwise
+pub fun (this: *Semver) has_build() bool {
+    ret !this.build.is_empty();
+}
+
+## Parse a number from input starting at pos, updates pos
+## ---
+## ret: parsed number or none on failure
+fun parse_number(input: str, pos: *usize) Option[u64] {
+    val start:       usize = @pos;
+    var value:       u64   = 0;
+    var found_digit: bool  = false;
+    
+    for (@pos < input.len) {
+        val c: u8 = input[@pos];
+        if (!ascii.is_digit(c)) {
+            brk;
+        }
+        
+        found_digit = true;
+        value       = value * 10 + ((c - '0')::u64);
+        @pos        = @pos + 1;
+    }
+    
+    if (!found_digit) {
+        ret none[u64]();
+    }
+    
+    ret some[u64](value);
+}
+
+## Check if character is valid for prerelease
+## ---
+## ret: true if valid, false otherwise
+fun is_valid_prerelease_char(c: u8) bool {
+    ret ascii.is_alnum(c) || c == '.' || c == '-';
+}
+
+## Check if character is valid for build metadata
+## ---
+## ret: true if valid, false otherwise
+fun is_valid_build_char(c: u8) bool {
+    ret ascii.is_alnum(c) || c == '.' || c == '-';
+}
+
+## Compare two prerelease strings per semver spec
+## ---
+## ret: <0 if a < b, 0 if equal, >0 if a > b
+fun compare_prerelease(a: *str, b: *str) i64 {
+    # split by dots and compare identifiers
+    var a_pos: usize = 0;
+    var b_pos: usize = 0;
+
+    for {
+        if (a_pos >= a.len && b_pos >= b.len) {
+            ret 0;
+        }
+
+        # more identifiers = lower precedence
+        if (a_pos >= a.len) {
+            ret -1;
+        }
+        if (b_pos >= b.len) {
+            ret 1;
+        }
+
+        # get next identifier from a
+        var a_start: usize = a_pos;
+        for (a_pos < a.len && @(a)[a_pos] != '.') {
+            a_pos = a_pos + 1;
+        }
+        var a_ident: str;
+        a_ident.data = a.data + a_start;
+        a_ident.len  = a_pos - a_start;
+        
+        # get next identifier from b
+        var b_start: usize = b_pos;
+        for (b_pos < b.len && @(b)[b_pos] != '.') {
+            b_pos = b_pos + 1;
+        }
+        var b_ident: str;
+        b_ident.data = b.data + b_start;
+        b_ident.len  = b_pos - b_start;
+        
+        # compare identifiers
+        val cmp: i64 = compare_identifier(?a_ident, ?b_ident);
+        if (cmp != 0) {
+            ret cmp;
+        }
+        
+        # skip dots
+        if (a_pos < a.len) {
+            a_pos = a_pos + 1;
+        }
+        if (b_pos < b.len) {
+            b_pos = b_pos + 1;
+        }
+    }
+    
+    ret 0;
+}
+
+## Compare two identifiers per semver spec
+## ---
+## ret: <0 if a < b, 0 if equal, >0 if a > b
+fun compare_identifier(a: *str, b: *str) i64 {
+    # check if identifiers are numeric
+    val a_numeric: bool = is_numeric(a);
+    val b_numeric: bool = is_numeric(b);
+    
+    # numeric < alphanumeric
+    if (a_numeric && !b_numeric) {
+        ret -1;
+    }
+    if (!a_numeric && b_numeric) {
+        ret 1;
+    }
+    
+    # both numeric: compare numerically
+    if (a_numeric && b_numeric) {
+        val a_val: u64 = parse_identifier_num(a);
+        val b_val: u64 = parse_identifier_num(b);
+        
+        if (a_val < b_val) {
+            ret -1;
+        }
+        if (a_val > b_val) {
+            ret 1;
+        }
+        ret 0;
+    }
+    
+    # both alphanumeric: lexical comparison
+    ret compare_strings(a, b);
+}
+
+## Check if string is all digits
+## ---
+## ret: true if all digits, false otherwise
+fun is_numeric(s: *str) bool {
+    if (s.len == 0) {
+        ret false;
+    }
+    
+    var i: usize = 0;
+    for (i < s.len) {
+        if (!ascii.is_digit(s.data[i])) {
+            ret false;
+        }
+        i = i + 1;
+    }
+    
+    ret true;
+}
+
+## Parse identifier string as number
+## ---
+## ret: parsed number
+fun parse_identifier_num(s: *str) u64 {
+    var value: u64 = 0;
+    var i: usize = 0;
+    
+    for (i < s.len) {
+        val c: u8 = s[i];
+        if (ascii.is_digit(c)) {
+            value = value * 10 + ((c - '0')::u64);
+        }
+        i = i + 1;
+    }
+    
+    ret value;
+}
+
+## Compare two strings lexically
+## ---
+## ret: <0 if a < b, 0 if equal, >0 if a > b
+fun compare_strings(a: *str, b: *str) i64 {
+    val min_len: usize = if (a.len < b.len) { a.len } or { b.len };
+    
+    var i: usize = 0;
+    for (i < min_len) {
+        val ca: u8 = a[i];
+        val cb: u8 = b[i];
+        
+        if (ca < cb) {
+            ret -1;
+        }
+        if (ca > cb) {
+            ret 1;
+        }
+        i = i + 1;
+    }
+    
+    if (a.len < b.len) {
+        ret -1;
+    }
+    if (a.len > b.len) {
+        ret 1;
+    }
+    
+    ret 0;
+}
