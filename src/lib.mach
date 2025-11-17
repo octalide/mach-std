@@ -30,6 +30,7 @@ use std.types.bool;
 use std.types.list;
 use std.types.option;
 use std.types.result;
+use std.types.semver;
 use std.types.size;
 use std.types.string;
 
