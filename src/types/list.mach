@@ -39,23 +39,20 @@ pub fun list_from_slice[T](slice: []T) Result[List[T], str] {
 }
 
 pub fun (this: *List[T]) init(cap: usize) Option[str] {
-    this.data = nil;
-    this.len  = 0;
-    this.cap  = 0;
+    mem.zero[List[T]](this, 1);
 
     if (cap == 0) {
         ret some[str]("capacity must be greater than zero");
     }
 
-    val alloc_res: Option[*T] = mem.allocate[T](cap);
+    val alloc_res: Option[*T] = mem.zallocate[T](cap);
     if (alloc_res.is_none()) {
         ret some[str]("allocation failed");
     }
 
-    val data: *T = alloc_res.unwrap();
-
-    this.data = data;
+    this.data = alloc_res.unwrap();
     this.cap  = cap;
+
     ret none[str]();
 }
 
@@ -63,9 +60,7 @@ pub fun (this: *List[T]) dnit() {
     if (this.data != nil && this.cap > 0) {
         mem.deallocate[T](this.data, this.cap);
     }
-    this.data = nil;
-    this.len  = 0;
-    this.cap  = 0;
+    mem.zero[List[T]](this, 1);
 }
 
 pub fun (this: List[T]) as_slice() []T {
@@ -205,6 +200,14 @@ pub fun (this: List[T]) get(index: usize) Option[T] {
     }
 
     ret some[T](@(this.data + index));
+}
+
+pub fun (this: List[T]) get_ptr(index: usize) Option[*T] {
+    if (this.data == nil || index >= this.len) {
+        ret none[*T]();
+    }
+
+    ret some[*T](this.data + index);
 }
 
 pub fun (this: *List[T]) set(index: usize, item: T) Option[str] {
