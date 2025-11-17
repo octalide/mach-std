@@ -1,7 +1,7 @@
 [project]
 id = "std"
 name = "Mach Standard Library"
-version = "0.2.4"
+version = "0.2.5"
 src = "src"
 dep = "dep"
 target = "native"
