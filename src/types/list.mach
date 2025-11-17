@@ -11,16 +11,6 @@ pub rec List[T] {
     cap:  usize;
 }
 
-pub fun list_new[T](cap: usize) Result[List[T], str] {
-    var list: List[T];
-    val init_err: Option[str] = list.init(cap);
-    if (init_err.is_some()) {
-        ret err[List[T], str](init_err.unwrap());
-    }
-
-    ret ok[List[T], str](list);
-}
-
 pub fun list_from_slice[T](slice: []T) Result[List[T], str] {
     if (slice.len == 0 || slice.data == nil) {
         ret err[List[T], str]("slice is empty");

@@ -591,11 +591,11 @@ fun (this: *TomlParser) parse_array() Result[TomlValue, str] {
     }
     this.advance();
 
-    var res_list: Result[List[TomlValue], str] = list_new[TomlValue](4);
-    if (res_list.is_err()) {
-        ret err[TomlValue, str](res_list.unwrap_err());
+    var list:          List[TomlValue];
+    var opt_list_init: Option[str] = list.init(4);
+    if (opt_list_init.is_some()) {
+        ret err[TomlValue, str](opt_list_init.unwrap());
     }
-    var list: List[TomlValue] = res_list.unwrap_ok();
     
     this.skip_whitespace_and_newlines();
     this.skip_comment();
@@ -773,11 +773,11 @@ fun (this: *TomlParser) parse_table_header() Result[str, str] {
 }
 
 fun (this: *TomlParser) parse_table(allow_headers: bool) Result[TomlValue, str] {
-    var res_list: Result[List[TomlProperty], str] = list_new[TomlProperty](8);
-    if (res_list.is_err()) {
-        ret err[TomlValue, str](res_list.unwrap_err());
+    var list:          List[TomlProperty];
+    val opt_list_init: Option[str] = list.init(8);
+    if (opt_list_init.is_some()) {
+        ret err[TomlValue, str](opt_list_init.unwrap());
     }
-    var list: List[TomlProperty] = res_list.unwrap_ok();
     
     for (this.pos < this.input.len) {
         this.skip_whitespace_and_newlines();
