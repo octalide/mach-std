@@ -4,253 +4,44 @@ use      std.types.result;
 use      std.types.size;
 use mem: std.system.memory;
 
+## Basic character type representing a single byte.
 pub def char: u8;
-pub def str:  []char;
 
-pub fun (this: str) is_empty() bool {
-    ret this.len == 0 || this.data == nil;
+## A mutable string type.
+pub rec String {
+    data: *u8;
+    len:  usize;
 }
 
-pub fun (this: str) equals(other: str) bool {
-    if (this.len != other.len) {
-        ret false;
+## Create a string from a str (copies the str data)
+## ---
+## s:   The source str
+## ret: The resulting String or an error message
+pub fun string_make(s: str) Result[String, str] {
+    if (s.data == nil || s.len == 0) {
+        ret err[String, str]("cannot create string from empty data");
     }
 
-    var i: usize = 0;
-    for (i < this.len) {
-        if (@(this.data + i) != @(other.data + i)) {
-            ret false;
-        }
-        i = i + 1;
+    val string: String;
+    val opt_init: Option[str] = string.init(s.len);
+    if (opt_init.is_some()) {
+        ret err[String, str](opt_init.unwrap());
     }
 
-    ret true;
+    mem.copy[char](string.data, s.data, s.len);
+
+    ret ok[String, str](string);
 }
 
-pub fun (this: str) starts_with(prefix: str) bool {
-    if (this.len < prefix.len) {
-        ret false;
-    }
-
-    var start: str;
-    start.data = this.data;
-    start.len  = prefix.len;
-
-    ret start.equals(prefix);
-}
-
-pub fun (this: str) ends_with(suffix: str) bool {
-    if (this.len < suffix.len) {
-        ret false;
-    }
-
-    var end: str;
-    end.data = this.data + (this.len - suffix.len);
-    end.len  = suffix.len;
-
-    ret end.equals(suffix);
-}
-
-pub fun (this: str) contains(segment: str) bool {
-    if (this.data == nil || segment.data == nil || segment.len == 0 || segment.len > this.len) {
-        ret false;
-    }
-
-    var i: usize = 0;
-    for (i <= this.len - segment.len) {
-        var found: bool = true;
-
-        var j: usize = 0;
-        for (j < segment.len) {
-            if (@(this.data + i + j) != @(segment.data + j)) {
-                found = false;
-                brk;
-            }
-            j = j + 1;
-        }
-
-        if (found) {
-            ret true;
-        }
-
-        i = i + 1;
-    }
-
-    ret false;
-}
-
-pub fun (this: str) index_of(segment: str) Option[usize] {
-    if (this.data == nil || segment.data == nil || segment.len == 0 || segment.len > this.len) {
-        ret none[usize]();
-    }
-
-    var i: usize = 0;
-    for (i <= this.len - segment.len) {
-        var found: bool = true;
-
-        var j: usize = 0;
-        for (j < segment.len) {
-            if (@(this.data + i + j) != @(segment.data + j)) {
-                found = false;
-                brk;
-            }
-            j = j + 1;
-        }
-
-        if (found) {
-            ret some[usize](i);
-        }
-
-        i = i + 1;
-    }
-
-    ret none[usize]();
-}
-
-pub fun (this: str) last_index_of(segment: str) Option[usize] {
-    if (this.data == nil || segment.data == nil || segment.len == 0 || segment.len > this.len) {
-        ret none[usize]();
-    }
-
-    var i: usize = this.len - segment.len;
-    for (i >= 0) {
-        var found: bool = true;
-
-        var j: usize = 0;
-        for (j < segment.len) {
-            if (@(this.data + i + j) != @(segment.data + j)) {
-                found = false;
-                brk;
-            }
-            j = j + 1;
-        }
-
-        if (found) {
-            ret some[usize](i);
-        }
-
-        if (i == 0) {
-            brk;
-        }
-        i = i - 1;
-    }
-
-    ret none[usize]();
-}
-
-pub fun (this: str) index_of_char(ch: char) Option[usize] {
-    if (this.data == nil || this.len == 0) {
-        ret none[usize]();
-    }
-
-    var i: usize = 0;
-    for (i < this.len) {
-        if (@(this.data + i) == ch) {
-            ret some[usize](i);
-        }
-        i = i + 1;
-    }
-
-    ret none[usize]();
-}
-
-pub fun (this: str) last_index_of_char(ch: char) Option[usize] {
-    if (this.data == nil || this.len == 0) {
-        ret none[usize]();
-    }
-
-    var i: usize = this.len;
-    for (i > 0) {
-        i = i - 1;
-        if (@(this.data + i) == ch) {
-            ret some[usize](i);
-        }
-    }
-
-    ret none[usize]();
-}
-
-pub fun (this: str) substring(start: usize, end: usize) Option[str] {
-    if (this.data == nil || start >= end || end > this.len) {
-        ret none[str]();
-    }
-
-    var result: str;
-    result.data = this.data + start;
-    result.len  = end - start;
-
-    ret some[str](result);
-}
-
-pub fun (this: str) clone() Result[String, str] {
-    if (this.len == 0) {
-        ret err[String, str]("string is empty");
-    }
-
-    val opt_alloc: Option[*char] = mem.allocate[char](this.len);
-    if (opt_alloc.is_none()) {
-        ret err[String, str]("failed to allocate memory for string clone");
-    }
-
-    val new_data: *char = opt_alloc.unwrap();
-
-    mem.copy[char](new_data, this.data, this.len);
-
-    var result: String;
-    result.data = new_data;
-    result.len  = this.len;
-
-    ret ok[String, str](result);
-}
-
-pub fun (this: str) as_cstr() Option[cstr] {
-    val alloc_res: Option[*char] = mem.allocate[char](this.len + 1);
-    if (alloc_res.is_none()) {
-        ret none[cstr]();
-    }
-
-    val c: *char = alloc_res.unwrap();
-    mem.copy[char](c, this.data, this.len);
-    @(c + this.len) = 0;
-
-    ret some[cstr](c);
-}
-
-pub def cstr: *char;
-
-pub fun (this: cstr) len() usize {
-    if (this == nil) {
-        ret 0;
-    }
-
-    var length: usize = 0;
-    for (@(this + length) != 0) {
-        length = length + 1;
-    }
-
-    ret length;
-}
-
-pub fun (this: cstr) to_str() Option[str] {
-    if (this == nil) {
-        ret none[str]();
-    }
-
-    val length: usize = this.len();
-    if (length == 0) {
-        ret none[str]();
-    }
-
-    var result: str;
-    result.data = this;
-    result.len  = length;
-
-    ret some[str](result);
-}
-
-pub def String: str;
-
+## Initialize the string with the specified length.
+## ---
+## len: The length of the string.
+## ret: An optional error message if initialization fails.
 pub fun (this: *String) init(len: usize) Option[str] {
+    if (this.data != nil) {
+        ret some[str]("string is already initialized");
+    }
+
     if (len == 0) {
         ret some[str]("cannot init string with zero length");
     }
@@ -266,31 +57,26 @@ pub fun (this: *String) init(len: usize) Option[str] {
     ret none[str]();
 }
 
+## Deinitializes the string, deallocating and zeroing its data.
 pub fun (this: *String) dnit() {
     mem.deallocate[char](this.data, this.len);
     mem.zero[String](this, 1);
 }
 
-pub fun (this: *String) as_str() str {
+## Returns a str view of the string's data.
+## ---
+## ret: A str representing the string's data.
+pub fun (this: String) as_str() str {
     var view: str;
     view.data = this.data;
     view.len  = this.len;
     ret view;
 }
 
-pub fun (this: *String) as_cstr() Option[cstr] {
-    val alloc_res: Option[*char] = mem.allocate[char](this.len + 1);
-    if (alloc_res.is_none()) {
-        ret none[cstr]();
-    }
-
-    val c: *char = alloc_res.unwrap();
-    mem.copy[char](c, this.data, this.len);
-    @(c + this.len) = 0;
-
-    ret some[cstr](c);
-}
-
+## Ensures that the string has at least the specified length.
+## ---
+## new_len: The desired minimum length.
+## ret:     True if the operation succeeded, false otherwise.
 pub fun (this: *String) ensure_len(new_len: usize) bool {
     if (new_len <= this.len) {
         ret true;
@@ -302,12 +88,19 @@ pub fun (this: *String) ensure_len(new_len: usize) bool {
     }
 
     this.data = new_data.unwrap();
+
+    # zero the new part
     mem.zero[char](this.data + this.len, new_len - this.len);
+
     this.len = new_len;
 
     ret true;
 }
 
+## Appends a single character to the end of the string.
+## ---
+## ch:  The character to append.
+## ret: True if the operation succeeded, false otherwise.
 pub fun (this: *String) push(ch: char) bool {
     val current_len: usize = this.len;
 
@@ -315,27 +108,36 @@ pub fun (this: *String) push(ch: char) bool {
         ret false;
     }
 
-    @(this.data + current_len) = ch;
+    this.data[current_len] = ch;
 
     ret true;
 }
 
+## Appends a str to the end of the string.
+## ---
+## s:   The str to append.
+## ret: True if the operation succeeded, false otherwise.
 pub fun (this: *String) append(s: str) bool {
     if (s.len == 0) {
         ret true;
     }
 
-    val current_len: usize = this.len;
+    val old_len: usize = this.len;
 
     if (this.ensure_len(this.len + s.len) == false) {
         ret false;
     }
 
-    mem.copy[char](this.data + current_len, s.data, s.len);
+    mem.copy[char](this.data + old_len, s.data, s.len);
 
     ret true;
 }
 
+## Appends an escape sequence character to the string.
+## ---
+## s:  Pointer to the String to append to.
+## ch: The escape sequence character.
+## ret: True if the operation succeeded, false otherwise.
 fun append_escape_sequence(s: *String, ch: char) bool {
     var mapped: char = ch;
     if (ch == 'n')  { mapped = 10; }
@@ -349,13 +151,18 @@ fun append_escape_sequence(s: *String, ch: char) bool {
     ret s.push(mapped);
 }
 
+## Appends an unsigned decimal number to the string.
+## ---
+## s:     Pointer to the String to append to.
+## value: The unsigned decimal number to append.
+## ret:   True if the operation succeeded, false otherwise.
 fun append_unsigned_decimal(s: *String, value: usize) bool {
     if (value == 0) {
         ret s.push('0');
     }
 
     var digits: [20]char;
-    var count: usize = 0;
+    var count:  usize = 0;
 
     var n: usize = value;
     for (n > 0) {
@@ -375,6 +182,11 @@ fun append_unsigned_decimal(s: *String, value: usize) bool {
     ret true;
 }
 
+## Appends a signed decimal number to the string.
+## ---
+## s:     Pointer to the String to append to.
+## value: The signed decimal number to append.
+## ret:   True if the operation succeeded, false otherwise.
 fun append_signed_decimal(s: *String, value: isize) bool {
     if (value < 0) {
         if (s.push('-') == false) {
@@ -387,6 +199,12 @@ fun append_signed_decimal(s: *String, value: isize) bool {
     ret append_unsigned_decimal(s, value::usize);
 }
 
+## Appends a hexadecimal number to the string.
+## ---
+## s:         Pointer to the String to append to.
+## value:     The hexadecimal number to append.
+## uppercase: Whether to use uppercase letters for A-F.
+## ret:       True if the operation succeeded, false otherwise.
 fun append_hex(s: *String, value: usize, uppercase: bool) bool {
     if (value == 0) {
         ret s.push('0');
@@ -422,6 +240,11 @@ fun append_hex(s: *String, value: usize, uppercase: bool) bool {
     ret true;
 }
 
+## Appends a boolean value to the string.
+## ---
+## s:     Pointer to the String to append to.
+## value: The boolean value to append.
+## ret:   True if the operation succeeded, false otherwise.
 fun append_bool(s: *String, value: bool) bool {
     if (value) {
         ret s.append("true");
@@ -429,6 +252,11 @@ fun append_bool(s: *String, value: bool) bool {
     ret s.append("false");
 }
 
+## Appends a pointer value to the string in hexadecimal format.
+## ---
+## s:     Pointer to the String to append to.
+## value: The pointer value to append.
+## ret:   True if the operation succeeded, false otherwise.
 fun append_pointer(s: *String, value: ptr) bool {
     if (s.append("0x") == false) {
         ret false;
@@ -438,6 +266,19 @@ fun append_pointer(s: *String, value: ptr) bool {
     ret append_hex(s, addr, false);
 }
 
+## Formats a string using a pattern and variable arguments.
+## Supported format specifiers:
+##   %s - string
+##   %d - signed decimal integer
+##   %u - unsigned decimal integer
+##   %x - hexadecimal integer (lowercase)
+##   %X - hexadecimal integer (uppercase)
+##   %b - boolean
+##   %p - pointer
+## ---
+## pattern: The format pattern string.
+## ...:     Variable arguments corresponding to format specifiers.
+## ret:     An Option[String] containing the formatted string, or none on failure.
 pub fun format(pattern: str, ...) Option[String] {
     if (pattern.data == nil && pattern.len > 0) {
         ret none[String]();
@@ -450,7 +291,7 @@ pub fun format(pattern: str, ...) Option[String] {
         var needs_processing: bool = false;
         var i: usize = 0;
         for (i < pattern.len) {
-            val ch: char = @(pattern.data + i);
+            val ch: char = pattern.data[i];
             if (ch == '\\' || ch == '%') {
                 needs_processing = true;
                 brk;
@@ -460,7 +301,7 @@ pub fun format(pattern: str, ...) Option[String] {
 
         if (needs_processing == false) {
             # just clone
-            val res_clone: Result[String, str] = pattern.clone();
+            val res_clone: Result[String, str] = clone(pattern);
             if (res_clone.is_err()) {
                 ret none[String]();
             }
@@ -479,10 +320,10 @@ pub fun format(pattern: str, ...) Option[String] {
     var pos:       usize = 0;
 
     for (pos < pattern.len) {
-        val ch: char = @(pattern.data + pos);
+        val ch: char = pattern.data[pos];
 
         if (ch == '\\' && (pos + 1) < pattern.len) {
-            val next: char = @(pattern.data + pos + 1);
+            val next: char = pattern.data[pos + 1];
             if (append_escape_sequence(?result, next) == false) {
                 result.dnit();
                 ret none[String]();
@@ -490,7 +331,7 @@ pub fun format(pattern: str, ...) Option[String] {
             pos = pos + 2;
         }
         or (ch == '%' && (pos + 1) < pattern.len) {
-            val spec: char = @(pattern.data + pos + 1);
+            val spec: char = pattern.data[pos + 1];
 
             if (spec == '%') {
                 # literal '%'
