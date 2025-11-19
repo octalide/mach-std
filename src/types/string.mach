@@ -63,6 +63,20 @@ pub fun (this: *String) dnit() {
     mem.zero[String](this, 1);
 }
 
+## Clones the string, creating a new copy of its data.
+## ---
+## ret: The cloned string or an error message.
+pub fun (this: String) clone() Result[String, str] {
+    ret string_make(this.as_str());
+}
+
+## Checks whether or not a string is empty.
+## ---
+## ret: True if the string is empty, false otherwise.
+pub fun (this: String) is_empty() bool {
+    ret this.len == 0;
+}
+
 ## Returns a str view of the string's data.
 ## ---
 ## ret: A str representing the string's data.
@@ -131,6 +145,185 @@ pub fun (this: *String) append(s: str) bool {
     mem.copy[char](this.data + old_len, s.data, s.len);
 
     ret true;
+}
+
+## Compares the string with another str for equality.
+## ---
+## other: The other str to compare with.
+## ret:   True if the strings are equal, false otherwise.
+pub fun (this: &String) equals(other: str) bool {
+    if (this.len != other.len) {
+        ret false;
+    }
+
+    for (i: usize = 0; i < this.len; i = i + 1) {
+        if (this.data[i] != other.data[i]) {
+            ret false;
+        }
+    }
+
+    ret true;
+}
+
+## Checks if the string starts with the specified prefix.
+## ---
+## prefix: The prefix to check.
+## ret:    True if the string starts with the prefix, false otherwise.
+pub fun (this: &String) starts_with(prefix: str) bool {
+    if (prefix.len > this.len) {
+        ret false;
+    }
+
+    val cmp: str;
+    cmp.data = this.data;
+    cmp.len  = prefix.len;
+
+    ret cmp.equals(prefix);
+}
+
+## Checks if the string ends with the specified suffix.
+## ---
+## suffix: The suffix to check.
+## ret:    True if the string ends with the suffix, false otherwise.
+pub fun (this: &String) ends_with(suffix: str) bool {
+    if (this.len < suffix.len) {
+        ret false;
+    }
+
+    val cmp: str;
+    cmp.data = this.data + (this.len - suffix.len);
+    cmp.len  = suffix.len;
+
+    ret cmp.equals(suffix);
+}
+
+## Finds the index of the first occurrence of the specified segment.
+## ---
+## segment: The segment to find.
+## ret:     An optional index of the first occurrence of the segment.
+pub fun (this: &String) index_of(segment: str) Option[usize] {
+    if (this.data == nil || segment.data == nil || segment.len == 0 || segment.len > this.len) {
+        ret none[usize]();
+    }
+
+    var i: usize = 0;
+    for (i <= this.len - segment.len) {
+        var found: bool = true;
+
+        var j: usize = 0;
+        for (j < segment.len) {
+            if (this.data[i + j] != segment.data[j]) {
+                found = false;
+                brk;
+            }
+            j = j + 1;
+        }
+
+        if (found) {
+            ret some[usize](i);
+        }
+
+        i = i + 1;
+    }
+
+    ret none[usize]();
+}
+
+## Finds the index of the last occurrence of the specified segment.
+## ---
+## segment: The segment to find.
+## ret:     An optional index of the last occurrence of the segment.
+pub fun (this: &String) last_index_of(segment: str) Option[usize] {
+    if (this.data == nil || segment.data == nil || segment.len == 0 || segment.len > this.len) {
+        ret none[usize]();
+    }
+
+    var i: isize = (this.len - segment.len)::isize;
+    for (i >= 0) {
+        var found: bool = true;
+
+        var j: usize = 0;
+        for (j < segment.len) {
+            if (this.data[i::usize + j] != segment.data[j]) {
+                found = false;
+                brk;
+            }
+            j = j + 1;
+        }
+
+        if (found) {
+            ret some[usize](i::usize);
+        }
+
+        i = i - 1;
+    }
+
+    ret none[usize]();
+}
+
+## Checks if the string contains the specified segment.
+## ---
+## segment: The segment to check.
+## ret:     True if the string contains the segment, false otherwise.
+pub fun (this: &String) contains(segment: str) bool {
+    ret this.index_of(segment).is_some();
+}
+
+## Finds the index of the first occurrence of the specified char.
+## ---
+## ch:  The character to find.
+## ret: An optional index of the first occurrence of the character.
+pub fun (this: &String) index_of_char(ch: char) Option[usize] {
+    if (this.data == nil || this.len == 0) {
+        ret none[usize]();
+    }
+
+    var i: usize = 0;
+    for (i < this.len) {
+        if (this.data[i] == ch) {
+            ret some[usize](i);
+        }
+        i = i + 1;
+    }
+
+    ret none[usize]();
+}
+
+## Finds the index of the last occurrence of the specified char.
+## ---
+## ch:  The character to find.
+## ret: An optional index of the last occurrence of the character.
+pub fun (this: &String) last_index_of_char(ch: char) Option[usize] {
+    if (this.data == nil || this.len == 0) {
+        ret none[usize]();
+    }
+
+    var i: isize = (this.len - 1)::isize;
+    for (i >= 0) {
+        if (this.data[i::usize] == ch) {
+            ret some[usize](i::usize);
+        }
+        i = i - 1;
+    }
+
+    ret none[usize]();
+}
+
+## Returns a substring of the string.
+## ---
+## start: The starting index (inclusive).
+## end:   The ending index (exclusive).
+## ret:   An optional substring str.
+pub fun (this: &String) substring(start: usize, end: usize) Option[str] {
+    if (start >= end || end > this.len) {
+        ret none[str]();
+    }
+
+    var result: str;
+    result.data = this.data + start;
+    result.len  = end - start;
+
+    ret some[str](result);
 }
 
 ## Appends an escape sequence character to the string.
