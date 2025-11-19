@@ -6,14 +6,19 @@ use      std.types.string;
 use      std.collections.slice;
 use mem: std.system.memory;
 
+## A dynamic array  of elements of type T
 pub rec List[T] {
     data: *T;
     len:  usize;
     cap:  usize;
 }
 
+## Create a list from a slice (copies the slice data)
+## ---
+## slice: The source slice
+## ret:   The resulting list or an error message
 pub fun list_from_slice[T](slice: Slice[T]) Result[List[T], str] {
-    if (slice.len == 0 || slice.data == nil) {
+    if (slice.is_empty()) {
         ret err[List[T], str]("slice is empty");
     }
 
@@ -25,16 +30,25 @@ pub fun list_from_slice[T](slice: Slice[T]) Result[List[T], str] {
     val data: *T = alloc_res.unwrap();
 
     mem.copy[T](data, slice.data, slice.len);
-    var list: List[T] = List[T]{ data: data, len: slice.len, cap: slice.len };
+
+    var list: List[T];
+    list.data = data;
+    list.len  = slice.len;
+    list.cap  = slice.len;
+
     ret ok[List[T], str](list);
 }
 
+## Initializes the list with the specified capacity.
+## ---
+## cap: The initial capacity of the list.
+## ret: An optional error message if initialization fails.
 pub fun (this: *List[T]) init(cap: usize) Option[str] {
-    mem.zero[List[T]](this, 1);
-
     if (cap == 0) {
         ret some[str]("capacity must be greater than zero");
     }
+
+    mem.zero[List[T]](this, 1);
 
     val alloc_res: Option[*T] = mem.zallocate[T](cap);
     if (alloc_res.is_none()) {
@@ -47,6 +61,7 @@ pub fun (this: *List[T]) init(cap: usize) Option[str] {
     ret none[str]();
 }
 
+## Deinitializes the list, deallocating and zeroing its data.
 pub fun (this: *List[T]) dnit() {
     if (this.data != nil && this.cap > 0) {
         mem.deallocate[T](this.data, this.cap);
@@ -54,35 +69,49 @@ pub fun (this: *List[T]) dnit() {
     mem.zero[List[T]](this, 1);
 }
 
+## Returns a slice view of the list's data.
+## ---
+## ret: A slice representing the list's data.
 pub fun (this: List[T]) as_slice() Slice[T] {
     ret Slice[T]{ data: this.data, len: this.len };
 }
 
+## Checks if the list is empty.
+## ---
+## ret: true if the list is empty, false otherwise.
 pub fun (this: List[T]) is_empty() bool {
-    ret this.len == 0;
+    ret this.data == nil || this.cap == 0 || this.len == 0;
 }
 
+## Reserves additional capacity for the list.
+## ---
+## additional: The number of additional elements to reserve space for.
+## ret:        An optional error message if reservation fails.
 pub fun (this: *List[T]) reserve(additional: usize) Option[str] {
+    if (this.is_empty()) {
+        ret some[str]("list is uninitialized");
+    }
+
     val required: usize = this.len + additional;
-    if (required <= this.cap) {
-        ret none[str]();
-    }
+    if (required <= this.cap) { ret none[str](); }
+    if (required < this.len)  { ret some[str]("length overflow"); }
 
-    if (required < this.len) {
-        ret none[str]();
-    }
-
+    # NOTE: `this.cap` should likely never be zero. This is a sanity check.
     var new_cap: usize = this.cap;
-    if (new_cap == 0) { new_cap = 8; }
+    if (new_cap == 0) {
+        new_cap = 8;
+    }
 
+    # double capacity until it fits the required size
     for (new_cap < required) {
-        if (new_cap >= (0xffff_ffff_ffff_ffff / 2)) {
+        if (new_cap >= ($max(usize) / 2)) {
             new_cap = required;
             brk;
         }
         new_cap = new_cap * 2;
     }
 
+    # reallocate memory
     val realloc_res: Option[*T] = mem.reallocate[T](this.data, this.cap, new_cap);
     if (realloc_res.is_none()) {
         ret some[str]("reallocation failed");
@@ -91,34 +120,38 @@ pub fun (this: *List[T]) reserve(additional: usize) Option[str] {
     val new_data: *T = realloc_res.unwrap();
 
     this.data = new_data;
-    this.cap = new_cap;
+    this.cap  = new_cap;
 
     ret none[str]();
 }
 
-pub fun (this: *List[T]) ensure_capacity(min_capacity: usize) Option[str] {
-    if (min_capacity <= this.cap) {
+## Ensures the list has at least the specified capacity.
+## ---
+## cap: The minimum capacity to ensure.
+## ret: An optional error message if reservation fails.
+pub fun (this: *List[T]) ensure_capacity(cap: usize) Option[str] {
+    if (cap <= this.cap) {
         ret none[str]();
     }
 
-    ret this.reserve(min_capacity - this.cap);
+    ret this.reserve(cap - this.cap);
 }
 
+## Shrinks the list's capacity to fit its current length.
+## ---
+## ret: An optional error message if shrinking fails.
 pub fun (this: *List[T]) shrink_to_fit() Option[str] {
     if (this.cap == this.len) {
         ret none[str]();
     }
 
     if (this.len == 0) {
-        if (this.data != nil && this.cap > 0) {
-            mem.deallocate[T](this.data, this.cap);
-        }
-        this.data = nil;
-        this.len = 0;
-        this.cap = 0;
-        ret none[str]();
+        # NOTE: this could possibly deallocate the memory instead of failing,
+        # but would rather be explicit about it for safety
+        ret some[str]("cannot shrink to fit when length is zero");
     }
 
+    # reallocate memory
     val realloc_res: Option[*T] = mem.reallocate[T](this.data, this.cap, this.len);
     if (realloc_res.is_none()) {
         ret some[str]("reallocation failed");
@@ -127,11 +160,42 @@ pub fun (this: *List[T]) shrink_to_fit() Option[str] {
     val new_data: *T = realloc_res.unwrap();
 
     this.data = new_data;
-    this.cap = this.len;
+    this.cap  = this.len;
 
     ret none[str]();
 }
 
+## Gets the item at the specified index.
+## ---
+## index: The index of the item to get.
+## ret:   An Option[T] containing the item if it exists.
+pub fun (this: List[T]) get(index: usize) Option[T] {
+    if (this.is_empty() || index >= this.len) {
+        ret none[T]();
+    }
+
+    ret some[T](this.data[index]);
+}
+
+## Sets the item at the specified index.
+## ---
+## index: The index of the item to set.
+## item:  The item to set.
+## ret:   An optional error message if the index is out of bounds.
+pub fun (this: *List[T]) set(index: usize, item: T) Option[str] {
+    if (index >= this.len) {
+        ret some[str]("index out of bounds");
+    }
+
+    this.data[index] = item;
+
+    ret none[str]();
+}
+
+## Pushes an item to the end of the list.
+## ---
+## item: The item to push.
+## ret:  An optional error message if pushing fails.
 pub fun (this: *List[T]) push(item: T) Option[str] {
     if (this.len >= this.cap) {
         val res: Option[str] = this.reserve(1);
@@ -141,13 +205,16 @@ pub fun (this: *List[T]) push(item: T) Option[str] {
     }
 
     this.data[this.len] = item;
-    this.len = this.len + 1;
+    this.len            = this.len + 1;
 
     ret none[str]();
 }
 
+## Pops an item from the end of the list.
+## ---
+## ret: The popped item, or none if the list is empty.
 pub fun (this: *List[T]) pop() Option[T] {
-    if (this.len == 0) {
+    if (this.is_empty()) {
         ret none[T]();
     }
 
@@ -156,8 +223,12 @@ pub fun (this: *List[T]) pop() Option[T] {
     ret some[T](this.data[this.len]);
 }
 
-pub fun (this: *List[T]) append(slice: []T) Option[str] {
-    if (slice.len == 0 || slice.data == nil) {
+## Appends a slice of items to the end of the list.
+## ---
+## slice: The slice of items to append.
+## ret:   An optional error message if appending fails.
+pub fun (this: *List[T]) append(slice: Slice[T]) Option[str] {
+    if (slice.is_empty()) {
         ret none[str]();
     }
 
@@ -166,13 +237,8 @@ pub fun (this: *List[T]) append(slice: []T) Option[str] {
         ret res;
     }
 
-    if (this.len + slice.len < this.len) {
-        ret some[str]("length overflow");
-    }
-
-    if (this.len + slice.len > this.cap) {
-        ret some[str]("capacity overflow");
-    }
+    if (this.len + slice.len < this.len) { ret some[str]("length overflow"); }
+    if (this.len + slice.len > this.cap) { ret some[str]("capacity overflow"); }
 
     mem.copy[T](this.data + this.len, slice.data, slice.len);
 
@@ -181,32 +247,7 @@ pub fun (this: *List[T]) append(slice: []T) Option[str] {
     ret none[str]();
 }
 
+## Clears the list, setting its length to zero.
 pub fun (this: *List[T]) clear() {
     this.len = 0;
-}
-
-pub fun (this: List[T]) get(index: usize) Option[T] {
-    if (this.data == nil || index >= this.len) {
-        ret none[T]();
-    }
-
-    ret some[T](this.data[index]);
-}
-
-pub fun (this: List[T]) get_ptr(index: usize) Option[*T] {
-    if (this.data == nil || index >= this.len) {
-        ret none[*T]();
-    }
-
-    ret some[*T](this.data + index);
-}
-
-pub fun (this: *List[T]) set(index: usize, item: T) Option[str] {
-    if (index >= this.len) {
-        ret some[str]("index out of bounds");
-    }
-
-    this.data[index] = item;
-
-    ret none[str]();
 }
