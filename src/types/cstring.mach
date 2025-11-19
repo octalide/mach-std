@@ -1,0 +1,41 @@
+use std.types.string;
+use std.types.size;
+use std.types.option;
+
+## C-style null-terminated string.
+## Used for interoperability with C libraries and system calls.
+## Not intended for general string manipulation within native Mach programs.
+pub def CString: *char;
+
+## Get the length of the C string (number of characters before null terminator).
+## ---
+## ret: Length of the C string.
+pub fun (this: CString) len() usize {
+    if (this == nil) {
+        ret 0;
+    }
+
+    var length: usize = 0;
+    for (this[length] != '\0') {
+        length = length + 1;
+    }
+
+    ret length;
+}
+
+## Convert the C string to a Mach str type.
+## Note that this does not copy the data, manage memory, or
+## remove the null terminator.
+## ---
+## ret: Result containing the Mach str or an error message.
+pub fun (this: CString) to_str() Result[str, str] {
+    if (this == nil) {
+        ret err[str, str]("cannot convert null CString to str");
+    }
+
+    var s: str;
+    s.data = this;
+    s.len  = this.len();
+
+    ret ok[str, str](s);
+}
