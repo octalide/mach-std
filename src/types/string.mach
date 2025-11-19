@@ -4,6 +4,207 @@ use      std.types.result;
 use      std.types.size;
 use mem: std.system.memory;
 
+## Check if the given str is empty.
+## ---
+## s:   The str to check.
+## ret: True if the str is empty, false otherwise.
+pub fun str_empty(s: str) bool {
+    ret s.len == 0 || s.data == nil;
+}
+
+## Compare two str values for equality.
+## ---
+## a:   The first str.
+## b:   The second str.
+## ret: True if the str values are equal, false otherwise.
+pub fun str_equal(a: str, b: str) bool {
+    if (a.len != b.len) {
+        ret false;
+    }
+
+    var i: usize = 0;
+    for (i < a.len) {
+        if (a.data[i] != b.data[i]) {
+            ret false;
+        }
+        i = i + 1;
+    }
+
+    ret true;
+}
+
+## Check if the str starts with the specified prefix.
+## ---
+## s:      The str to check.
+## prefix: The prefix to check.
+## ret:    True if the str starts with the prefix, false otherwise.
+pub fun str_starts_with(s: str, prefix: str) bool {
+    if (s.len < prefix.len) {
+        ret false;
+    }
+
+    var start: str;
+    start.data = s.data;
+    start.len  = prefix.len;
+
+    ret str_equal(start, prefix);
+}
+
+## Check if the str ends with the specified suffix.
+## ---
+## s:      The str to check.
+## suffix: The suffix to check.
+## ret:    True if the str ends with the suffix, false otherwise.
+pub fun str_ends_with(s: str, suffix: str) bool {
+    if (s.len < suffix.len) {
+        ret false;
+    }
+
+    var end: str;
+    end.data = s.data + (s.len - suffix.len);
+    end.len  = suffix.len;
+
+    ret str_equal(end, suffix);
+}
+
+## Find the index of the first occurrence of the specified segment.
+## ---
+## s:       The str to search.
+## segment: The segment to find.
+## ret:     The index of the first occurrence of the segment, or none if not found.
+pub fun str_index_of(s: str, segment: str) Option[usize] {
+    if (s.data == nil || segment.data == nil || segment.len == 0 || segment.len > s.len) {
+        ret none[usize]();
+    }
+
+    var i: usize = 0;
+    for (i <= s.len - segment.len) {
+        var found: bool = true;
+
+        var j: usize = 0;
+        for (j < segment.len) {
+            if (s.data[i + j] != segment.data[j]) {
+                found = false;
+                brk;
+            }
+            j = j + 1;
+        }
+
+        if (found) {
+            ret some[usize](i);
+        }
+
+        i = i + 1;
+    }
+
+    ret none[usize]();
+}
+
+## Find the index of the last occurrence of the specified segment.
+## ---
+## s:       The str to search.
+## segment: The segment to find.
+## ret:     The index of the last occurrence of the segment, or none if not found.
+pub fun str_last_index_of(s: str, segment: str) Option[usize] {
+    if (s.data == nil || segment.data == nil || segment.len == 0 || segment.len > s.len) {
+        ret none[usize]();
+    }
+
+    var i: usize = s.len - segment.len;
+    for (i >= 0) {
+        var found: bool = true;
+
+        var j: usize = 0;
+        for (j < segment.len) {
+            if (s.data[i + j] != segment.data[j]) {
+                found = false;
+                brk;
+            }
+            j = j + 1;
+        }
+
+        if (found) {
+            ret some[usize](i);
+        }
+
+        if (i == 0) {
+            brk;
+        }
+        i = i - 1;
+    }
+
+    ret none[usize]();
+}
+
+## Check if the str contains the specified segment.
+## ---
+## s:       The str to check.
+## segment: The segment to check.
+## ret:     True if the str contains the segment, false otherwise.
+pub fun str_contains(s: str, segment: str) bool {
+    ret str_index_of(s, segment).is_some();
+}
+
+## Find the index of the first occurrence of the specified char.
+## ---
+## s:   The str to search.
+## ch:  The char to find.
+## ret: The index of the first occurrence of the char, or none if not found.
+pub fun str_index_of_char(s: str, ch: char) Option[usize] {
+    if (s.data == nil || s.len == 0) {
+        ret none[usize]();
+    }
+
+    var i: usize = 0;
+    for (i < s.len) {
+        if (s.data[i] == ch) {
+            ret some[usize](i);
+        }
+        i = i + 1;
+    }
+
+    ret none[usize]();
+}
+
+## Find the index of the last occurrence of the specified char.
+## ---
+## s:   The str to search.
+## ch:  The char to find.
+## ret: The index of the last occurrence of the char, or none if not found.
+pub fun str_last_index_of_char(s: str, ch: char) Option[usize] {
+    if (s.data == nil || s.len == 0) {
+        ret none[usize]();
+    }
+
+    var i: usize = s.len;
+    for (i > 0) {
+        i = i - 1;
+        if (s.data[i] == ch) {
+            ret some[usize](i);
+        }
+    }
+
+    ret none[usize]();
+}
+
+## Returns a substring of the str.
+## ---
+## s:     The str to extract the substring from.
+## start: The starting index of the substring.
+## end:   The ending index of the substring.
+## ret:   The resulting substring, or none if the indices are invalid.
+pub fun str_substring(s: str, start: usize, end: usize) Option[str] {
+    if (s.data == nil || start >= end || end > s.len) {
+        ret none[str]();
+    }
+
+    var result: str;
+    result.data = s.data + start;
+    result.len  = end - start;
+
+    ret some[str](result);
+}
+
 ## Basic character type representing a single byte.
 pub def char: u8;
 
