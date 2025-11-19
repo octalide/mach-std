@@ -44,6 +44,10 @@ pub fun list_from_slice[T](slice: Slice[T]) Result[List[T], str] {
 ## cap: The initial capacity of the list.
 ## ret: An optional error message if initialization fails.
 pub fun (this: *List[T]) init(cap: usize) Option[str] {
+    if (this.data != nil) {
+        ret some[str]("list is already initialized");
+    }
+
     if (cap == 0) {
         ret some[str]("capacity must be greater than zero");
     }
@@ -63,9 +67,7 @@ pub fun (this: *List[T]) init(cap: usize) Option[str] {
 
 ## Deinitializes the list, deallocating and zeroing its data.
 pub fun (this: *List[T]) dnit() {
-    if (this.data != nil && this.cap > 0) {
-        mem.deallocate[T](this.data, this.cap);
-    }
+    mem.deallocate[T](this.data, this.cap);
     mem.zero[List[T]](this, 1);
 }
 
