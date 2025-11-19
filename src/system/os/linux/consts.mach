@@ -1,0 +1,38 @@
+use std.types.size;
+
+# File access modes
+pub val O_RDONLY: i32 = 0;
+pub val O_WRONLY: i32 = 1;
+pub val O_RDWR:   i32 = 2;
+pub val O_CREAT:  i32 = 64;
+pub val O_EXCL:   i32 = 128;
+pub val O_TRUNC:  i32 = 512;
+pub val O_APPEND: i32 = 1024;
+
+# File status flags
+pub val AT_FDCWD:            i32 = -100;
+pub val AT_SYMLINK_NOFOLLOW: i32 = 0x0100;
+pub val AT_REMOVEDIR:        i32 = 0x0200;
+
+# File type mask and values
+pub val S_IFMT:  u32 = 0o170000;
+pub val S_IFDIR: u32 = 0o040000;
+pub val S_IFREG: u32 = 0o100000;
+pub val S_IFLNK: u32 = 0o120000;
+
+# Memory mapping
+pub val PROT_READ:      i32 = 1;
+pub val PROT_WRITE:     i32 = 2;
+pub val PROT_EXEC:      i32 = 4;
+pub val PROT_NONE:      i32 = 0;
+
+pub val MAP_SHARED:     i32 = 1;
+pub val MAP_PRIVATE:    i32 = 2;
+pub val MAP_FIXED:      i32 = 16;
+pub val MAP_ANONYMOUS:  i32 = 32;
+
+pub val MREMAP_MAYMOVE: usize = 1;
+
+# Clock IDs
+pub val CLOCK_REALTIME:  i32 = 0;
+pub val CLOCK_MONOTONIC: i32 = 1;

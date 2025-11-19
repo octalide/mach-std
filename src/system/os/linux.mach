@@ -1,4 +1,6 @@
 use std.system.os.linux.syscall;
+use std.system.os.linux.types;
+use std.system.os.linux.consts;
 use std.types.size;
 
 pub val SYS_READ:          usize = 0;
@@ -17,10 +19,6 @@ pub val SYS_GETDENTS64:    usize = 217;
 pub val SYS_FACCESSAT:     usize = 269;
 pub val SYS_CLOCK_GETTIME: usize = 228;
 pub val SYS_OPENAT:        usize = 257;
-
-pub val MREMAP_MAYMOVE: usize = 1;
-
-pub val AT_FDCWD: i32 = -100;
 
 pub fun read(fd: i32, buf: *u8, count: usize) i64 {
 	ret syscall3(SYS_READ, fd::isize::usize, buf::usize, count);
@@ -82,7 +80,7 @@ pub fun mremap(old_addr: *u8, old_size: usize, new_size: usize, flags: usize) *u
 	ret (res::usize)::*u8;
 }
 
-pub fun clock_gettime(clock_id: i32, ts: *u8) i32 {
+pub fun clock_gettime(clock_id: i32, ts: *timespec) i32 {
 	val res: i64 = syscall2(SYS_CLOCK_GETTIME, clock_id::isize::usize, ts::usize);
 
 	if (res < 0) {
@@ -92,11 +90,11 @@ pub fun clock_gettime(clock_id: i32, ts: *u8) i32 {
 	ret (res::i32);
 }
 
-pub fun fstat(fd: i32, statbuf: *u8) i64 {
+pub fun fstat(fd: i32, statbuf: *stat_t) i64 {
 	ret syscall2(SYS_FSTAT, fd::isize::usize, statbuf::usize);
 }
 
-pub fun newfstatat(dirfd: i32, path: &u8, statbuf: *u8, flags: i32) i64 {
+pub fun newfstatat(dirfd: i32, path: &u8, statbuf: *stat_t, flags: i32) i64 {
 	ret syscall4(SYS_NEWFSTATAT, dirfd::isize::usize, path::usize, statbuf::usize, flags::usize);
 }
 
