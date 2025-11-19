@@ -55,7 +55,7 @@ pub fun ok[T, E](value: T) Result[T, E] {
 ## ret:   A Result[T, E] with the err value present.
 pub fun err[T, E](value: E) Result[T, E] {
     var res: Result[T, E];
-    res.tag            = TAG_ERR;
+    res.tag            = false;
     res.data.err_value = value;
     ret res;
 }
