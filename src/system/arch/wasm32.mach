@@ -1,0 +1,79 @@
+use std.types.size;
+
+# register sizes
+pub val WORD_SIZE: usize = 4;
+pub val PAGE_SIZE: usize = 65536;  # wasm page size
+
+# wasm has limited atomics support
+pub val HAS_ATOMICS: bool = true;
+
+# wasm doesn't have traditional syscalls or cpu control
+# these are handled by host imports
+
+pub fun memory_size() u32 {
+    var result: u32;
+    asm {
+        memory.size
+        local.set %[result]
+    }
+    ret result;
+}
+
+pub fun memory_grow(pages: u32) i32 {
+    var result: i32;
+    asm {
+        local.get %[pages]
+        memory.grow
+        local.set %[result]
+    }
+    ret result;
+}
+
+# atomic operations (requires threads proposal)
+pub fun atomic_load_u32(ptr: *u32) u32 {
+    var result: u32;
+    asm {
+        local.get %[ptr]
+        i32.atomic.load
+        local.set %[result]
+    }
+    ret result;
+}
+
+pub fun atomic_store_u32(ptr: *u32, value: u32) {
+    asm {
+        local.get %[ptr]
+        local.get %[value]
+        i32.atomic.store
+    }
+}
+
+pub fun atomic_add_u32(ptr: *u32, value: u32) u32 {
+    var result: u32;
+    asm {
+        local.get %[ptr]
+        local.get %[value]
+        i32.atomic.rmw.add
+        local.set %[result]
+    }
+    ret result;
+}
+
+pub fun atomic_cmpxchg_u32(ptr: *u32, expected: u32, desired: u32) u32 {
+    var result: u32;
+    asm {
+        local.get %[ptr]
+        local.get %[expected]
+        local.get %[desired]
+        i32.atomic.rmw.cmpxchg
+        local.set %[result]
+    }
+    ret result;
+}
+
+# unreachable instruction
+pub fun unreachable() {
+    asm {
+        unreachable
+    }
+}

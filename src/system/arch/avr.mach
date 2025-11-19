@@ -1,0 +1,74 @@
+use std.types.size;
+
+# register sizes
+pub val WORD_SIZE: usize = 2;  # 16-bit pointers
+pub val PAGE_SIZE: usize = 0;  # no mmu/paging
+
+# no atomic operations
+pub val HAS_ATOMICS: bool = false;
+
+# cpu control
+pub fun halt() {
+    asm {
+        sleep
+    }
+}
+
+pub fun breakpoint() {
+    asm {
+        break
+    }
+}
+
+pub fun nop() {
+    asm {
+        nop
+    }
+}
+
+pub fun cli() {
+    asm {
+        cli
+    }
+}
+
+pub fun sei() {
+    asm {
+        sei
+    }
+}
+
+# infinite loop for "exit" behavior
+pub fun infinite_loop() {
+    asm {
+    .Lloop:
+        rjmp .Lloop
+    }
+}
+
+# watchdog timer reset
+pub fun wdt_reset() {
+    asm {
+        wdr
+    }
+}
+
+# common register definitions (as addresses)
+pub val SREG:  u8 = 0x3F;  # status register
+pub val SPH:   u8 = 0x3E;  # stack pointer high
+pub val SPL:   u8 = 0x3D;  # stack pointer low
+
+# io port operations
+pub fun out_port(port: u8, value: u8) {
+    asm {
+        out %[port], %[value]
+    }
+}
+
+pub fun in_port(port: u8) u8 {
+    var result: u8;
+    asm {
+        in %[result], %[port]
+    }
+    ret result;
+}

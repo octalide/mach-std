@@ -1,0 +1,61 @@
+use std.types.option;
+use std.types.size;
+use std.types.string;
+use std.collections.slice;
+
+# architecture dispatch
+$if ($mach.build.target.arch.id == $mach.arch.avr.id) {
+    use arch: std.system.arch.avr;
+}
+$if ($mach.build.target.arch.id == $mach.arch.msp430.id) {
+    use arch: std.system.arch.msp430;
+}
+$if ($mach.build.target.arch.id == $mach.arch.arm.id) {
+    use arch: std.system.arch.arm;
+}
+$if ($mach.build.target.arch.id == $mach.arch.aarch64.id) {
+    use arch: std.system.arch.aarch64;
+}
+$if ($mach.build.target.arch.id == $mach.arch.riscv32.id) {
+    use arch: std.system.arch.riscv32;
+}
+$if ($mach.build.target.arch.id == $mach.arch.riscv64.id) {
+    use arch: std.system.arch.riscv64;
+}
+
+# bare metal has no arguments
+pub fun collect_args() Option[Slice[str]] {
+    ret some[Slice[str]](Slice[str]{ nil, 0 });
+}
+
+# exit means halt or infinite loop
+pub fun exit(code: i64) {
+    $if ($mach.build.target.arch.id == $mach.arch.avr.id || $mach.build.target.arch.id == $mach.arch.msp430.id) {
+        arch.infinite_loop();
+    }
+    or {
+        arch.halt();
+        for {
+            arch.halt();
+        }
+    }
+}
+
+# no stdout on bare metal by default - hardware specific
+pub fun write(fd: i32, buf: *u8, count: usize) i64 {
+    ret 0;
+}
+
+# initialization routine - board specific
+pub fun init() {
+    $if ($mach.build.target.arch.id == $mach.arch.avr.id) {
+        # avr initialization
+        arch.cli();
+        # setup would go here
+        arch.sei();
+    }
+    $if ($mach.build.target.arch.id == $mach.arch.msp430.id) {
+        # stop watchdog
+        arch.watchdog_stop();
+    }
+}

@@ -1,0 +1,140 @@
+use std.types.size;
+
+# register sizes
+pub val WORD_SIZE: usize = 8;
+pub val PAGE_SIZE: usize = 4096;
+
+# atomic operations are supported
+pub val HAS_ATOMICS: bool = true;
+
+# syscall instruction for linux
+pub fun syscall0(number: u64) u64 {
+    var result: u64;
+    asm {
+        mov x8, %[number]
+        svc #0
+        mov %[result], x0
+    }
+    ret result;
+}
+
+pub fun syscall1(number: u64, arg1: u64) u64 {
+    var result: u64;
+    asm {
+        mov x8, %[number]
+        mov x0, %[arg1]
+        svc #0
+        mov %[result], x0
+    }
+    ret result;
+}
+
+pub fun syscall2(number: u64, arg1: u64, arg2: u64) u64 {
+    var result: u64;
+    asm {
+        mov x8, %[number]
+        mov x0, %[arg1]
+        mov x1, %[arg2]
+        svc #0
+        mov %[result], x0
+    }
+    ret result;
+}
+
+pub fun syscall3(number: u64, arg1: u64, arg2: u64, arg3: u64) u64 {
+    var result: u64;
+    asm {
+        mov x8, %[number]
+        mov x0, %[arg1]
+        mov x1, %[arg2]
+        mov x2, %[arg3]
+        svc #0
+        mov %[result], x0
+    }
+    ret result;
+}
+
+pub fun syscall6(number: u64, arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64, arg6: u64) u64 {
+    var result: u64;
+    asm {
+        mov x8, %[number]
+        mov x0, %[arg1]
+        mov x1, %[arg2]
+        mov x2, %[arg3]
+        mov x3, %[arg4]
+        mov x4, %[arg5]
+        mov x5, %[arg6]
+        svc #0
+        mov %[result], x0
+    }
+    ret result;
+}
+
+# cpu control
+pub fun halt() {
+    asm {
+        wfi
+    }
+}
+
+pub fun yield_cpu() {
+    asm {
+        yield
+    }
+}
+
+pub fun breakpoint() {
+    asm {
+        brk #0
+    }
+}
+
+# memory barriers
+pub fun memory_barrier() {
+    asm {
+        dmb sy
+    }
+}
+
+pub fun load_barrier() {
+    asm {
+        dmb ld
+    }
+}
+
+pub fun store_barrier() {
+    asm {
+        dmb st
+    }
+}
+
+# atomic operations using lse (load-store exclusive)
+pub fun atomic_cmpxchg_u64(ptr: *u64, expected: u64, desired: u64) u64 {
+    var result: u64 = expected;
+    asm {
+        mov x1, %[expected]
+        mov x2, %[desired]
+    .Lretry:
+        ldxr x0, [%[ptr]]
+        cmp x0, x1
+        b.ne .Lfail
+        stxr w3, x2, [%[ptr]]
+        cbnz w3, .Lretry
+        mov %[result], x0
+        b .Ldone
+    .Lfail:
+        mov %[result], x0
+    .Ldone:
+    }
+    ret result;
+}
+
+pub fun atomic_add_u64(ptr: *u64, value: u64) {
+    asm {
+    .Lretry:
+        ldxr x0, [%[ptr]]
+        add x0, x0, %[value]
+        stxr w1, x0, [%[ptr]]
+        cbnz w1, .Lretry
+    }
+}
