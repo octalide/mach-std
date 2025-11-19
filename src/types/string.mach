@@ -11,6 +11,7 @@ pub def char: u8;
 pub rec String {
     data: *u8;
     len:  usize;
+    cap:  usize;
 }
 
 ## Create a string from a str (copies the str data)
@@ -22,44 +23,48 @@ pub fun string_make(s: str) Result[String, str] {
         ret err[String, str]("cannot create string from empty data");
     }
 
-    val string: String;
+    var string: String;
     val opt_init: Option[str] = string.init(s.len);
     if (opt_init.is_some()) {
         ret err[String, str](opt_init.unwrap());
     }
 
-    mem.copy[char](string.data, s.data, s.len);
+    if (s.len > 0) {
+        mem.copy[char](string.data, s.data, s.len);
+    }
+    string.len = s.len;
 
     ret ok[String, str](string);
 }
 
-## Initialize the string with the specified length.
+## Initialize the string with the specified capacity.
 ## ---
-## len: The length of the string.
-## ret: An optional error message if initialization fails.
-pub fun (this: *String) init(len: usize) Option[str] {
+## capacity: The initial capacity of the string.
+## ret:      An optional error message if initialization fails.
+pub fun (this: *String) init(capacity: usize) Option[str] {
     if (this.data != nil) {
         ret some[str]("string is already initialized");
     }
 
-    if (len == 0) {
-        ret some[str]("cannot init string with zero length");
+    if (capacity == 0) {
+        ret some[str]("capacity must be greater than zero");
     }
 
-    val res_alloc: Option[*char] = mem.zallocate[char](len);
+    val res_alloc: Option[*char] = mem.zallocate[char](capacity);
     if (res_alloc.is_none()) {
         ret some[str]("out of memory");
     }
 
     this.data = res_alloc.unwrap();
-    this.len  = len;
+    this.len  = 0;
+    this.cap  = capacity;
 
     ret none[str]();
 }
 
 ## Deinitializes the string, deallocating and zeroing its data.
 pub fun (this: *String) dnit() {
-    mem.deallocate[char](this.data, this.len);
+    mem.deallocate[char](this.data, this.cap);
     mem.zero[String](this, 1);
 }
 
@@ -87,26 +92,38 @@ pub fun (this: String) as_str() str {
     ret view;
 }
 
-## Ensures that the string has at least the specified length.
+## Ensures that the string has at least the specified capacity.
+## Grows geometrically (doubles) to avoid frequent reallocations.
 ## ---
-## new_len: The desired minimum length.
+## min_cap: The desired minimum capacity.
 ## ret:     True if the operation succeeded, false otherwise.
-pub fun (this: *String) ensure_len(new_len: usize) bool {
-    if (new_len <= this.len) {
+pub fun (this: *String) ensure_cap(min_cap: usize) bool {
+    if (min_cap <= this.cap) {
         ret true;
     }
 
-    val new_data: Option[*char] = mem.reallocate[char](this.data, this.len, new_len);
+    # grow geometrically
+    var new_cap: usize = this.cap * 2;
+    if (new_cap < min_cap) {
+        new_cap = min_cap;
+    }
+    
+    # handle case where cap was 0
+    if (new_cap == 0) {
+        new_cap = 8; # minimum allocation
+    }
+
+    val new_data: Option[*char] = mem.reallocate[char](this.data, this.cap, new_cap);
     if (new_data.is_none()) {
         ret false;
     }
 
     this.data = new_data.unwrap();
-
-    # zero the new part
-    mem.zero[char](this.data + this.len, new_len - this.len);
-
-    this.len = new_len;
+    
+    # Zero the newly allocated portion
+    mem.zero[char](this.data + this.cap, new_cap - this.cap);
+    
+    this.cap = new_cap;
 
     ret true;
 }
@@ -116,13 +133,12 @@ pub fun (this: *String) ensure_len(new_len: usize) bool {
 ## ch:  The character to append.
 ## ret: True if the operation succeeded, false otherwise.
 pub fun (this: *String) push(ch: char) bool {
-    val current_len: usize = this.len;
-
-    if (this.ensure_len(this.len + 1) == false) {
+    if (this.ensure_cap(this.len + 1) == false) {
         ret false;
     }
 
-    this.data[current_len] = ch;
+    this.data[this.len] = ch;
+    this.len = this.len + 1;
 
     ret true;
 }
@@ -136,13 +152,12 @@ pub fun (this: *String) append(s: str) bool {
         ret true;
     }
 
-    val old_len: usize = this.len;
-
-    if (this.ensure_len(this.len + s.len) == false) {
+    if (this.ensure_cap(this.len + s.len) == false) {
         ret false;
     }
 
-    mem.copy[char](this.data + old_len, s.data, s.len);
+    mem.copy[char](this.data + this.len, s.data, s.len);
+    this.len = this.len + s.len;
 
     ret true;
 }
@@ -156,10 +171,12 @@ pub fun (this: &String) equals(other: str) bool {
         ret false;
     }
 
-    for (i: usize = 0; i < this.len; i = i + 1) {
+    var i: usize = 0;
+    for (i < this.len) {
         if (this.data[i] != other.data[i]) {
             ret false;
         }
+        i = i + 1;
     }
 
     ret true;
@@ -174,11 +191,7 @@ pub fun (this: &String) starts_with(prefix: str) bool {
         ret false;
     }
 
-    val cmp: str;
-    cmp.data = this.data;
-    cmp.len  = prefix.len;
-
-    ret cmp.equals(prefix);
+    ret this.equals(prefix);
 }
 
 ## Checks if the string ends with the specified suffix.
@@ -190,11 +203,7 @@ pub fun (this: &String) ends_with(suffix: str) bool {
         ret false;
     }
 
-    val cmp: str;
-    cmp.data = this.data + (this.len - suffix.len);
-    cmp.len  = suffix.len;
-
-    ret cmp.equals(suffix);
+    ret this.equals(suffix);
 }
 
 ## Finds the index of the first occurrence of the specified segment.
@@ -493,13 +502,13 @@ pub fun format(pattern: str, ...) Option[String] {
         }
 
         if (needs_processing == false) {
-            # just clone
-            val res_clone: Result[String, str] = clone(pattern);
-            if (res_clone.is_err()) {
+            # build String from pattern
+            val res_make: Result[String, str] = string_make(pattern);
+            if (res_make.is_err()) {
                 ret none[String]();
             }
 
-            ret some[String](res_clone.unwrap_ok());
+            ret some[String](res_make.unwrap_ok());
         }
     }
 
