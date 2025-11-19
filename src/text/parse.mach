@@ -1,12 +1,13 @@
 use std.text.ascii;
 use std.types.size;
+use std.collections.slice;
 
 # integer parsing helpers (subset)
-pub fun parse_u64_dec(s: []u8) u64 {
+pub fun parse_u64_dec(s: Slice[u8]) u64 {
     var i: usize = 0;
     var v: usize = 0;
     for (i < s.len) {
-        val d: i32 = digit_val(s[i]);
+        val d: i32 = ascii.digit_val(s.data[i]);
 
         if (d < 0) { brk; }
         if (d > 9) { brk; }
@@ -18,11 +19,11 @@ pub fun parse_u64_dec(s: []u8) u64 {
     ret v::u64;
 }
 
-pub fun parse_u64_hex(s: []u8) u64 {
+pub fun parse_u64_hex(s: Slice[u8]) u64 {
     var i: usize = 0;
     var v: usize = 0;
     for (i < s.len) {
-        val d: i32 = digit_val(s[i]);
+        val d: i32 = ascii.digit_val(s.data[i]);
 
         if (d < 0)  { brk; }
         if (d > 15) { brk; }
