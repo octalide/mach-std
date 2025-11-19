@@ -1,22 +1,36 @@
 use std.types.bool;
 
+## Option[T] represents an optional value that may or may not be present.
 pub rec Option[T] {
     is_some: bool;
     value:   T;
 }
 
+## Unwraps the Option[T], returning the contained value.
+## ---
+## ret: The contained value.
 pub fun (this: Option[T]) unwrap() T {
     ret this.value;
 }
 
+## Checks if the Option[T] is none (no value present).
+## ---
+## ret: true if no value is present, false otherwise.
 pub fun (this: Option[T]) is_none() bool {
     ret this.is_some == false;
 }
 
+## Checks if the Option[T] is some (value is present).
+## ---
+## ret: true if a value is present, false otherwise.
 pub fun (this: Option[T]) is_some() bool {
     ret this.is_some == true;
 }
 
+## Creates an Option[T] containing a value.
+## ---
+## value: The value to contain.
+## ret:   An Option[T] with the value present.
 pub fun some[T](value: T) Option[T] {
     var opt: Option[T];
     opt.is_some = true;
@@ -24,6 +38,9 @@ pub fun some[T](value: T) Option[T] {
     ret opt;
 }
 
+## Creates an Option[T] with no value.
+## ---
+## ret: An Option[T] with no value present.
 pub fun none[T]() Option[T] {
     var opt: Option[T];
     opt.is_some = false;

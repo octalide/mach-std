@@ -1,39 +1,58 @@
 use std.types.bool;
 
+## Result[T, E] represents either a success (Ok) containing a value of type T,
+## or an error (Err) containing a value of type E.
 pub rec Result[T, E] {
-    tag:  u32;
+    tag:  bool;
     data: uni {
         ok_value:  T;
         err_value: E;
     };
 }
 
-pub val TAG_OK:  u32 = 0;
-pub val TAG_ERR: u32 = 1;
-
+## Checks if the Result[T, E] is ok (success).
+## ---
+## ret: true if the result is ok, false otherwise.
 pub fun (this: Result[T, E]) is_ok() bool {
-    ret this.tag == TAG_OK;
+    ret this.tag;
 }
 
+## Checks if the Result[T, E] is err (error).
+## ---
+## ret: true if the result is an error, false otherwise.
 pub fun (this: Result[T, E]) is_err() bool {
-    ret this.tag == TAG_ERR;
+    ret !this.tag;
 }
 
+## Unwraps the Result[T, E], returning the contained ok value.
+## ---
+## ret: The contained ok value if the result is ok; otherwise, this function will panic
 pub fun (this: Result[T, E]) unwrap_ok() T {
     ret this.data.ok_value;
 }
 
+## Unwraps the Result[T, E], returning the contained err value.
+## ---
+## ret: The contained err value if the result is an error; otherwise, this function will
 pub fun (this: Result[T, E]) unwrap_err() E {
     ret this.data.err_value;
 }
 
+## Creates a Result[T, E] representing a successful value.
+## ---
+## value: The success value to contain.
+## ret:   A Result[T, E] with the ok value present.
 pub fun ok[T, E](value: T) Result[T, E] {
     var res: Result[T, E];
-    res.tag           = TAG_OK;
+    res.tag           = true;
     res.data.ok_value = value;
     ret res;
 }
 
+## Creates a Result[T, E] representing an error value.
+## ---
+## value: The error value to contain.
+## ret:   A Result[T, E] with the err value present.
 pub fun err[T, E](value: E) Result[T, E] {
     var res: Result[T, E];
     res.tag            = TAG_ERR;
