@@ -1,37 +1,26 @@
+use std.collections.list;
+use std.collections.slice;
+
 use std.crypto.hash;
 
 use std.data.json;
 use std.data.toml;
 
-use std.io.console;
-use std.io.filesystem;
-use std.io.path;
-
-use std.lang.driver.pipeline;
-use std.lang.driver.session;
-use std.lang.frontend.lexical.lexer;
-use std.lang.frontend.lexical.tokens;
-use std.lang.frontend.syntax.ast;
-use std.lang.frontend.syntax.parser;
-use std.lang.config;
-use std.lang.diagnostics;
-use std.lang.driver;
-use std.lang.module;
-use std.lang.target;
-
-use std.system.env;
-use std.system.memory;
-use std.system.time;
-
 use std.text.ascii;
 use std.text.parse;
 
 use std.types.bool;
-use std.types.list;
+use std.types.cstring;
 use std.types.option;
 use std.types.result;
 use std.types.semver;
 use std.types.size;
 use std.types.string;
 
-use std.system.runtime;
+use std.console;
+use std.env;
+use std.filesystem;
+use std.memory;
+use std.path;
+use std.time;
+use std.runtime;

@@ -1,0 +1,129 @@
+use std.os.linux.types;
+use std.os.linux.consts;
+use std.types.size;
+use std.types.result;
+use std.types.string;
+use std.types.bool;
+use std.path;
+use std.collections.slice;
+use mem: std.memory;
+
+pub rec FileInfo {
+    size:        u64;
+    mode:        u32;
+    is_dir:      bool;
+    is_file:     bool;
+    is_symlink:  bool;
+    atime_sec:   i64;
+    mtime_sec:   i64;
+    ctime_sec:   i64;
+}
+
+fun fileinfo_from_os(st: stat_t) FileInfo {
+    var fi: FileInfo;
+    fi.size       = st.st_size::u64;
+    fi.mode       = st.st_mode;
+    fi.is_dir     = (st.st_mode & S_IFMT) == S_IFDIR;
+    fi.is_file    = (st.st_mode & S_IFMT) == S_IFREG;
+    fi.is_symlink = (st.st_mode & S_IFMT) == S_IFLNK;
+    fi.atime_sec  = st.st_atime;
+    fi.mtime_sec  = st.st_mtime;
+    fi.ctime_sec  = st.st_ctime;
+    ret fi;
+}
+
+pub fun read_all(path: Path) Result[Slice[u8], i32] {
+    val fd: i64 = os.openat(AT_FDCWD, path.data, O_RDONLY, 0);
+    if (fd < 0) { ret err[Slice[u8], i32](fd::i32); }
+
+    var st: stat_t;
+    val stat_res: i64 = os.fstat(fd::i32, ?st);
+    if (stat_res < 0) {
+        os.close(fd::i32);
+        ret err[Slice[u8], i32](stat_res::i32);
+    }
+
+    val size: usize = st.st_size::usize;
+    val buf_opt: Option[*u8] = mem.allocate[u8](size);
+    if (buf_opt.is_none()) {
+        os.close(fd::i32);
+        # ENOMEM is 12
+        ret err[Slice[u8], i32](-12);
+    }
+    val buf: *u8 = buf_opt.unwrap();
+
+    var total_read: usize = 0;
+    for (total_read < size) {
+        val read_res: i64 = os.read(fd::i32, &buf[total_read], size - total_read);
+        if (read_res < 0) {
+            mem.deallocate(buf, size);
+            os.close(fd::i32);
+            ret err[Slice[u8], i32](read_res::i32);
+        }
+        if (read_res == 0) { brk; } # EOF
+        total_read = total_read + read_res::usize;
+    }
+
+    os.close(fd::i32);
+    ret ok[Slice[u8], i32](slice_make[u8](buf, total_read));
+}
+
+pub fun write_file(path: Path, data: Slice[u8], flags: i32, mode: i32) Result[u64, i32] {
+    val fd: i64 = os.openat(AT_FDCWD, path.data, flags, mode);
+    if (fd < 0) { ret err[u64, i32](fd::i32); }
+
+    var total_written: usize = 0;
+    for (total_written < data.len) {
+        val write_res: i64 = os.write(fd::i32, &data.data[total_written], data.len - total_written);
+        if (write_res < 0) {
+            os.close(fd::i32);
+            ret err[u64, i32](write_res::i32);
+        }
+        total_written = total_written + write_res::usize;
+    }
+    os.close(fd::i32);
+    ret ok[u64, i32](total_written::u64);
+}
+
+pub fun exists(path: Path) bool {
+    val res: i64 = os.faccessat(AT_FDCWD, path.data, 0, 0); # F_OK is 0
+    ret res == 0;
+}
+
+pub fun remove(path: Path) Result[u64, i32] {
+    val res: i64 = os.unlinkat(AT_FDCWD, path.data, 0);
+    if (res < 0) { ret err[u64, i32](res::i32); }
+    ret ok[u64, i32](0);
+}
+
+pub fun remove_dir(path: Path) Result[u64, i32] {
+    val res: i64 = os.unlinkat(AT_FDCWD, path.data, AT_REMOVEDIR);
+    if (res < 0) { ret err[u64, i32](res::i32); }
+    ret ok[u64, i32](0);
+}
+
+pub fun rename(oldpath: Path, newpath: Path) Result[u64, i32] {
+    val res: i64 = os.renameat(AT_FDCWD, oldpath.data, AT_FDCWD, newpath.data);
+    if (res < 0) { ret err[u64, i32](res::i32); }
+    ret ok[u64, i32](0);
+}
+
+pub fun create_dir(path: Path, mode: i32) Result[u64, i32] {
+    val res: i64 = os.mkdirat(AT_FDCWD, path.data, mode);
+    if (res < 0) { ret err[u64, i32](res::i32); }
+    ret ok[u64, i32](0);
+}
+
+pub fun stat(path: Path) Result[FileInfo, i32] {
+    var st: stat_t;
+    val res: i64 = os.newfstatat(AT_FDCWD, path.data, ?st, 0);
+    if (res < 0) { ret err[FileInfo, i32](res::i32); }
+    ret ok[FileInfo, i32](fileinfo_from_os(st));
+}
+
+pub fun lstat(path: Path) Result[FileInfo, i32] {
+    var st: stat_t;
+    val res: i64 = os.newfstatat(AT_FDCWD, path.data, ?st, AT_SYMLINK_NOFOLLOW);
+    if (res < 0) { ret err[FileInfo, i32](res::i32); }
+    ret ok[FileInfo, i32](fileinfo_from_os(st));
+}

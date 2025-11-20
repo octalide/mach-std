@@ -1,0 +1,91 @@
+use std.types.string;
+use std.types.size;
+use std.collections.slice;
+use std.types.bool;
+use std.types.result;
+use std.path;
+use fs: std.filesystem;
+
+var env_blob: Slice[u8];
+var env_loaded: bool = false;
+
+pub fun ensure_env_blob() bool {
+    if (env_loaded) { ret true; }
+
+    val path_res: Result[Path, str] = path_from_string("/proc/self/environ");
+    if (path_res.is_err()) { ret false; }
+    val p: Path = path_res.unwrap_ok();
+    
+    val res: Result[Slice[u8], str] = fs.read_all(p);
+    p.dnit();
+
+    if (res.is_err()) { ret false; }
+    env_blob = res.unwrap_ok();
+    env_loaded = true;
+    ret true;
+}
+
+pub fun get_env_blob() Slice[u8] {
+    ret env_blob;
+}
+
+fun find_value(blob: Slice[u8], name: str) Slice[u8] {
+    if (blob.data == nil || blob.len == 0) {
+        ret slice_make[u8](nil, 0);
+    }
+
+    val target_len: usize = name.len;
+    val data:       &u8   = blob.data;
+    val total:      usize = blob.len;
+
+    var pos: usize = 0;
+    for (pos < total) {
+        val segment_start: usize = pos;
+
+        for (pos < total && data[pos] != 0) {
+            pos = pos + 1;
+        }
+
+        val segment_end: usize = pos;
+        val segment_len: usize = segment_end - segment_start;
+
+        if (segment_len > target_len) {
+            var match: u8    = 1;
+            var idx:   usize = 0;
+
+            for (idx < target_len) {
+                val a: u8 = data[segment_start + idx];
+                val b: u8 = name.data[idx];
+
+                if (a != b) {
+                    match = 0;
+                    brk;
+                }
+
+                idx = idx + 1;
+            }
+
+            if (match == 1 && (segment_start + target_len) < segment_end && data[segment_start + target_len] == '=') {
+                val value_start: usize = segment_start + target_len + 1;
+                val value_len:   usize = segment_len - target_len - 1;
+
+                ret slice_make[u8](data + value_start, value_len);
+            }
+        }
+
+        if (pos >= total) {
+            brk;
+        }
+
+        pos = pos + 1;
+    }
+
+    ret slice_make[u8](nil, 0);
+}
+
+pub fun get(name: str) Slice[u8] {
+    if (!ensure_env_blob()) {
+        ret slice_make[u8](nil, 0);
+    }
+    ret find_value(env_blob, name);
+}

@@ -1,0 +1,86 @@
+use std.types.string;
+use std.types.cstring;
+use std.types.size;
+use std.types.option;
+use std.collections.slice;
+use mem: std.memory;
+
+pub ext main: fun(Slice[str]) i64;
+pub ext "mach_runtime_exit" mach_runtime_exit: fun(i64);
+
+fun cstring_length(s: CString) usize {
+    if (s == nil) { ret 0; }
+    var length: usize = 0;
+    var cursor: CString = s;
+    for {
+        if (cursor[0] == 0::char) { brk; }
+        length = length + 1;
+        cursor = cursor + 1;
+    }
+    ret length;
+}
+
+$mach_runtime_entry.symbol = "mach_runtime_entry";
+fun mach_runtime_entry(stack: *u8) i64 {
+    val argc: usize = (stack::*usize)[0];
+    
+    # Build args
+    var args: Slice[str] = Slice[str]{ nil, 0 };
+    
+    if (argc > 0) {
+        val entry_size:  usize = $size_of(str);
+        val total_bytes: usize = argc * entry_size;
+        val storage_opt: Option[*u8] = mem.allocate[u8](total_bytes);
+        
+        if (storage_opt.is_some()) {
+            val storage: *u8 = storage_opt.unwrap();
+            val argv_base: *u8 = stack + 8; # WORD_BYTES (8 on 64-bit)
+
+            var index: usize = 0;
+            for (index < argc) {
+                val offset:  usize = index * 8;
+                val addr:    *u8   = argv_base + offset;
+                val raw:     usize = (addr::*usize)[0];
+                val arg_ptr: CString = raw::CString;
+                val length:  usize = cstring_length(arg_ptr);
+
+                val slot_offset: usize = index * entry_size;
+                val slot_addr:   *u8   = storage + slot_offset;
+
+                val data_slot: **char = slot_addr::**char;
+                data_slot[0] = arg_ptr;
+
+                val length_addr: *u8     = slot_addr + 8;
+                val length_slot: *usize = length_addr::*usize;
+                length_slot[0] = length;
+
+                index = index + 1;
+            }
+            args = Slice[str]{ storage::*str, argc };
+        }
+    }
+
+    val exit_code: i64 = main(args);
+    mach_runtime_exit(exit_code);
+    ret 0;
+}
+
+asm {
+.text
+.globl _start
+_start:
+    xor %rbp, %rbp
+    mov %rsp, %rdi
+    and $-16, %rsp
+    call mach_runtime_entry
+    hlt
+}
+
+asm {
+.text
+.globl mach_runtime_exit
+mach_runtime_exit:
+    mov $60, %rax
+    syscall
+    hlt
+}

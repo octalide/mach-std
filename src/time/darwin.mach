@@ -1,0 +1,20 @@
+use os: std.os.darwin;
+use std.os.darwin.types;
+use std.os.darwin.consts;
+use std.types.size;
+
+pub val SECOND: u64 = 1000000000;
+
+pub fun now() u64 {
+    var ts: timespec;
+    val r: i32 = os.clock_gettime(CLOCK_MONOTONIC, ?ts);
+    if (r != 0) { ret 0; }
+    ret (ts.tv_sec::u64 * SECOND) + ts.tv_nsec::u64;
+}
+
+pub fun unix_nano() i64 {
+    var ts: timespec;
+    val r: i32 = os.clock_gettime(CLOCK_REALTIME, ?ts);
+    if (r != 0) { ret 0; }
+    ret (ts.tv_sec * SECOND::i64) + ts.tv_nsec;
+}

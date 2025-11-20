@@ -1,0 +1,46 @@
+use os: std.os.windows;
+use std.os.windows.consts;
+use std.types.size;
+
+pub fun allocate(size: usize) ptr {
+    ret os.virt_alloc(size)::ptr;
+}
+
+pub fun deallocate(p: ptr, size: usize) bool {
+    if (p == nil) { ret true; }
+    val r: u32 = os.virt_free(p::*u8, 0); # size is ignored for MEM_RELEASE
+    ret r != 0;
+}
+
+pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
+    # Windows VirtualAlloc cannot resize in place like mremap.
+    # We must alloc, copy, free.
+    if (p == nil) { ret allocate(new_size); }
+    if (new_size == 0) {
+        deallocate(p, old_size);
+        ret nil;
+    }
+    
+    val new_ptr: ptr = allocate(new_size);
+    if (new_ptr == nil) { ret nil; }
+    
+    # We need raw_copy. Since we are in sys layer, we can't easily use std.system.memory 
+    # if it depends on us (circular dependency).
+    # But std.system.memory depends on sys.windows.memory.
+    # So sys.windows.memory cannot depend on std.system.memory.
+    # We must implement a simple copy loop or use an intrinsic if available.
+    
+    var src: *u8 = p::*u8;
+    var dst: *u8 = new_ptr::*u8;
+    var copy_len: usize = old_size;
+    if (new_size < old_size) { copy_len = new_size; }
+    
+    var i: usize = 0;
+    for (i < copy_len) {
+        dst[i] = src[i];
+        i = i + 1;
+    }
+    
+    deallocate(p, old_size);
+    ret new_ptr;
+}

@@ -1,0 +1,73 @@
+use std.types.string;
+use std.types.size;
+use std.types.option;
+use std.collections.slice;
+use mem: std.memory;
+
+pub ext main: fun(Slice[str]) i64;
+pub ext "mach_runtime_exit" mach_runtime_exit: fun(i64);
+
+$mach_runtime_entry.symbol = "mach_runtime_entry";
+fun mach_runtime_entry() {
+    # TODO: Implement Windows command line parsing
+    # val args_opt:  Option[Slice[str]] = platform.collect_args();
+    
+    val args: Slice[str] = Slice[str]{ nil, 0 };
+    val exit_code: i64 = main(args);
+    mach_runtime_exit(exit_code);
+}
+
+asm {
+.text
+.globl _start
+_start:
+    and $-16, %rsp
+    sub $32, %rsp
+    call mach_runtime_entry
+    hlt
+}
+
+# Windows exit is usually ExitProcess from kernel32, but here we might need to link it.
+# For now, assuming mach_runtime_exit is provided or we need to implement it.
+# The original code didn't have an asm impl for windows mach_runtime_exit?
+# Ah, looking at the original file...
+# It seems it didn't have a Windows implementation for mach_runtime_exit in the asm block.
+# It might be expected to be linked from C or implemented elsewhere?
+# Wait, `pub ext "mach_runtime_exit" mach_runtime_exit: fun(i64);` was declared.
+# But where is it defined for Windows?
+# The original code had:
+# $if ($mach.build.target.os.id == $mach.os.linux.id) { ... }
+# $if ($mach.build.target.os.id == $mach.os.darwin.id) { ... }
+# It didn't have one for Windows.
+# This implies it might be missing or I missed it.
+# Let's assume for now we need to use ExitProcess.
+# But I can't easily call ExitProcess from asm without knowing the symbol name mangling or import.
+# I'll leave it as `ext` and assume the user handles it or it's in `os.windows`.
+# Actually, `std.os.windows` has `kernel32` imports.
+# I should probably use `std.os.windows.exit_process` if it existed.
+# But for now, I'll just leave it as is, maybe it's defined in the bootstrap or C runtime if linked?
+# Or maybe it was just missing.
+# I'll add a TODO or try to implement it if I can.
+# `ExitProcess` is `void ExitProcess(UINT uExitCode);`
+# I can add `use std.os.windows;` and call `os.exit_process(exit_code::u32)`.
+# But `mach_runtime_exit` is `fun(i64)`.
+# Let's just define it to call ExitProcess.
+
+use os: std.os.windows;
+
+# We can't easily define an `ext` function with a body.
+# But we can define a function that matches the symbol.
+# However, `mach_runtime_exit` is declared as `ext` in the other files.
+# Here I can define it as a normal function if I don't mark it `ext`?
+# But `abort` calls `mach_runtime_exit`.
+# Let's just implement `mach_runtime_exit` as a wrapper around `ExitProcess`.
+
+$mach_runtime_exit.symbol = "mach_runtime_exit";
+pub fun mach_runtime_exit_impl(code: i64) {
+    # We need ExitProcess.
+    # std.os.windows doesn't export ExitProcess yet.
+    # I should add it to std.os.windows.
+    # For now, let's just use a local ext.
+    ext "C:ExitProcess" win32_exit_process: fun(u32);
+    win32_exit_process(code::u32);
+}

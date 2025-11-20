@@ -1,11 +1,11 @@
 use      std.types.bool;
-use      std.types.list;
+use      std.collections.list;
 use      std.types.option;
 use      std.types.result;
 use      std.types.size;
 use      std.types.string;
 use      std.text.ascii;
-use mem: std.system.memory;
+use mem: std.memory;
 
 # json value types
 pub val JSON_NULL:   u32 = 0;
@@ -158,20 +158,20 @@ pub fun (this: JsonValue) as_number() Option[f64] {
 
 pub fun (this: JsonValue) as_string() Option[str] {
     if (this.tag == JSON_STRING) {
-        var s: *String = ?this.data.string_val;
+        var s: &String = ?this.data.string_val;
         ret some[str](s.as_str());
     }
     ret none[str]();
 }
 
-pub fun (this: JsonValue) as_array() Option[*List[JsonValue]] {
+pub fun (this: *JsonValue) as_array() Option[*List[JsonValue]] {
     if (this.tag == JSON_ARRAY) {
         ret some[*List[JsonValue]](?this.data.array_val);
     }
     ret none[*List[JsonValue]]();
 }
 
-pub fun (this: JsonValue) as_object() Option[*List[JsonProperty]] {
+pub fun (this: *JsonValue) as_object() Option[*List[JsonProperty]] {
     if (this.tag == JSON_OBJECT) {
         ret some[*List[JsonProperty]](?this.data.object_val);
     }
@@ -660,7 +660,7 @@ pub fun parse_json(input: str) Result[JsonValue, str] {
         ret err[JsonValue, str]("input is null");
     }
 
-    val cloned: Result[String, str] = input.clone();
+    val cloned: Result[String, str] = string_make(input);
     if (cloned.is_err()) {
         ret err[JsonValue, str]("failed to clone input str");
     }
@@ -697,7 +697,7 @@ pub fun (this: JsonValue) get_property(key: str) Option[JsonValue] {
     for (i < this.data.object_val.len) {
         val prop: *JsonProperty = this.data.object_val.data + i;
         var k: *String = ?prop.key;
-        if (k.as_str().equals(key)) {
+        if (str_equal(k.as_str(), key)) {
             ret some[JsonValue](prop.value);
         }
         i = i + 1;

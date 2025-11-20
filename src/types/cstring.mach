@@ -1,6 +1,7 @@
 use std.types.string;
 use std.types.size;
 use std.types.option;
+use std.types.result;
 
 ## C-style null-terminated string.
 ## Used for interoperability with C libraries and system calls.

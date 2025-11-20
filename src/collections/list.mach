@@ -4,7 +4,7 @@ use      std.types.option;
 use      std.types.size;
 use      std.types.string;
 use      std.collections.slice;
-use mem: std.system.memory;
+use mem: std.memory;
 
 ## A dynamic array  of elements of type T
 pub rec List[T] {

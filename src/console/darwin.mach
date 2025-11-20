@@ -1,0 +1,10 @@
+use os: std.os.darwin;
+use std.types.size;
+
+pub fun write(fd: i32, data: &u8, len: usize) i64 {
+    ret os.write(fd, data, len);
+}
+
+pub fun read(fd: i32, dest: *u8, max: usize) i64 {
+    ret os.read(fd, dest, max);
+}

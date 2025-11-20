@@ -1,0 +1,32 @@
+use os: std.os.darwin;
+use std.os.darwin.consts;
+use std.types.size;
+use std.memory; # for raw_copy
+
+pub fun allocate(size: usize) ptr {
+    if (size == 0) { ret nil; }
+    ret (os.mmap(nil, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0)::ptr);
+}
+
+pub fun deallocate(p: ptr, size: usize) bool {
+    if (p == nil || size == 0) { ret true; }
+    val r: i32 = os.munmap((p::*u8), size);
+    ret r == 0;
+}
+
+pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
+    if (p == nil) { ret allocate(new_size); }
+    if (new_size == 0) {
+        val r: bool = deallocate(p, old_size);
+        ret nil;
+    }
+    val new_ptr: ptr = allocate(new_size);
+    if (new_ptr == nil) { ret nil; }
+    
+    var copy_size: usize = old_size;
+    if (new_size < old_size) { copy_size = new_size; }
+    
+    memory.raw_copy(new_ptr, p, copy_size);
+    deallocate(p, old_size);
+    ret new_ptr;
+}

@@ -2,7 +2,7 @@ use      std.types.bool;
 use      std.types.option;
 use      std.types.result;
 use      std.types.size;
-use mem: std.system.memory;
+use mem: std.memory;
 
 ## Check if the given str is empty.
 ## ---

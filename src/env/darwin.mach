@@ -1,0 +1,42 @@
+use std.types.string;
+use std.types.size;
+use std.collections.slice;
+use std.types.bool;
+use os: std.os.darwin;
+
+pub fun get(name: str) Slice[u8] {
+    if (os.environ == nil) { ret slice_make[u8](nil, 0); }
+
+    var i: usize = 0;
+    for {
+        val entry: *u8 = os.environ[i];
+        if (entry == nil) { brk; }
+
+        # Check if entry starts with name + "="
+        var match: bool = true;
+        var j: usize = 0;
+        for (j < name.len) {
+            if (entry[j] != name.data[j]) {
+                match = false;
+                brk;
+            }
+            j = j + 1;
+        }
+
+        if (match && entry[name.len] == '=') {
+            # Found it. Calculate value length.
+            val val_start: *u8 = entry + name.len + 1;
+            var val_len: usize = 0;
+            var k: usize = 0;
+            for {
+                if (val_start[k] == 0) { brk; }
+                val_len = val_len + 1;
+                k = k + 1;
+            }
+            ret slice_make[u8](val_start, val_len);
+        }
+
+        i = i + 1;
+    }
+    ret slice_make[u8](nil, 0);
+}

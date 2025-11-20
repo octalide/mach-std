@@ -1,0 +1,18 @@
+$if ($mach.build.target.os.id == $mach.os.linux.id) {
+    use impl: std.runtime.linux;
+}
+
+$if ($mach.build.target.os.id == $mach.os.darwin.id) {
+    use impl: std.runtime.darwin;
+}
+
+$if ($mach.build.target.os.id == $mach.os.windows.id) {
+    use impl: std.runtime.windows;
+}
+
+# Common abort implementation
+$abort.symbol = "abort";
+pub fun abort() i64 {
+    impl.mach_runtime_exit(255);
+    ret 255;
+}

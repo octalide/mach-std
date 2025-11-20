@@ -1,0 +1,229 @@
+use std.types.path;
+use std.types.bool;
+use std.types.option;
+use std.types.result;
+use std.types.string;
+use std.types.slice;
+use std.time;
+
+$if($mach.target.os.id == $mach.os.linux.id) { use impl: std.os.filesystem.linux; }
+
+## File error codes
+## NOTE: These error codes are standardized across all OS implementations.
+## Each implementation should map its native error codes to these.
+pub def FileError: u8;
+pub val FILE_ERROR_UNKNOWN:        FileError = 0;
+pub val FILE_ERROR_NOT_FOUND:      FileError = 1;
+pub val FILE_ERROR_PERMISSION:     FileError = 2;
+pub val FILE_ERROR_ALREADY_EXISTS: FileError = 3;
+pub val FILE_ERROR_IS_DIRECTORY:   FileError = 4;
+pub val FILE_ERROR_NOT_DIRECTORY:  FileError = 5;
+pub val FILE_ERROR_NOT_EMPTY:      FileError = 6;
+pub val FILE_ERROR_NO_SPACE:       FileError = 7;
+pub val FILE_ERROR_TOO_LARGE:      FileError = 8;
+pub val FILE_ERROR_INVALID_PATH:   FileError = 9;
+pub val FILE_ERROR_IO:             FileError = 10;
+
+## Convert FileError to human-readable string
+## ---
+## ret: A string representation of the FileError
+pub fun (this: FileError) to_str() str {
+    if (this == FILE_ERROR_NOT_FOUND)      { ret "not found"; }
+    or (this == FILE_ERROR_PERMISSION)     { ret "permission denied"; }
+    or (this == FILE_ERROR_ALREADY_EXISTS) { ret "already exists"; }
+    or (this == FILE_ERROR_IS_DIRECTORY)   { ret "is a directory"; }
+    or (this == FILE_ERROR_NOT_DIRECTORY)  { ret "not a directory"; }
+    or (this == FILE_ERROR_NOT_EMPTY)      { ret "directory not empty"; }
+    or (this == FILE_ERROR_NO_SPACE)       { ret "no space left on device"; }
+    or (this == FILE_ERROR_TOO_LARGE)      { ret "file too large"; }
+    or (this == FILE_ERROR_INVALID_PATH)   { ret "invalid path"; }
+    or (this == FILE_ERROR_IO)             { ret "I/O error"; }
+    or                                     { ret "unknown"; }
+}
+
+## Map implementation-specific error codes to standardized FileError
+## ---
+## code: The implementation-specific error code
+## ret:  The corresponding standardized FileError
+fun fileerror_from_impl(code: i32) FileError {
+    if (code == impl.FILE_ERROR_NOT_FOUND)      { ret FILE_ERROR_NOT_FOUND; }
+    or (code == impl.FILE_ERROR_PERMISSION)     { ret FILE_ERROR_PERMISSION; }
+    or (code == impl.FILE_ERROR_ALREADY_EXISTS) { ret FILE_ERROR_ALREADY_EXISTS; }
+    or (code == impl.FILE_ERROR_IS_DIRECTORY)   { ret FILE_ERROR_IS_DIRECTORY; }
+    or (code == impl.FILE_ERROR_NOT_DIRECTORY)  { ret FILE_ERROR_NOT_DIRECTORY; }
+    or (code == impl.FILE_ERROR_NOT_EMPTY)      { ret FILE_ERROR_NOT_EMPTY; }
+    or (code == impl.FILE_ERROR_NO_SPACE)       { ret FILE_ERROR_NO_SPACE; }
+    or (code == impl.FILE_ERROR_TOO_LARGE)      { ret FILE_ERROR_TOO_LARGE; }
+    or (code == impl.FILE_ERROR_INVALID_PATH)   { ret FILE_ERROR_INVALID_PATH; }
+    or (code == impl.FILE_ERROR_IO)             { ret FILE_ERROR_IO; }
+    or                                          { ret FILE_ERROR_UNKNOWN; }
+}
+
+## File mode constants
+pub def FileMode: u32;
+pub val FILE_MODE_USER_READ:     FileMode = 0o400;
+pub val FILE_MODE_USER_WRITE:    FileMode = 0o200;
+pub val FILE_MODE_USER_EXECUTE:  FileMode = 0o100;
+pub val FILE_MODE_GROUP_READ:    FileMode = 0o040;
+pub val FILE_MODE_GROUP_WRITE:   FileMode = 0o020;
+pub val FILE_MODE_GROUP_EXECUTE: FileMode = 0o010;
+pub val FILE_MODE_OTHER_READ:    FileMode = 0o004;
+pub val FILE_MODE_OTHER_WRITE:   FileMode = 0o002;
+pub val FILE_MODE_OTHER_EXECUTE: FileMode = 0o001;
+pub val FILE_MODE_FILE_PRIVATE:  FileMode = 0o700;
+pub val FILE_MODE_FILE_COMMON:   FileMode = 0o644;
+pub val FILE_MODE_FILE_PUBLIC:   FileMode = 0o666;
+pub val FILE_MODE_DIR_PRIVATE:   FileMode = 0o700;
+pub val FILE_MODE_DIR_COMMON:    FileMode = 0o755;
+pub val FILE_MODE_DIR_PUBLIC:    FileMode = 0o777;
+
+## File type constants
+pub def FileType: u8;
+pub val FILE_TYPE_UNKNOWN: FileType = 0;
+pub val FILE_TYPE_DIR:     FileType = 1;
+pub val FILE_TYPE_FILE:    FileType = 2;
+pub val FILE_TYPE_SYMLINK: FileType = 3;
+
+## File information structure
+pub rec FileInfo {
+    size:        u64;      ## size in bytes
+    mode:        FileMode; ## POSIX-style permission bits
+    type:        FileType; ## file type
+    accessed_at: DateTime; ## last access time
+    modified_at: DateTime; ## last modified time
+    changed_at:  DateTime; ## last status change time
+}
+
+## Convert implementation-specific FileInfo to standardized FileInfo.
+## Note that this requires each implementation to provide a compatible FileInfo
+## structure.
+## ---
+## fi:  The implementation-specific FileInfo
+## ret: A standardized FileInfo structure
+fun fileinfo_from_impl(fi: impl.FileInfo) FileInfo {
+    var info: FileInfo;
+
+    info.size = fi.size;
+    info.mode = fi.mode;
+
+    if (fi.is_dir)     { info.type = FILE_TYPE_DIR; }
+    or (fi.is_file)    { info.type = FILE_TYPE_FILE; }
+    or (fi.is_symlink) { info.type = FILE_TYPE_SYMLINK; }
+    or                 { info.type = FILE_TYPE_UNKNOWN; }
+
+    info.accessed_at = DateTime.from_unix_seconds(fi.atime_sec);
+    info.modified_at = DateTime.from_unix_seconds(fi.mtime_sec);
+    info.changed_at  = DateTime.from_unix_seconds(fi.ctime_sec);
+
+    ret info;
+}
+
+## Read the entire contents of a file at the given path
+## ---
+## path: The path to the file to read
+## ret:  A Result containing a Slice of bytes with the file contents on success,
+##       or a string error message on failure.
+pub fun read_all(path: Path) Result[Slice[u8], str] {
+    val res: Result[Slice[u8], i32] = impl.read_all(path);
+    if (res.is_err()) {
+        val err_code: FileError = fileerror_from_impl(res.err());
+        val err_str:  str       = err_code.to_string();
+        ret err[Slice[u8], str](err_str);
+    }
+    ret ok[Slice[u8], str](res.ok());
+}
+
+## Write the entire contents to a file at the given path
+## ---
+## path: The path to the file to write
+## data: A Slice of bytes containing the data to write
+## ret:  An Option containing a string error message on failure, or none on success.
+pub fun write_all(path: Path, data: Slice[u8]) Option[str] {
+    val res: Option[i32] = impl.write_all(path, data);
+    if (res.is_some()) {
+        val err_code: FileError = fileerror_from_impl(res.unwrap());
+        val err_str:  str       = err_code.to_string();
+        ret some[str](err_str);
+    }
+    ret none[str]();
+}
+
+## Check if a file or directory exists at the given path
+## ---
+## path: The path to check for existence
+## ret:  A boolean indicating whether the file or directory exists
+pub fun exists(path: Path) bool {
+    ret impl.exists(path);
+}
+
+## Remove the file at the given path
+## ---
+## path: The path to the file to remove
+## ret:  An Option containing a string error message on failure, or none on success.
+pub fun remove(path: Path) Option[str] {
+    val res: Option[i32] = impl.remove(path);
+    if (res.is_some()) {
+        val err_code: FileError = fileerror_from_impl(res.unwrap());
+        val err_str:  str       = err_code.to_string();
+        ret some[str](err_str);
+    }
+    ret none[str]();
+}
+
+## Remove the directory at the given path
+## ---
+## path: The path to the directory to remove
+## ret:  An Option containing a string error message on failure, or none on success.
+pub fun remove_dir(path: Path) Option[str] {
+    val res: Option[i32] = impl.remove_dir(path);
+    if (res.is_some()) {
+        val err_code: FileError = fileerror_from_impl(res.unwrap());
+        val err_str:  str       = err_code.to_string();
+        ret some[str](err_str);
+    }
+    ret none[str]();
+}
+
+## Create a directory at the given path
+## ---
+## path: The path to the directory to create
+## ret:  An Option containing a string error message on failure, or none on success.
+pub fun create_dir(path: Path) Option[str] {
+    val res: Option[i32] = impl.create_dir(path);
+    if (res.is_some()) {
+        val err_code: FileError = fileerror_from_impl(res.unwrap());
+        val err_str:  str       = err_code.to_string();
+        ret some[str](err_str);
+    }
+    ret none[str]();
+}
+
+## Rename a file or directory from old path to new path
+## ---
+## path_old: The current path of the file or directory
+## path_new: The new path for the file or directory
+## ret:      An Option containing a string error message on failure, or none on success.
+pub fun rename(path_old: Path, path_new: Path) Option[str] {
+    val res: Option[i32] = impl.rename(path_old, path_new);
+    if (res.is_some()) {
+        val err_code: FileError = fileerror_from_impl(res.unwrap());
+        val err_str:  str       = err_code.to_string();
+        ret some[str](err_str);
+    }
+    ret none[str]();
+}
+
+## Get information about the file or directory at the given path
+## ---
+## path: The path to the file or directory
+## ret:  A Result containing FileInfo on success, or a string error message on failure.
+pub fun info(path: Path) Result[FileInfo, str] {
+    val res: Result[impl.FileInfo, i32] = impl.info(path);
+    if (res.is_err()) {
+        val err_code: FileError = fileerror_from_impl(res.err());
+        val err_str:  str       = err_code.to_string();
+        ret err[FileInfo, str](err_str);
+    }
+    val info: FileInfo = fileinfo_from_impl(res.ok());
+    ret ok[FileInfo, str](info);
+}

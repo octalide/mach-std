@@ -1,0 +1,198 @@
+$if ($mach.build.target.os.id == $mach.os.linux.id) {
+    use impl: std.memory.linux;
+}
+
+$if ($mach.build.target.os.id == $mach.os.darwin.id) {
+    use impl: std.memory.darwin;
+}
+
+$if ($mach.build.target.os.id == $mach.os.windows.id) {
+    use impl: std.memory.windows;
+}
+
+use std.types.bool;
+use std.types.size;
+use std.types.option;
+
+# Allocates a block of memory for a specified number of elements of type T.
+
+## Fill a block of raw memory with a specified byte value.
+## ---
+## p:     Pointer to the start of the memory block.
+## value: Byte value to fill the memory with.
+## size:  Number of bytes to fill.
+pub fun raw_fill(p: ptr, value: u8, size: usize) {
+    if (p == nil || size == 0) {
+        ret;
+    }
+
+    val bytes: *u8 = p::*u8;
+
+    var i: usize = 0;
+    for (i < size) {
+        bytes[i] = value;
+        i = i + 1;
+    }
+}
+
+## Copy a block of raw memory from source to destination.
+## ---
+## dst:  Pointer to the destination memory block.
+## src:  Pointer to the source memory block.
+## size: Number of bytes to copy.
+pub fun raw_copy(dst: ptr, src: ptr, size: usize) {
+    if (dst == nil || src == nil || size == 0) {
+        ret;
+    }
+
+    val dst_bytes: *u8 = dst::*u8;
+    val src_bytes: *u8 = src::*u8;
+
+    var i: usize = 0;
+    for (i < size) {
+        dst_bytes[i] = src_bytes[i];
+        i = i + 1;
+    }
+}
+
+## Zero out a block of raw memory.
+## ---
+## p:    Pointer to the start of the memory block.
+## size: Number of bytes to zero out.
+pub fun raw_zero(p: ptr, size: usize) {
+    raw_fill(p, 0, size);
+}
+
+## Allocates a block of memory for a specified number of elements of type T.
+## ---
+## T:     The type of elements to allocate memory for.
+## count: The number of elements to allocate.
+## ret:   An Option[*T] containing a pointer to the allocated memory, or none on failure.
+pub fun allocate[T](count: usize) Option[*T] {
+    if (count == 0) {
+        ret none[*T]();
+    }
+
+    # check for size overflow
+    val size:  usize = $size_of(T);
+    val total: usize = size * count;
+    if (size != 0 && total / size != count) {
+        ret none[*T]();
+    }
+
+    # memory.allocate returns `ptr` that will be `nil`` on failure
+    val mem: *T = impl.allocate(total)::*T;
+    if (mem == nil) {
+        ret none[*T]();
+    }
+
+    ret some[*T](mem);
+}
+
+## Allocates a block of zero-initialized memory for a specified number of elements of type T.
+## ---
+## T:     The type of elements to allocate memory for.
+## count: The number of elements to allocate.
+## ret:   An Option[*T] containing a pointer to the allocated memory, or none on failure.
+pub fun zallocate[T](count: usize) Option[*T] {
+    val mem: Option[*T] = allocate[T](count);
+    if (mem.is_none()) {
+        ret none[*T]();
+    }
+
+    val p: *T = mem.unwrap();
+
+    zero[T](p, count);
+
+    ret some[*T](p);
+}
+
+## Deallocates a block of memory previously allocated for a specified number of elements of type T.
+## ---
+## T:     The type of elements the memory was allocated for.
+## p:     Pointer to the memory block to deallocate.
+## count: The number of elements the memory block contains.
+## ret:   True if the deallocation was successful, false otherwise.
+pub fun deallocate[T](p: *T, count: usize) bool {
+    if (p == nil || count == 0) {
+        # NOTE: do not explicitly fail. Deallocating nil or zero size is a no-op.
+        ret true;
+    }
+
+    ret impl.deallocate(p::ptr, $size_of(T) * count);
+}
+
+## Reallocates a block of memory for a specified number of elements of type T.
+## ---
+## T:         The type of elements the memory was allocated for.
+## p:         Pointer to the existing memory block.
+## old_count: The current number of elements the memory block contains.
+## new_count: The new number of elements to allocate.
+## ret:       An Option[*T] containing a pointer to the reallocated memory, or none on failure.
+pub fun reallocate[T](p: *T, old_count: usize, new_count: usize) Option[*T] {
+    if (new_count == 0) {
+        ret none[*T]();
+    }
+
+    val elem_size: usize = $size_of(T);
+    val old_size:  usize = elem_size * old_count;
+    val new_size:  usize = elem_size * new_count;
+
+    # check for size overflow
+    if (elem_size != 0 && new_size / elem_size != new_count) {
+        ret none[*T]();
+    }
+
+    # use platform-specific reallocate
+    val new_mem: *T = impl.reallocate(p::ptr, old_size, new_size)::*T;
+    if (new_mem == nil) {
+        ret none[*T]();
+    }
+
+    ret some[*T](new_mem);
+}
+
+## Fills a block of memory with a specified value.
+## ---
+## T:     The type of elements in the memory block.
+## p:     Pointer to the start of the memory block.
+## value: Value to fill the memory with.
+## count: Number of elements to fill.
+pub fun fill[T](p: *T, value: T, count: usize) {
+    if (p == nil || count == 0) {
+        ret;
+    }
+
+    var i: usize = 0;
+    for (i < count) {
+        p[i] = value;
+        i    = i + 1;
+    }
+}
+
+## Copies a block of memory from a source to a destination.
+## ---
+## T:     The type of elements in the memory block.
+## dst:   Pointer to the destination memory block.
+## src:   Pointer to the source memory block.
+## count: Number of elements to copy.
+pub fun copy[T](dst: *T, src: &T, count: usize) {
+    if (dst == nil || src == nil || count == 0) {
+        ret;
+    }
+
+    var i: usize = 0;
+    for (i < count) {
+        dst[i] = src[i];
+        i      = i + 1;
+    }
+}
+
+## Zero out a block of memory for a specified number of elements of type T.
+## ---
+## T:     The type of elements in the memory block.
+## p:     Pointer to the start of the memory block.
+## count: Number of elements to zero out.
+pub fun zero[T](p: *T, count: usize) {
+    raw_zero(p::ptr, $size_of(T) * count);
+}

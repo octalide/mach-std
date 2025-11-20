@@ -4,7 +4,7 @@ use        std.types.option;
 use        std.types.result;
 use        std.types.string;
 use ascii: std.text.ascii;
-use mem:   std.system.memory;
+use mem:   std.memory;
 
 ## Semantic version record following semver 2.0.0 spec
 pub rec Semver {

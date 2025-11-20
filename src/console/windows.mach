@@ -1,0 +1,51 @@
+use os: std.os.windows;
+use std.os.windows.consts;
+use std.types.size;
+
+fun windows_handle(fd: i32) ptr {
+    if (fd == 0) { ret os.get_std_handle(STD_INPUT_HANDLE); }
+    or (fd == 1) { ret os.get_std_handle(STD_OUTPUT_HANDLE); }
+    or (fd == 2) { ret os.get_std_handle(STD_ERROR_HANDLE); }
+    ret nil;
+}
+
+pub fun write(fd: i32, data: &u8, size: usize) i64 {
+    val handle: ptr = windows_handle(fd);
+    if (handle == nil) { ret -1; }
+    
+    var remaining: usize = size;
+    var offset: usize = 0;
+    val buf_addr: usize = data::usize;
+    
+    for (remaining > 0) {
+        var chunk: usize = remaining;
+        if (chunk > 0xffff_ffff) { chunk = 0xffff_ffff; }
+        
+        var written: u32;
+        val ptr: &u8 = (buf_addr + offset)::&u8;
+        
+        if (os.write_file(handle, ptr, chunk::u32, ?written) == 0) {
+            ret -1;
+        }
+        
+        remaining = remaining - written::usize;
+        offset = offset + written::usize;
+    }
+    
+    ret size::i64;
+}
+
+pub fun read(fd: i32, dest: *u8, max: usize) i64 {
+    val handle: ptr = windows_handle(fd);
+    if (handle == nil) { ret -1; }
+    
+    var chunk: usize = max;
+    if (chunk > 0xffff_ffff) { chunk = 0xffff_ffff; }
+    
+    var read_bytes: u32;
+    if (os.read_file(handle, dest, chunk::u32, ?read_bytes) == 0) {
+        ret -1;
+    }
+    
+    ret read_bytes::i64;
+}

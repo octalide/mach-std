@@ -1,11 +1,11 @@
 use        std.types.bool;
-use        std.types.list;
+use        std.collections.list;
 use        std.types.option;
 use        std.types.result;
 use        std.types.size;
 use        std.types.string;
 use ascii: std.text.ascii;
-use mem:   std.system.memory;
+use mem:   std.memory;
 
 # toml value types
 pub val TOML_INVALID: u32 = $max(u32);
@@ -198,7 +198,7 @@ fun (this: *TomlParser) current() char {
     if (this.pos >= this.input.len) {
         ret 0;
     }
-    ret @(this.input.data + this.pos);
+    ret this.input.data[this.pos];
 }
 
 fun (this: *TomlParser) peek(offset: usize) char {
@@ -206,7 +206,7 @@ fun (this: *TomlParser) peek(offset: usize) char {
     if (idx >= this.input.len) {
         ret 0;
     }
-    ret @(this.input.data + idx);
+    ret this.input.data[idx];
 }
 
 fun (this: *TomlParser) advance() {
@@ -256,7 +256,7 @@ fun (this: *TomlParser) skip_comment() {
 fun (this: *TomlParser) match_keyword(keyword: str) bool {
     var i: usize = 0;
     for (i < keyword.len) {
-        if (this.peek(i) != @(keyword.data + i)) {
+        if (this.peek(i) != keyword.data[i]) {
             ret false;
         }
         i = i + 1;
@@ -295,7 +295,12 @@ fun (this: *TomlParser) parse_bare_key() Result[str, str] {
     }
 
     # return borrowed slice from input
-    ret ok[str, str](str{ this.input.data + start, len });
+    val opt_substring: Option[str] = this.input.substring(start, len);
+    if (opt_substring.is_none()) {
+        ret err[str, str]("invalid substring");
+    }
+
+    ret ok[str, str](opt_substring.unwrap());
 }
 
 fun (this: *TomlParser) parse_basic_string() Result[str, str] {
@@ -356,7 +361,7 @@ fun (this: *TomlParser) parse_basic_string() Result[str, str] {
             brk;
         }
         
-        val ch: char = @(this.input.data + read_pos);
+        val ch: char = this.input.data[read_pos];
         
         if (ch == '"') {
             brk;
@@ -367,36 +372,36 @@ fun (this: *TomlParser) parse_basic_string() Result[str, str] {
                 brk;
             }
             
-            val esc: char = @(this.input.data + read_pos);
+            val esc: char = this.input.data[read_pos];
             if (esc == 'n') {
-                @(buffer + write_pos) = '\n';
+                buffer[write_pos] = '\n';
             }
             or (esc == 't') {
-                @(buffer + write_pos) = '\t';
+                buffer[write_pos] = '\t';
             }
             or (esc == 'r') {
-                @(buffer + write_pos) = '\r';
+                buffer[write_pos] = '\r';
             }
             or (esc == '\\') {
-                @(buffer + write_pos) = '\\';
+                buffer[write_pos] = '\\';
             }
             or (esc == '"') {
-                @(buffer + write_pos) = '"';
+                buffer[write_pos] = '"';
             }
             or {
-                @(buffer + write_pos) = esc;
+                buffer[write_pos] = esc;
             }
             write_pos = write_pos + 1;
         }
         or {
-            @(buffer + write_pos) = ch;
+            buffer[write_pos] = ch;
             write_pos = write_pos + 1;
         }
         
         read_pos = read_pos + 1;
     }
-    
-    ret ok[str, str](str{ buffer, write_pos });
+
+    ret ok[str, str](str{ data: buffer, len: write_pos });   
 }
 
 fun (this: *TomlParser) parse_literal_string() Result[str, str] {

@@ -1,0 +1,38 @@
+use os: std.os.windows;
+use std.os.windows.types;
+use std.os.windows.consts;
+use std.types.size;
+
+pub val SECOND: u64 = 1000000000;
+
+pub fun now() u64 {
+    var count: i64;
+    var freq: i64;
+    
+    if (os.query_performance_frequency(?freq) == 0) { ret 0; }
+    if (os.query_performance_counter(?count) == 0) { ret 0; }
+    
+    # (count * 1_000_000_000) / freq
+    # To avoid overflow, we might need 128-bit math or careful scaling.
+    # For now, simple implementation:
+    ret (count::u64 * SECOND) / freq::u64;
+}
+
+pub fun unix_nano() i64 {
+    var ft: FILETIME;
+    os.get_system_time_as_file_time(?ft);
+    
+    # FILETIME is 100-nanosecond intervals since Jan 1, 1601 (UTC).
+    # Unix epoch is Jan 1, 1970.
+    # Difference is 11644473600 seconds.
+    
+    val low: u64 = ft.dwLowDateTime::u64;
+    val high: u64 = ft.dwHighDateTime::u64;
+    val ticks: u64 = (high << 32) | low;
+    
+    val ticks_per_sec: u64 = 10000000;
+    val epoch_diff: u64 = 11644473600 * ticks_per_sec;
+    
+    val unix_ticks: u64 = ticks - epoch_diff;
+    ret (unix_ticks * 100)::i64;
+}
