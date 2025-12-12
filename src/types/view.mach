@@ -1,0 +1,26 @@
+use std.types.size;
+
+# View[T] represents a read-only view into a sequence of elements of type T.
+pub rec View[T] {
+    data: &T;
+    size: usize;
+}
+
+# Creates a View[T] from a pointer and size.
+# ---
+# data: Pointer to the data.
+# size: Number of elements in the view.
+# ret:  A View[T] representing the data.
+pub fun view_make(data: &T, size: usize) View[T] {
+    var v: View[T];
+    v.data = data;
+    v.size = size;
+    ret v;
+}
+
+# Checks if the View[T] is empty.
+# ---
+# ret: true if the view is empty, false otherwise.
+pub fun (this: View[T]) is_empty() bool {
+    ret this.data == nil || this.size == 0;
+}

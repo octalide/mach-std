@@ -1,380 +1,70 @@
-use      std.types.bool;
-use      std.types.option;
-use      std.types.result;
-use      std.types.size;
-use mem: std.memory;
+use std.types.bool;
+use std.types.size;
+use std.types.option;
 
-## Check if the given str is empty.
-## ---
-## s:   The str to check.
-## ret: True if the str is empty, false otherwise.
-pub fun str_empty(s: str) bool {
-    ret s.len == 0 || s.data == nil;
-}
-
-## Compare two str values for equality.
-## ---
-## a:   The first str.
-## b:   The second str.
-## ret: True if the str values are equal, false otherwise.
-pub fun str_equal(a: str, b: str) bool {
-    if (a.len != b.len) {
-        ret false;
-    }
-
-    var i: usize = 0;
-    for (i < a.len) {
-        if (a.data[i] != b.data[i]) {
-            ret false;
-        }
-        i = i + 1;
-    }
-
-    ret true;
-}
-
-## Check if the str starts with the specified prefix.
-## ---
-## s:      The str to check.
-## prefix: The prefix to check.
-## ret:    True if the str starts with the prefix, false otherwise.
-pub fun str_starts_with(s: str, prefix: str) bool {
-    if (s.len < prefix.len) {
-        ret false;
-    }
-
-    var start: str;
-    start.data = s.data;
-    start.len  = prefix.len;
-
-    ret str_equal(start, prefix);
-}
-
-## Check if the str ends with the specified suffix.
-## ---
-## s:      The str to check.
-## suffix: The suffix to check.
-## ret:    True if the str ends with the suffix, false otherwise.
-pub fun str_ends_with(s: str, suffix: str) bool {
-    if (s.len < suffix.len) {
-        ret false;
-    }
-
-    var end: str;
-    end.data = s.data + (s.len - suffix.len);
-    end.len  = suffix.len;
-
-    ret str_equal(end, suffix);
-}
-
-## Find the index of the first occurrence of the specified segment.
-## ---
-## s:       The str to search.
-## segment: The segment to find.
-## ret:     The index of the first occurrence of the segment, or none if not found.
-pub fun str_index_of(s: str, segment: str) Option[usize] {
-    if (s.data == nil || segment.data == nil || segment.len == 0 || segment.len > s.len) {
-        ret none[usize]();
-    }
-
-    var i: usize = 0;
-    for (i <= s.len - segment.len) {
-        var found: bool = true;
-
-        var j: usize = 0;
-        for (j < segment.len) {
-            if (s.data[i + j] != segment.data[j]) {
-                found = false;
-                brk;
-            }
-            j = j + 1;
-        }
-
-        if (found) {
-            ret some[usize](i);
-        }
-
-        i = i + 1;
-    }
-
-    ret none[usize]();
-}
-
-## Find the index of the last occurrence of the specified segment.
-## ---
-## s:       The str to search.
-## segment: The segment to find.
-## ret:     The index of the last occurrence of the segment, or none if not found.
-pub fun str_last_index_of(s: str, segment: str) Option[usize] {
-    if (s.data == nil || segment.data == nil || segment.len == 0 || segment.len > s.len) {
-        ret none[usize]();
-    }
-
-    var i: usize = s.len - segment.len;
-    for (i >= 0) {
-        var found: bool = true;
-
-        var j: usize = 0;
-        for (j < segment.len) {
-            if (s.data[i + j] != segment.data[j]) {
-                found = false;
-                brk;
-            }
-            j = j + 1;
-        }
-
-        if (found) {
-            ret some[usize](i);
-        }
-
-        if (i == 0) {
-            brk;
-        }
-        i = i - 1;
-    }
-
-    ret none[usize]();
-}
-
-## Check if the str contains the specified segment.
-## ---
-## s:       The str to check.
-## segment: The segment to check.
-## ret:     True if the str contains the segment, false otherwise.
-pub fun str_contains(s: str, segment: str) bool {
-    ret str_index_of(s, segment).is_some();
-}
-
-## Find the index of the first occurrence of the specified char.
-## ---
-## s:   The str to search.
-## ch:  The char to find.
-## ret: The index of the first occurrence of the char, or none if not found.
-pub fun str_index_of_char(s: str, ch: char) Option[usize] {
-    if (s.data == nil || s.len == 0) {
-        ret none[usize]();
-    }
-
-    var i: usize = 0;
-    for (i < s.len) {
-        if (s.data[i] == ch) {
-            ret some[usize](i);
-        }
-        i = i + 1;
-    }
-
-    ret none[usize]();
-}
-
-## Find the index of the last occurrence of the specified char.
-## ---
-## s:   The str to search.
-## ch:  The char to find.
-## ret: The index of the last occurrence of the char, or none if not found.
-pub fun str_last_index_of_char(s: str, ch: char) Option[usize] {
-    if (s.data == nil || s.len == 0) {
-        ret none[usize]();
-    }
-
-    var i: usize = s.len;
-    for (i > 0) {
-        i = i - 1;
-        if (s.data[i] == ch) {
-            ret some[usize](i);
-        }
-    }
-
-    ret none[usize]();
-}
-
-## Returns a substring of the str.
-## ---
-## s:     The str to extract the substring from.
-## start: The starting index of the substring.
-## end:   The ending index of the substring.
-## ret:   The resulting substring, or none if the indices are invalid.
-pub fun str_substring(s: str, start: usize, end: usize) Option[str] {
-    if (s.data == nil || start >= end || end > s.len) {
-        ret none[str]();
-    }
-
-    var result: str;
-    result.data = s.data + start;
-    result.len  = end - start;
-
-    ret some[str](result);
-}
-
-## Basic character type representing a single byte.
 pub def char: u8;
+pub def str:  &char;
 
-## A mutable string type.
-pub rec String {
-    data: *u8;
-    len:  usize;
-    cap:  usize;
+# Calculate the length of a null-terminated string
+# ---
+# ret: Length of the string (not including null terminator)
+pub fun (this: str) len() usize {
+    var len: usize = 0;
+    for (this[len] != 0) {
+        len = len + 1;
+    }
+    ret len;
 }
 
-## Create a string from a str (copies the str data)
-## ---
-## s:   The source str
-## ret: The resulting String or an error message
-pub fun string_make(s: str) Result[String, str] {
-    if (s.data == nil || s.len == 0) {
-        ret err[String, str]("cannot create string from empty data");
-    }
-
-    var string: String;
-    val opt_init: Option[str] = string.init(s.len);
-    if (opt_init.is_some()) {
-        ret err[String, str](opt_init.unwrap());
-    }
-
-    if (s.len > 0) {
-        mem.copy[char](string.data, s.data, s.len);
-    }
-    string.len = s.len;
-
-    ret ok[String, str](string);
+pub fun (this: str) empty() bool {
+    ret this.len() == 0;
 }
 
-## Initialize the string with the specified capacity.
-## ---
-## capacity: The initial capacity of the string.
-## ret:      An optional error message if initialization fails.
-pub fun (this: *String) init(capacity: usize) Option[str] {
-    if (this.data != nil) {
-        ret some[str]("string is already initialized");
+# Compare two null-terminated strings for equality
+# ---
+# other: The other string to compare against
+# ret:   true if the strings are equal, false otherwise
+pub fun (this: str) equals(other: str) bool {
+    var i: usize = 0;
+    for (this[i] != 0 && other[i] != 0) {
+        if (this[i] != other[i]) {
+            ret false;
+        }
+        i = i + 1;
     }
-
-    if (capacity == 0) {
-        ret some[str]("capacity must be greater than zero");
-    }
-
-    val res_alloc: Option[*char] = mem.zallocate[char](capacity);
-    if (res_alloc.is_none()) {
-        ret some[str]("out of memory");
-    }
-
-    this.data = res_alloc.unwrap();
-    this.len  = 0;
-    this.cap  = capacity;
-
-    ret none[str]();
+    ret this[i] == other[i];
 }
 
-## Deinitializes the string, deallocating and zeroing its data.
-pub fun (this: *String) dnit() {
-    mem.deallocate[char](this.data, this.cap);
-    mem.zero[String](this, 1);
-}
-
-## Clones the string, creating a new copy of its data.
-## ---
-## ret: The cloned string or an error message.
-pub fun (this: String) clone() Result[String, str] {
-    ret string_make(this.as_str());
-}
-
-## Checks whether or not a string is empty.
-## ---
-## ret: True if the string is empty, false otherwise.
-pub fun (this: String) is_empty() bool {
-    ret this.len == 0;
-}
-
-## Returns a str view of the string's data.
-## ---
-## ret: A str representing the string's data.
-pub fun (this: String) as_str() str {
-    var view: str;
-    view.data = this.data;
-    view.len  = this.len;
-    ret view;
-}
-
-## Ensures that the string has at least the specified capacity.
-## Grows geometrically (doubles) to avoid frequent reallocations.
-## ---
-## min_cap: The desired minimum capacity.
-## ret:     True if the operation succeeded, false otherwise.
-pub fun (this: *String) ensure_cap(min_cap: usize) bool {
-    if (min_cap <= this.cap) {
-        ret true;
+# Check if the string starts with the given prefix
+# ---
+# prefix: The prefix to check
+# ret:    true if the string starts with the prefix, false otherwise
+pub fun (this: str) starts_with(prefix: str) bool {
+    var i: usize = 0;
+    for (prefix[i] != 0) {
+        if (this[i] != prefix[i]) {
+            ret false;
+        }
+        i = i + 1;
     }
-
-    # grow geometrically
-    var new_cap: usize = this.cap * 2;
-    if (new_cap < min_cap) {
-        new_cap = min_cap;
-    }
-    
-    # handle case where cap was 0
-    if (new_cap == 0) {
-        new_cap = 8; # minimum allocation
-    }
-
-    val new_data: Option[*char] = mem.reallocate[char](this.data, this.cap, new_cap);
-    if (new_data.is_none()) {
-        ret false;
-    }
-
-    this.data = new_data.unwrap();
-    
-    # Zero the newly allocated portion
-    mem.zero[char](this.data + this.cap, new_cap - this.cap);
-    
-    this.cap = new_cap;
-
     ret true;
 }
 
-## Appends a single character to the end of the string.
-## ---
-## ch:  The character to append.
-## ret: True if the operation succeeded, false otherwise.
-pub fun (this: *String) push(ch: char) bool {
-    if (this.ensure_cap(this.len + 1) == false) {
-        ret false;
-    }
+# Check if the string ends with the given suffix
+# ---
+# suffix: The suffix to check
+# ret:    true if the string ends with the suffix, false otherwise
+pub fun (this: str) ends_with(suffix: str) bool {
+    val this_len: usize = this.len();
+    val suffix_len: usize = suffix.len();
 
-    this.data[this.len] = ch;
-    this.len = this.len + 1;
-
-    ret true;
-}
-
-## Appends a str to the end of the string.
-## ---
-## s:   The str to append.
-## ret: True if the operation succeeded, false otherwise.
-pub fun (this: *String) append(s: str) bool {
-    if (s.len == 0) {
-        ret true;
-    }
-
-    if (this.ensure_cap(this.len + s.len) == false) {
-        ret false;
-    }
-
-    mem.copy[char](this.data + this.len, s.data, s.len);
-    this.len = this.len + s.len;
-
-    ret true;
-}
-
-## Compares the string with another str for equality.
-## ---
-## other: The other str to compare with.
-## ret:   True if the strings are equal, false otherwise.
-pub fun (this: &String) equals(other: str) bool {
-    if (this.len != other.len) {
+    if (suffix_len > this_len) {
         ret false;
     }
 
     var i: usize = 0;
-    for (i < this.len) {
-        if (this.data[i] != other.data[i]) {
+    for (i < suffix_len) {
+        if (this[this_len - suffix_len + i] != suffix[i]) {
             ret false;
         }
         i = i + 1;
@@ -383,46 +73,25 @@ pub fun (this: &String) equals(other: str) bool {
     ret true;
 }
 
-## Checks if the string starts with the specified prefix.
-## ---
-## prefix: The prefix to check.
-## ret:    True if the string starts with the prefix, false otherwise.
-pub fun (this: &String) starts_with(prefix: str) bool {
-    if (prefix.len > this.len) {
-        ret false;
-    }
+# Find the index of a substring within the string
+# ---
+# sub: The substring to find
+# ret: The index of the substring if found, or an error if not found
+pub fun (this: str) index_of(sub: str) Result[str, usize] {
+    val this_len: usize = this.len();
+    val sub_len:  usize = sub.len();
 
-    ret this.equals(prefix);
-}
-
-## Checks if the string ends with the specified suffix.
-## ---
-## suffix: The suffix to check.
-## ret:    True if the string ends with the suffix, false otherwise.
-pub fun (this: &String) ends_with(suffix: str) bool {
-    if (this.len < suffix.len) {
-        ret false;
-    }
-
-    ret this.equals(suffix);
-}
-
-## Finds the index of the first occurrence of the specified segment.
-## ---
-## segment: The segment to find.
-## ret:     An optional index of the first occurrence of the segment.
-pub fun (this: &String) index_of(segment: str) Option[usize] {
-    if (this.data == nil || segment.data == nil || segment.len == 0 || segment.len > this.len) {
-        ret none[usize]();
+    if (sub_len == 0 || sub_len > this_len) {
+        ret err[str, usize]("invalid substring length");
     }
 
     var i: usize = 0;
-    for (i <= this.len - segment.len) {
+    for (i <= this_len - sub_len) {
+        var j: usize = 0;
         var found: bool = true;
 
-        var j: usize = 0;
-        for (j < segment.len) {
-            if (this.data[i + j] != segment.data[j]) {
+        for (j < sub_len) {
+            if (this[i + j] != sub[j]) {
                 found = false;
                 brk;
             }
@@ -430,31 +99,34 @@ pub fun (this: &String) index_of(segment: str) Option[usize] {
         }
 
         if (found) {
-            ret some[usize](i);
+            ret ok[str, usize](this + i);
         }
 
         i = i + 1;
     }
 
-    ret none[usize]();
+    ret err[str, usize]("substring not found");
 }
 
-## Finds the index of the last occurrence of the specified segment.
-## ---
-## segment: The segment to find.
-## ret:     An optional index of the last occurrence of the segment.
-pub fun (this: &String) last_index_of(segment: str) Option[usize] {
-    if (this.data == nil || segment.data == nil || segment.len == 0 || segment.len > this.len) {
-        ret none[usize]();
+# Find the last index of a substring within the string
+# ---
+# sub: The substring to find
+# ret: The last index of the substring if found, or an error if not found
+pub fun (this: str) last_index_of(sub: str) Result[str, usize] {
+    val this_len: usize = this.len();
+    val sub_len:  usize = sub.len();
+
+    if (sub_len == 0 || sub_len > this_len) {
+        ret err[str, usize]("invalid substring length");
     }
 
-    var i: isize = (this.len - segment.len)::isize;
-    for (i >= 0) {
+    var i: isize = isize(this_len - sub_len);
+    while (i >= 0) {
+        var j: usize = 0;
         var found: bool = true;
 
-        var j: usize = 0;
-        for (j < segment.len) {
-            if (this.data[i::usize + j] != segment.data[j]) {
+        for (j < sub_len) {
+            if (this[usize(i) + j] != sub[j]) {
                 found = false;
                 brk;
             }
@@ -462,376 +134,21 @@ pub fun (this: &String) last_index_of(segment: str) Option[usize] {
         }
 
         if (found) {
-            ret some[usize](i::usize);
+            ret ok[str, usize](this + usize(i));
         }
 
         i = i - 1;
     }
 
-    ret none[usize]();
+    ret err[str, usize]("substring not found");
 }
 
-## Checks if the string contains the specified segment.
-## ---
-## segment: The segment to check.
-## ret:     True if the string contains the segment, false otherwise.
-pub fun (this: &String) contains(segment: str) bool {
-    ret this.index_of(segment).is_some();
+# Check if the string contains the given substring
+# ---
+# sub: The substring to check
+# ret: true if the string contains the substring, false otherwise
+pub fun (this: str) contains(sub: str) bool {
+    val index_res: Result[str, usize] = this.index_of(sub);
+    ret index_res.is_ok();
 }
 
-## Finds the index of the first occurrence of the specified char.
-## ---
-## ch:  The character to find.
-## ret: An optional index of the first occurrence of the character.
-pub fun (this: &String) index_of_char(ch: char) Option[usize] {
-    if (this.data == nil || this.len == 0) {
-        ret none[usize]();
-    }
-
-    var i: usize = 0;
-    for (i < this.len) {
-        if (this.data[i] == ch) {
-            ret some[usize](i);
-        }
-        i = i + 1;
-    }
-
-    ret none[usize]();
-}
-
-## Finds the index of the last occurrence of the specified char.
-## ---
-## ch:  The character to find.
-## ret: An optional index of the last occurrence of the character.
-pub fun (this: &String) last_index_of_char(ch: char) Option[usize] {
-    if (this.data == nil || this.len == 0) {
-        ret none[usize]();
-    }
-
-    var i: isize = (this.len - 1)::isize;
-    for (i >= 0) {
-        if (this.data[i::usize] == ch) {
-            ret some[usize](i::usize);
-        }
-        i = i - 1;
-    }
-
-    ret none[usize]();
-}
-
-## Returns a substring of the string.
-## ---
-## start: The starting index (inclusive).
-## end:   The ending index (exclusive).
-## ret:   An optional substring str.
-pub fun (this: &String) substring(start: usize, end: usize) Option[str] {
-    if (start >= end || end > this.len) {
-        ret none[str]();
-    }
-
-    var result: str;
-    result.data = this.data + start;
-    result.len  = end - start;
-
-    ret some[str](result);
-}
-
-## Appends an escape sequence character to the string.
-## ---
-## s:  Pointer to the String to append to.
-## ch: The escape sequence character.
-## ret: True if the operation succeeded, false otherwise.
-fun append_escape_sequence(s: *String, ch: char) bool {
-    var mapped: char = ch;
-    if (ch == 'n')  { mapped = 10; }
-    or (ch == 't')  { mapped = 9; }
-    or (ch == 'r')  { mapped = 13; }
-    or (ch == '0')  { mapped = 0; }
-    or (ch == '\\') { mapped = '\\'; }
-    or (ch == '"')  { mapped = '"'; }
-    or (ch == '\'') { mapped = '\''; }
-
-    ret s.push(mapped);
-}
-
-## Appends an unsigned decimal number to the string.
-## ---
-## s:     Pointer to the String to append to.
-## value: The unsigned decimal number to append.
-## ret:   True if the operation succeeded, false otherwise.
-fun append_unsigned_decimal(s: *String, value: usize) bool {
-    if (value == 0) {
-        ret s.push('0');
-    }
-
-    var digits: [20]char;
-    var count:  usize = 0;
-
-    var n: usize = value;
-    for (n > 0) {
-        digits[count] = ('0' + (n % 10)::char);
-        count = count + 1;
-        n = n / 10;
-    }
-
-    # append in reverse order
-    for (count > 0) {
-        count = count - 1;
-        if (s.push(digits[count]) == false) {
-            ret false;
-        }
-    }
-
-    ret true;
-}
-
-## Appends a signed decimal number to the string.
-## ---
-## s:     Pointer to the String to append to.
-## value: The signed decimal number to append.
-## ret:   True if the operation succeeded, false otherwise.
-fun append_signed_decimal(s: *String, value: isize) bool {
-    if (value < 0) {
-        if (s.push('-') == false) {
-            ret false;
-        }
-        val abs_value: usize = (0 - value)::usize;
-        ret append_unsigned_decimal(s, abs_value);
-    }
-
-    ret append_unsigned_decimal(s, value::usize);
-}
-
-## Appends a hexadecimal number to the string.
-## ---
-## s:         Pointer to the String to append to.
-## value:     The hexadecimal number to append.
-## uppercase: Whether to use uppercase letters for A-F.
-## ret:       True if the operation succeeded, false otherwise.
-fun append_hex(s: *String, value: usize, uppercase: bool) bool {
-    if (value == 0) {
-        ret s.push('0');
-    }
-
-    var digits: [16]char;
-    var count: usize = 0;
-
-    var n: usize = value;
-    for (n > 0) {
-        val digit: char = (n % 16)::char;
-        if (digit < 10) {
-            digits[count] = '0' + digit;
-        } or {
-            if (uppercase) {
-                digits[count] = 'A' + (digit - 10);
-            } or {
-                digits[count] = 'a' + (digit - 10);
-            }
-        }
-        count = count + 1;
-        n = n / 16;
-    }
-
-    # append in reverse order
-    for (count > 0) {
-        count = count - 1;
-        if (s.push(digits[count]) == false) {
-            ret false;
-        }
-    }
-
-    ret true;
-}
-
-## Appends a boolean value to the string.
-## ---
-## s:     Pointer to the String to append to.
-## value: The boolean value to append.
-## ret:   True if the operation succeeded, false otherwise.
-fun append_bool(s: *String, value: bool) bool {
-    if (value) {
-        ret s.append("true");
-    }
-    ret s.append("false");
-}
-
-## Appends a pointer value to the string in hexadecimal format.
-## ---
-## s:     Pointer to the String to append to.
-## value: The pointer value to append.
-## ret:   True if the operation succeeded, false otherwise.
-fun append_pointer(s: *String, value: ptr) bool {
-    if (s.append("0x") == false) {
-        ret false;
-    }
-
-    val addr: usize = value::usize;
-    ret append_hex(s, addr, false);
-}
-
-## Formats a string using a pattern and variable arguments.
-## Supported format specifiers:
-##   %s - string
-##   %d - signed decimal integer
-##   %u - unsigned decimal integer
-##   %x - hexadecimal integer (lowercase)
-##   %X - hexadecimal integer (uppercase)
-##   %b - boolean
-##   %p - pointer
-## ---
-## pattern: The format pattern string.
-## ...:     Variable arguments corresponding to format specifiers.
-## ret:     An Option[String] containing the formatted string, or none on failure.
-pub fun format(pattern: str, ...) Option[String] {
-    if (pattern.data == nil && pattern.len > 0) {
-        ret none[String]();
-    }
-
-    # if no format specifiers needed, just clone the pattern
-    val arg_count: usize = va_count();
-    if (arg_count == 0) {
-        # no arguments - check if pattern needs escaping
-        var needs_processing: bool = false;
-        var i: usize = 0;
-        for (i < pattern.len) {
-            val ch: char = pattern.data[i];
-            if (ch == '\\' || ch == '%') {
-                needs_processing = true;
-                brk;
-            }
-            i = i + 1;
-        }
-
-        if (needs_processing == false) {
-            # build String from pattern
-            val res_make: Result[String, str] = string_make(pattern);
-            if (res_make.is_err()) {
-                ret none[String]();
-            }
-
-            ret some[String](res_make.unwrap_ok());
-        }
-    }
-
-    var result: String;
-    val opt_init: Option[str] = result.init(pattern.len);
-    if (opt_init.is_some()) {
-        ret none[String]();
-    }
-
-    var arg_index: usize = 0;
-    var pos:       usize = 0;
-
-    for (pos < pattern.len) {
-        val ch: char = pattern.data[pos];
-
-        if (ch == '\\' && (pos + 1) < pattern.len) {
-            val next: char = pattern.data[pos + 1];
-            if (append_escape_sequence(?result, next) == false) {
-                result.dnit();
-                ret none[String]();
-            }
-            pos = pos + 2;
-        }
-        or (ch == '%' && (pos + 1) < pattern.len) {
-            val spec: char = pattern.data[pos + 1];
-
-            if (spec == '%') {
-                # literal '%'
-                if (result.push('%') == false) {
-                    result.dnit();
-                    ret none[String]();
-                }
-                pos = pos + 2;
-            }
-            or (arg_index >= arg_count) {
-                # not enough arguments - keep literal
-                if (result.push('%') == false || result.push(spec) == false) {
-                    result.dnit();
-                    ret none[String]();
-                }
-                pos = pos + 2;
-            }
-            or (spec == 's') {
-                val arg_str: *str = va_arg(arg_index)::*str;
-                if (result.append(@arg_str) == false) {
-                    result.dnit();
-                    ret none[String]();
-                }
-                arg_index = arg_index + 1;
-                pos = pos + 2;
-            }
-            or (spec == 'd') {
-                val arg_int: *isize = va_arg(arg_index)::*isize;
-                if (append_signed_decimal(?result, @arg_int) == false) {
-                    result.dnit();
-                    ret none[String]();
-                }
-                arg_index = arg_index + 1;
-                pos = pos + 2;
-            }
-            or (spec == 'u') {
-                val arg_uint: *usize = va_arg(arg_index)::*usize;
-                if (append_unsigned_decimal(?result, @arg_uint) == false) {
-                    result.dnit();
-                    ret none[String]();
-                }
-                arg_index = arg_index + 1;
-                pos = pos + 2;
-            }
-            or (spec == 'x') {
-                val arg_hex: *usize = va_arg(arg_index)::*usize;
-                if (append_hex(?result, @arg_hex, false) == false) {
-                    result.dnit();
-                    ret none[String]();
-                }
-                arg_index = arg_index + 1;
-                pos = pos + 2;
-            }
-            or (spec == 'X') {
-                val arg_hex: *usize = va_arg(arg_index)::*usize;
-                if (append_hex(?result, @arg_hex, true) == false) {
-                    result.dnit();
-                    ret none[String]();
-                }
-                arg_index = arg_index + 1;
-                pos = pos + 2;
-            }
-            or (spec == 'b') {
-                val arg_bool: *bool = va_arg(arg_index)::*bool;
-                if (append_bool(?result, @arg_bool) == false) {
-                    result.dnit();
-                    ret none[String]();
-                }
-                arg_index = arg_index + 1;
-                pos = pos + 2;
-            }
-            or (spec == 'p') {
-                val arg_ptr: *ptr = va_arg(arg_index)::*ptr;
-                if (append_pointer(?result, @arg_ptr) == false) {
-                    result.dnit();
-                    ret none[String]();
-                }
-                arg_index = arg_index + 1;
-                pos = pos + 2;
-            }
-            or {
-                # unknown specifier - keep literal
-                if (result.push('%') == false || result.push(spec) == false) {
-                    result.dnit();
-                    ret none[String]();
-                }
-                pos = pos + 2;
-            }
-        }
-        or {
-            if (result.push(ch) == false) {
-                result.dnit();
-                ret none[String]();
-            }
-            pos = pos + 1;
-        }
-    }
-
-    ret some[String](result);
-}
