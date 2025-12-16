@@ -1,34 +1,37 @@
+use std.types.bool;
 use std.types.size;
 
-## Slice represents a read-only view into a contiguous sequence of elements.
+# Slice[T] represents a mutable slice of elements of type T.
 pub rec Slice[T] {
-    data: &T;
-    len:  usize;
+    data: *T;
+    size: usize;
 }
 
-## Creates a new Slice[T] from a data pointer and length.
-## ---
-## data: A read-only pointer to the first element of the slice.
-## len:  The number of elements in the slice.
-## ret:  A Slice[T] representing the specified data and length.
-pub fun slice_make[T](data: &T, len: usize) Slice[T] {
-    ret Slice[T]{data: data, len: len};
+# Creates a Slice[T] from a pointer and size.
+# ---
+# data: Pointer to the data.
+# size: Number of elements in the slice.
+# ret:  A Slice[T] representing the data.
+pub fun slice_make[T](data: *T, size: usize) Slice[T] {
+    var s: Slice[T];
+    s.data = data;
+    s.size = size;
+    ret s;
 }
 
-## Checks if the slice is empty (has zero length or nil data pointer).
-## ---
-## ret: true if the slice is empty, false otherwise.
+# Checks if the Slice[T] is empty.
+# ---
+# ret: true if the slice is empty, false otherwise.
 pub fun (this: Slice[T]) is_empty() bool {
-    ret this.data == nil || this.len == 0;
+    ret this.size == 0;
 }
 
-## Gets the element at the specified index in the slice.
-## ---
-## index: The index of the element to retrieve.
-## ret:   An Option[&T] containing a read-only pointer to the element if it exists.
-pub fun (this: Slice[T]) get(index: usize) Option[&T] {
-    if (this.data == nil)  { ret none[&T](); }
-    if (index >= this.len) { ret none[&T](); }
-
-    ret some[&T](?this.data[index]);
+# Converts the Slice[T] to a View[T].
+# ---
+# ret: A View[T] representing the same data as the slice.
+pub fun (this: Slice[T]) as_view() View[T] {
+    var v: View[T];
+    v.data = this.data;
+    v.size = this.size;
+    ret v;
 }

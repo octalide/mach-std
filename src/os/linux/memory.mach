@@ -1,0 +1,55 @@
+use std.types.bool;
+use std.types.size;
+use std.os.linux.constants;
+use sc: std.os.linux.syscall;
+
+pub fun map_rw(size: usize) *u8 {
+    if (size == 0) {
+        ret nil;
+    }
+
+    val res: i64 = sc.syscall6(
+        SYS_MMAP,
+        0,
+        size,
+        PROT_READ::usize | PROT_WRITE::usize,
+        MAP_PRIVATE::usize | MAP_ANONYMOUS::usize,
+        (-1)::isize::usize,
+        0
+    );
+
+    if (res < 0) {
+        ret nil;
+    }
+
+    ret (res::usize)::*u8;
+}
+
+pub fun unmap(ptr: *u8, size: usize) bool {
+    if (ptr == nil || size == 0) {
+        ret true;
+    }
+
+    val res: i64 = sc.syscall2(SYS_MUNMAP, ptr::usize, size);
+    ret res == 0;
+}
+
+pub fun remap(ptr: *u8, old_size: usize, new_size: usize, flags: usize) *u8 {
+    if (new_size == 0) {
+        ret nil;
+    }
+
+    val res: i64 = sc.syscall4(
+        SYS_MREMAP,
+        ptr::usize,
+        old_size,
+        new_size,
+        flags
+    );
+
+    if (res < 0) {
+        ret nil;
+    }
+
+    ret (res::usize)::*u8;
+}

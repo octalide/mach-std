@@ -1,5 +1,6 @@
 use std.types.size;
 
+# linux stat structure (x86_64)
 pub rec stat_t {
     st_dev:        u64;
     st_ino:        u64;
@@ -28,10 +29,11 @@ pub rec timespec {
     tv_nsec: i64;
 }
 
-pub rec dirent64 {
+# Directory entry structure for getdents64
+pub rec linux_dirent64 {
     d_ino:    u64;
     d_off:    i64;
     d_reclen: u16;
     d_type:   u8;
-    d_name:   [256]u8;
+    d_name:   [256]u8; # Name buffer (max 255 + null terminator)
 }

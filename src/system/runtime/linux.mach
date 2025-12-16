@@ -1,0 +1,24 @@
+use osrt: std.os.linux.runtime;
+use std.types.size;
+use std.types.string;
+
+ext "C:main" user_main: fun(i64, &str) i64;
+
+# linux entry shim for std.system.runtime
+# expects rdi = initial stack pointer, calls user main(argc, argv)
+$entry.symbol = "entry";
+pub fun entry(stack: ptr) {
+	if (stack == nil) {
+		osrt.exit(255);
+	}
+
+	val sp: *usize = stack::*usize;
+	val argc: i64  = sp[0]::i64;
+
+	# argv immediately follows argc on the initial stack
+	val argv: &str = (stack + $size_of(usize))::*str;
+
+	val code: i64 = user_main(argc, argv);
+	osrt.exit(code);
+}
+

@@ -1,0 +1,52 @@
+use std.types.size;
+use std.os.linux.constants;
+use sc: std.os.linux.syscall;
+use types: std.os.linux.types;
+
+pub fun read(fd: i32, buf: *u8, count: usize) i64 {
+    ret sc.syscall3(SYS_READ, fd::isize::usize, buf::usize, count);
+}
+
+pub fun write(fd: i32, buf: &u8, count: usize) i64 {
+    ret sc.syscall3(SYS_WRITE, fd::isize::usize, buf::usize, count);
+}
+
+pub fun openat(dirfd: i32, path: &u8, flags: i32, mode: i32) i64 {
+    ret sc.syscall4(SYS_OPENAT, dirfd::isize::usize, path::usize, flags::usize, mode::usize);
+}
+
+pub fun close(fd: i32) i64 {
+    ret sc.syscall1(SYS_CLOSE, fd::isize::usize);
+}
+
+pub fun fstat(fd: i32, st: *types.stat_t) i64 {
+    ret sc.syscall2(SYS_FSTAT, fd::isize::usize, st::usize);
+}
+
+pub fun newfstatat(dirfd: i32, path: &u8, st: *types.stat_t, flags: i32) i64 {
+    ret sc.syscall4(SYS_NEWFSTATAT, dirfd::isize::usize, path::usize, st::usize, flags::usize);
+}
+
+pub fun unlinkat(dirfd: i32, path: &u8, flags: i32) i64 {
+    ret sc.syscall3(SYS_UNLINKAT, dirfd::isize::usize, path::usize, flags::usize);
+}
+
+pub fun renameat(olddir: i32, oldpath: &u8, newdir: i32, newpath: &u8) i64 {
+    ret sc.syscall4(SYS_RENAMEAT, olddir::isize::usize, oldpath::usize, newdir::isize::usize, newpath::usize);
+}
+
+pub fun mkdirat(dirfd: i32, path: &u8, mode: i32) i64 {
+    ret sc.syscall3(SYS_MKDIRAT, dirfd::isize::usize, path::usize, mode::usize);
+}
+
+pub fun getdents64(fd: i32, dirp: *u8, count: usize) i64 {
+    ret sc.syscall3(SYS_GETDENTS64, fd::isize::usize, dirp::usize, count);
+}
+
+pub fun faccessat(dirfd: i32, path: &u8, mode: i32, flags: i32) i64 {
+    ret sc.syscall4(SYS_FACCESSAT, dirfd::isize::usize, path::usize, mode::usize, flags::usize);
+}
+
+pub fun lseek(fd: i32, offset: i64, whence: i32) i64 {
+    ret sc.syscall3(SYS_LSEEK, fd::isize::usize, offset::isize::usize, whence::usize);
+}

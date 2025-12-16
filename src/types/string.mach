@@ -35,6 +35,29 @@ pub fun (this: str) equals(other: str) bool {
     ret this[i] == other[i];
 }
 
+# Compare two null-terminated strings lexically (like strcmp)
+# ---
+# other: The other string to compare against
+# ret:   <0 if this < other, 0 if equal, >0 if this > other
+pub fun (this: str) compare(other: str) i64 {
+    var i: usize = 0;
+    for {
+        val a: u8 = this[i];
+        val b: u8 = other[i];
+
+        if (a == 0 && b == 0) { ret 0; }
+        if (a == 0) { ret -1; }
+        if (b == 0) { ret 1; }
+
+        if (a < b) { ret -1; }
+        if (a > b) { ret 1; }
+
+        i = i + 1;
+    }
+
+    ret 0;
+}
+
 # Check if the string starts with the given prefix
 # ---
 # prefix: The prefix to check
