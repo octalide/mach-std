@@ -1,92 +1,30 @@
+use impl: std.platform.linux.x86_64.syscall;
 use std.types.size;
 
 pub fun syscall0(n: usize) i64 {
-    var out: i64;
-    masm {
-        mov rax, n
-        syscall
-        mov out, rax
-    }
-    ret out;
+    ret impl.syscall0(n);
 }
 
 pub fun syscall1(n: usize, a0: usize) i64 {
-    var out: i64;
-    masm {
-        mov rax, n
-        mov rdi, a0
-        syscall
-        mov out, rax
-    }
-    ret out;
+    ret impl.syscall1(n, a0);
 }
 
 pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
-    var out: i64;
-    masm {
-        mov rax, n
-        mov rdi, a0
-        mov rsi, a1
-        syscall
-        mov out, rax
-    }
-    ret out;
+    ret impl.syscall2(n, a0, a1);
 }
 
 pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
-    var out: i64;
-    masm {
-        mov rax, n
-        mov rdi, a0
-        mov rsi, a1
-        mov rdx, a2
-        syscall
-        mov out, rax
-    }
-    ret out;
+    ret impl.syscall3(n, a0, a1, a2);
 }
 
 pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
-    var out: i64;
-    masm {
-        mov rax, n
-        mov rdi, a0
-        mov rsi, a1
-        mov rdx, a2
-        mov r10, a3
-        syscall
-        mov out, rax
-    }
-    ret out;
+    ret impl.syscall4(n, a0, a1, a2, a3);
 }
 
 pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
-    var out: i64;
-    masm {
-        mov rax, n
-        mov rdi, a0
-        mov rsi, a1
-        mov rdx, a2
-        mov r10, a3
-        mov r8, a4
-        syscall
-        mov out, rax
-    }
-    ret out;
+    ret impl.syscall5(n, a0, a1, a2, a3, a4);
 }
 
 pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
-    var out: i64;
-    masm {
-        mov rax, n
-        mov rdi, a0
-        mov rsi, a1
-        mov rdx, a2
-        mov r10, a3
-        mov r8, a4
-        mov r9, a5
-        syscall
-        mov out, rax
-    }
-    ret out;
+    ret impl.syscall6(n, a0, a1, a2, a3, a4, a5);
 }

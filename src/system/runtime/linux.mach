@@ -1,4 +1,4 @@
-use osrt: std.os.linux.runtime;
+use plat: std.platform;
 use std.collections.slice;
 use std.types.size;
 use std.types.string;
@@ -10,7 +10,7 @@ ext "C:main" user_main: fun(Slice[str]) i64;
 $entry.symbol = "entry";
 pub fun entry(stack: ptr) {
 	if (stack == nil) {
-		osrt.exit(255);
+		plat.terminate(255);
 	}
 
 	val sp: *usize = stack::*usize;
@@ -21,7 +21,5 @@ pub fun entry(stack: ptr) {
 	val args: Slice[str] = slice_make[str](argv, argc);
 
 	val code: i64 = user_main(args);
-	osrt.exit(code);
+	plat.terminate(code);
 }
-
-

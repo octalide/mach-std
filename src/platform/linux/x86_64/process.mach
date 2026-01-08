@@ -1,0 +1,19 @@
+use c: std.platform.linux.x86_64.constants;
+
+# minimal process termination primitives for linux x86_64.
+#
+# this is intentionally low-level and target-specific.
+# higher layers (std.system.runtime, std.os.*) should call into this.
+
+pub fun terminate(code: i64) {
+    masm {
+        mov rax, c.SYS_EXIT
+        mov rdi, code
+        syscall
+        hlt
+    }
+}
+
+pub fun abort() {
+    terminate(255);
+}

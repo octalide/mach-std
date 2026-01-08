@@ -1,13 +1,7 @@
-use std.os.linux.constants;
-use std.os.linux.syscall;
+use plat: std.platform;
 
 pub fun exit(code: i64) {
-    masm {
-        mov rax, SYS_EXIT
-        mov rdi, code
-        syscall
-        hlt
-    }
+    plat.terminate(code);
 }
 
 pub fun abort() {

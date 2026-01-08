@@ -1,0 +1,96 @@
+use std.types.size;
+
+# raw syscall wrappers for linux x86_64
+#
+# this is a platform layer: stable OS APIs should live above this.
+
+pub fun syscall0(n: usize) i64 {
+    var out: i64;
+    masm {
+        mov rax, n
+        syscall
+        mov out, rax
+    }
+    ret out;
+}
+
+pub fun syscall1(n: usize, a0: usize) i64 {
+    var out: i64;
+    masm {
+        mov rax, n
+        mov rdi, a0
+        syscall
+        mov out, rax
+    }
+    ret out;
+}
+
+pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
+    var out: i64;
+    masm {
+        mov rax, n
+        mov rdi, a0
+        mov rsi, a1
+        syscall
+        mov out, rax
+    }
+    ret out;
+}
+
+pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
+    var out: i64;
+    masm {
+        mov rax, n
+        mov rdi, a0
+        mov rsi, a1
+        mov rdx, a2
+        syscall
+        mov out, rax
+    }
+    ret out;
+}
+
+pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
+    var out: i64;
+    masm {
+        mov rax, n
+        mov rdi, a0
+        mov rsi, a1
+        mov rdx, a2
+        mov r10, a3
+        syscall
+        mov out, rax
+    }
+    ret out;
+}
+
+pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
+    var out: i64;
+    masm {
+        mov rax, n
+        mov rdi, a0
+        mov rsi, a1
+        mov rdx, a2
+        mov r10, a3
+        mov r8, a4
+        syscall
+        mov out, rax
+    }
+    ret out;
+}
+
+pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
+    var out: i64;
+    masm {
+        mov rax, n
+        mov rdi, a0
+        mov rsi, a1
+        mov rdx, a2
+        mov r10, a3
+        mov r8, a4
+        mov r9, a5
+        syscall
+        mov out, rax
+    }
+    ret out;
+}

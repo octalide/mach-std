@@ -1,0 +1,19 @@
+# std.platform is the lowest-level target interface.
+#
+# it provides a minimal set of primitives that std.system.runtime can rely on,
+# while remaining implementable for any target (including freestanding).
+
+$if ($mach.build.target.os.id == $mach.os.linux.id && $mach.build.target.arch.id == $mach.arch.x86_64.id) {
+    use impl: std.platform.linux.x86_64.process;
+}
+$or {
+    $error("std.platform: unsupported target");
+}
+
+pub fun terminate(code: i64) {
+    impl.terminate(code);
+}
+
+pub fun abort() {
+    impl.abort();
+}
