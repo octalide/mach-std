@@ -1,4 +1,4 @@
-use impl: std.platform.linux.x86_64.syscall;
+use impl: std.platform.linux.syscall;
 use std.types.size;
 
 pub fun syscall0(n: usize) i64 {

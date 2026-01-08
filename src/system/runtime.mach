@@ -1,3 +1,12 @@
+# program entrypoint contract
+#
+# in your entry module:
+#   use std.system.runtime;
+#   $main.symbol = "main";
+#   fun main(argc: i64, argv: &&u8) i64 { ... }
+#
+# `std.system.runtime` provides the target `_start` and argv decoding.
+
 $if ($mach.build.target.os.id == $mach.os.linux.id && $mach.build.target.arch.id == $mach.arch.x86_64.id) {
     use std.system.runtime.linux.x86_64;
 }

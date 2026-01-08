@@ -1,4 +1,4 @@
-use p: std.platform.linux.x86_64.constants;
+use p: std.platform.linux.constants;
 use std.types.size;
 
 # compatibility shim: prefer `std.platform.linux.x86_64.constants` for new code.
