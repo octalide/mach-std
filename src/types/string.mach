@@ -1,6 +1,7 @@
 use std.types.bool;
 use std.types.size;
 use std.types.option;
+use std.types.result;
 
 pub def char: u8;
 pub def str:  &char;
@@ -100,12 +101,12 @@ pub fun (this: str) ends_with(suffix: str) bool {
 # ---
 # sub: The substring to find
 # ret: The index of the substring if found, or an error if not found
-pub fun (this: str) index_of(sub: str) Result[str, usize] {
+pub fun (this: str) index_of(sub: str) Result[usize, str] {
     val this_len: usize = this.len();
     val sub_len:  usize = sub.len();
 
     if (sub_len == 0 || sub_len > this_len) {
-        ret err[str, usize]("invalid substring length");
+        ret err[usize, str]("invalid substring length");
     }
 
     var i: usize = 0;
@@ -122,34 +123,36 @@ pub fun (this: str) index_of(sub: str) Result[str, usize] {
         }
 
         if (found) {
-            ret ok[str, usize](this + i);
+            ret ok[usize, str](i);
         }
 
         i = i + 1;
     }
 
-    ret err[str, usize]("substring not found");
+    ret err[usize, str]("substring not found");
 }
 
 # Find the last index of a substring within the string
 # ---
 # sub: The substring to find
 # ret: The last index of the substring if found, or an error if not found
-pub fun (this: str) last_index_of(sub: str) Result[str, usize] {
+pub fun (this: str) last_index_of(sub: str) Result[usize, str] {
     val this_len: usize = this.len();
     val sub_len:  usize = sub.len();
 
     if (sub_len == 0 || sub_len > this_len) {
-        ret err[str, usize]("invalid substring length");
+        ret err[usize, str]("invalid substring length");
     }
 
-    var i: isize = isize(this_len - sub_len);
-    while (i >= 0) {
-        var j: usize = 0;
+    # iterate backwards safely using a countdown variable (avoids usize underflow)
+    var i: usize = (this_len - sub_len) + 1;
+    for (i > 0) {
+        i = i - 1;
+        var j:     usize = 0;
         var found: bool = true;
 
         for (j < sub_len) {
-            if (this[usize(i) + j] != sub[j]) {
+            if (this[i + j] != sub[j]) {
                 found = false;
                 brk;
             }
@@ -157,13 +160,11 @@ pub fun (this: str) last_index_of(sub: str) Result[str, usize] {
         }
 
         if (found) {
-            ret ok[str, usize](this + usize(i));
+            ret ok[usize, str](i);
         }
-
-        i = i - 1;
     }
 
-    ret err[str, usize]("substring not found");
+    ret err[usize, str]("substring not found");
 }
 
 # Check if the string contains the given substring
@@ -171,7 +172,6 @@ pub fun (this: str) last_index_of(sub: str) Result[str, usize] {
 # sub: The substring to check
 # ret: true if the string contains the substring, false otherwise
 pub fun (this: str) contains(sub: str) bool {
-    val index_res: Result[str, usize] = this.index_of(sub);
+    val index_res: Result[usize, str] = this.index_of(sub);
     ret index_res.is_ok();
 }
-

@@ -1,8 +1,9 @@
 use osrt: std.os.linux.runtime;
+use std.collections.slice;
 use std.types.size;
 use std.types.string;
 
-ext "C:main" user_main: fun(i64, &str) i64;
+ext "C:main" user_main: fun(Slice[str]) i64;
 
 # linux entry shim for std.system.runtime
 # expects rdi = initial stack pointer, calls user main(argc, argv)
@@ -13,12 +14,14 @@ pub fun entry(stack: ptr) {
 	}
 
 	val sp: *usize = stack::*usize;
-	val argc: i64  = sp[0]::i64;
+	val argc: usize = sp[0];
 
 	# argv immediately follows argc on the initial stack
-	val argv: &str = (stack + $size_of(usize))::*str;
+	val argv: *str = (stack + $size_of(usize))::*str;
+	val args: Slice[str] = slice_make[str](argv, argc);
 
-	val code: i64 = user_main(argc, argv);
+	val code: i64 = user_main(args);
 	osrt.exit(code);
 }
+
 

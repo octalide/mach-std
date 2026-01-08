@@ -2,12 +2,10 @@ use std.types.bool;
 use std.types.option;
 use std.types.result;
 use std.types.size;
-use std.types.slice;
 use std.types.string;
-use std.types.view;
 
-use std.memory.raw;
-use std.memory.alloc;
+use std.collections.slice;
+use std.collections.view;
 
-use std.runtime.args;
-use std.runtime.entry;
+use std.system.runtime;
+

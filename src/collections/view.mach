@@ -11,7 +11,7 @@ pub rec View[T] {
 # data: Pointer to the data.
 # size: Number of elements in the view.
 # ret:  A View[T] representing the data.
-pub fun view_make(data: &T, size: usize) View[T] {
+pub fun view_make[T](data: &T, size: usize) View[T] {
     var v: View[T];
     v.data = data;
     v.size = size;

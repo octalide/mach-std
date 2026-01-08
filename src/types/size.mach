@@ -1,17 +1,17 @@
 $if ($mach.build.target.pointer_width == 2) {
-    pub def usize: u16;
-    pub def isize: i16;
+	pub def usize: u16;
+	pub def isize: i16;
 }
-or ($mach.build.target.pointer_width == 4) {
-    pub def usize: u32;
-    pub def isize: i32;
+$or ($mach.build.target.pointer_width == 4) {
+	pub def usize: u32;
+	pub def isize: i32;
 }
-or ($mach.build.target.pointer_width == 8) {
-    pub def usize: u64;
-    pub def isize: i64;
+$or ($mach.build.target.pointer_width == 8) {
+	pub def usize: u64;
+	pub def isize: i64;
 }
-or {
-    # default to 64-bit size
-    pub def usize: u64;
-    pub def isize: i64;
+$or {
+	# default to 64-bit size
+	pub def usize: u64;
+	pub def isize: i64;
 }

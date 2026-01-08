@@ -1,15 +1,4 @@
-$if ($mach.build.target.os.id == $mach.os.linux.id) {
-    use impl: std.system.runtime.linux;
+$if ($mach.build.target.os.id == $mach.os.linux.id && $mach.build.target.arch.id == $mach.arch.x86_64.id) {
+    use std.system.runtime.linux.x86_64;
 }
 
-$if ($mach.build.target.os.id == $mach.os.linux.id) {
-    $_start.symbol = "_start";
-    pub fun _start() {
-        masm {
-            mov rdi, rsp
-            and rsp, -16
-            sub rsp, 8
-            call entry
-        }
-    }
-}

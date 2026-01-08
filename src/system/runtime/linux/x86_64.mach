@@ -1,0 +1,19 @@
+use impl: std.system.runtime.linux;
+
+# x86_64 SysV linux entrypoint
+# - rdi is set to the initial stack pointer (rsp at process entry)
+# - stack is aligned before calling into mach code
+$_start.symbol = "_start";
+pub fun _start() {
+    masm {
+        mov rdi, rsp
+        and rsp, -16
+        sub rsp, 8
+        call entry
+    }
+}
+
+# local shim so the asm can call an unqualified symbol name.
+fun entry(stack: ptr) {
+    impl.entry(stack);
+}
