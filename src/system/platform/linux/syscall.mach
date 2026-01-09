@@ -1,0 +1,14 @@
+use impl: std.platform.linux.syscall;
+use std.types.size;
+
+# stable linux syscall helpers for std.system.platform.
+#
+# these return the raw i64 convention used by linux.
+
+pub fun syscall0(n: usize) i64 { ret impl.syscall0(n); }
+pub fun syscall1(n: usize, a0: usize) i64 { ret impl.syscall1(n, a0); }
+pub fun syscall2(n: usize, a0: usize, a1: usize) i64 { ret impl.syscall2(n, a0, a1); }
+pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 { ret impl.syscall3(n, a0, a1, a2); }
+pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 { ret impl.syscall4(n, a0, a1, a2, a3); }
+pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 { ret impl.syscall5(n, a0, a1, a2, a3, a4); }
+pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 { ret impl.syscall6(n, a0, a1, a2, a3, a4, a5); }

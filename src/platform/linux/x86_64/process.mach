@@ -1,7 +1,7 @@
 # minimal process termination primitives for linux x86_64.
 #
 # this is intentionally low-level and target-specific.
-# higher layers (std.system.runtime, std.os.*) should call into this.
+# higher layers (std.runtime, std.system.platform) should call into this.
 
 pub fun terminate(code: i64) {
     masm {

@@ -1,13 +1,8 @@
 $if ($mach.build.target.os.id == $mach.os.linux.id) {
     use impl: std.memory.linux;
 }
-
-$if ($mach.build.target.os.id == $mach.os.darwin.id) {
-    use impl: std.memory.darwin;
-}
-
-$if ($mach.build.target.os.id == $mach.os.windows.id) {
-    use impl: std.memory.windows;
+$or {
+    $error("std.memory: unsupported target");
 }
 
 use std.types.bool;
@@ -78,7 +73,7 @@ pub fun allocate[T](count: usize) Option[*T] {
         ret none[*T]();
     }
 
-    # memory.allocate returns `ptr` that will be `nil`` on failure
+    # impl.allocate returns `ptr` that will be `nil` on failure
     val mem: *T = impl.allocate(total)::*T;
     if (mem == nil) {
         ret none[*T]();
@@ -113,7 +108,7 @@ pub fun zallocate[T](count: usize) Option[*T] {
 ## ret:   True if the deallocation was successful, false otherwise.
 pub fun deallocate[T](p: *T, count: usize) bool {
     if (p == nil || count == 0) {
-        # NOTE: do not explicitly fail. Deallocating nil or zero size is a no-op.
+        # NOTE: do not explicitly fail. deallocating nil or zero size is a no-op.
         ret true;
     }
 
@@ -141,7 +136,6 @@ pub fun reallocate[T](p: *T, old_count: usize, new_count: usize) Option[*T] {
         ret none[*T]();
     }
 
-    # use platform-specific reallocate
     val new_mem: *T = impl.reallocate(p::ptr, old_size, new_size)::*T;
     if (new_mem == nil) {
         ret none[*T]();

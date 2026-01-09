@@ -1,9 +1,10 @@
 use p: std.platform.linux.constants;
 use std.types.size;
 
-# compatibility shim: prefer `std.platform.linux.x86_64.constants` for new code.
+# linux constants as exposed through std.system.platform.
+#
+# note: this module exists to keep platform glue nested under std.system.
 
-# syscall numbers (x86_64 linux)
 pub val SYS_READ:          usize = p.SYS_READ;
 pub val SYS_WRITE:         usize = p.SYS_WRITE;
 pub val SYS_CLOSE:         usize = p.SYS_CLOSE;

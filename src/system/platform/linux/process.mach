@@ -1,0 +1,13 @@
+# linux process primitives for std.system.platform.
+#
+# this is intentionally minimal: enough for runtime entry and hard termination.
+
+use impl: std.platform.linux.process;
+
+pub fun terminate(code: i64) {
+    impl.terminate(code);
+}
+
+pub fun abort() {
+    impl.abort();
+}

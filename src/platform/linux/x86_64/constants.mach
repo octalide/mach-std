@@ -3,7 +3,7 @@ use std.types.size;
 # linux x86_64 syscall numbers + flags
 #
 # this module is intentionally "platform" (os + arch) specific.
-# keep OS-layer APIs (std.os.*) from depending on raw syscalls long-term.
+# keep higher-level modules (std.fs, std.runtime, etc) from depending on raw syscalls.
 
 # syscall numbers (x86_64 linux)
 pub val SYS_READ:          usize = 0;

@@ -1,9 +1,0 @@
-use plat: std.platform;
-
-pub fun exit(code: i64) {
-    plat.terminate(code);
-}
-
-pub fun abort() {
-    exit(255);
-}

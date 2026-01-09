@@ -1,6 +1,6 @@
 # std.platform is the lowest-level target interface.
 #
-# it provides a minimal set of primitives that std.system.runtime can rely on,
+# it provides a minimal set of primitives that std.runtime can rely on,
 # while remaining implementable for any target (including freestanding).
 
 $if ($mach.build.target.os.id == $mach.os.linux.id) {

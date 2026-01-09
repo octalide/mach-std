@@ -1,5 +1,9 @@
 use std.types.size;
 
+# linux ABI types for std.system.platform.
+#
+# these are kernel-facing layouts and should remain stable.
+
 pub rec stat_t {
     st_dev:        u64;
     st_ino:        u64;

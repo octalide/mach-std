@@ -1,0 +1,30 @@
+use std.types.size;
+use types: std.system.platform.linux.types;
+
+# std.filesystem is a topic module for filesystem and file-descriptor based I/O.
+#
+# for now it reflects platform conventions directly (negative i64 results on error).
+
+$if ($mach.build.target.os.id == $mach.os.linux.id) {
+    use impl: std.filesystem.linux;
+}
+$or {
+    $error("std.filesystem: unsupported target");
+}
+
+pub fun read(fd: i32, buf: *u8, count: usize) i64 { ret impl.read(fd, buf, count); }
+pub fun write(fd: i32, buf: &u8, count: usize) i64 { ret impl.write(fd, buf, count); }
+pub fun openat(dirfd: i32, path: &u8, flags: i32, mode: i32) i64 { ret impl.openat(dirfd, path, flags, mode); }
+pub fun close(fd: i32) i64 { ret impl.close(fd); }
+
+pub fun fstat(fd: i32, st: *types.stat_t) i64 { ret impl.fstat(fd, st); }
+pub fun newfstatat(dirfd: i32, path: &u8, st: *types.stat_t, flags: i32) i64 { ret impl.newfstatat(dirfd, path, st, flags); }
+
+pub fun unlinkat(dirfd: i32, path: &u8, flags: i32) i64 { ret impl.unlinkat(dirfd, path, flags); }
+pub fun renameat(olddir: i32, oldpath: &u8, newdir: i32, newpath: &u8) i64 { ret impl.renameat(olddir, oldpath, newdir, newpath); }
+
+pub fun mkdirat(dirfd: i32, path: &u8, mode: i32) i64 { ret impl.mkdirat(dirfd, path, mode); }
+pub fun getdents64(fd: i32, dirp: *types.dirent64, count: usize) i64 { ret impl.getdents64(fd, dirp, count); }
+
+pub fun faccessat(dirfd: i32, path: &u8, mode: i32, flags: i32) i64 { ret impl.faccessat(dirfd, path, mode, flags); }
+pub fun lseek(fd: i32, offset: i64, whence: i32) i64 { ret impl.lseek(fd, offset, whence); }
