@@ -1,13 +1,14 @@
 use plat: std.platform;
 use std.types.size;
 
-
 # user entrypoint contract:
 # - user imports `std.system.runtime` from their program entry module
 # - user defines: `$main.symbol = "main"; fun main(argc: i64, argv: &&u8) i64`
 #
 # runtime calls a C/ABI symbol named "main".
-ext "C:main" main: fun(i64, &&u8) i64;
+# note: the binding is intentionally *not* named `main` to avoid colliding with
+# the user's `fun main` in the global symbol table.
+ext "C:main" user_main: fun(i64, &&u8) i64;
 
 # linux entry shim for std.system.runtime
 # expects rdi = initial stack pointer, calls user main(argc, argv)
@@ -17,12 +18,12 @@ pub fun entry(stack: ptr) {
 		plat.terminate(255);
 	}
 
-	val sp: *usize = stack::*usize;
-	val argc: i64 = sp[0]::i64;
+	val sp:  *usize = stack::*usize;
+	val argc: i64   = sp[0]::i64;
 
 	# argv immediately follows argc on the initial stack
 	val argv: &&u8 = (stack + $size_of(usize))::&&u8;
 
-	val code: i64 = main(argc, argv);
+	val code: i64 = user_main(argc, argv);
 	plat.terminate(code);
 }

@@ -7,5 +7,3 @@ use std.types.string;
 use std.collections.slice;
 use std.collections.view;
 
-use std.system.runtime;
-
