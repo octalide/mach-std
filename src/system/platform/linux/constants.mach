@@ -1,69 +1,73 @@
-use p: std.platform.linux.constants;
 use std.types.size;
 
 # linux constants as exposed through std.system.platform.
 #
-# note: this module exists to keep platform glue nested under std.system.
+# note: this is intentionally self-contained so `std.platform` can be removed.
 
-pub val SYS_READ:          usize = p.SYS_READ;
-pub val SYS_WRITE:         usize = p.SYS_WRITE;
-pub val SYS_CLOSE:         usize = p.SYS_CLOSE;
-pub val SYS_FSTAT:         usize = p.SYS_FSTAT;
-pub val SYS_LSEEK:         usize = p.SYS_LSEEK;
-pub val SYS_MMAP:          usize = p.SYS_MMAP;
-pub val SYS_MUNMAP:        usize = p.SYS_MUNMAP;
-pub val SYS_MREMAP:        usize = p.SYS_MREMAP;
-pub val SYS_EXIT:          usize = p.SYS_EXIT;
-pub val SYS_GETDENTS64:    usize = p.SYS_GETDENTS64;
-pub val SYS_CLOCK_GETTIME: usize = p.SYS_CLOCK_GETTIME;
-pub val SYS_OPENAT:        usize = p.SYS_OPENAT;
-pub val SYS_MKDIRAT:       usize = p.SYS_MKDIRAT;
-pub val SYS_NEWFSTATAT:    usize = p.SYS_NEWFSTATAT;
-pub val SYS_UNLINKAT:      usize = p.SYS_UNLINKAT;
-pub val SYS_RENAMEAT:      usize = p.SYS_RENAMEAT;
-pub val SYS_FACCESSAT:     usize = p.SYS_FACCESSAT;
+$if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
+	$error("std.system.platform.linux.constants: unsupported arch");
+}
+
+# syscall numbers (x86_64 linux)
+pub val SYS_READ:          usize = 0;
+pub val SYS_WRITE:         usize = 1;
+pub val SYS_CLOSE:         usize = 3;
+pub val SYS_FSTAT:         usize = 5;
+pub val SYS_LSEEK:         usize = 8;
+pub val SYS_MMAP:          usize = 9;
+pub val SYS_MUNMAP:        usize = 11;
+pub val SYS_MREMAP:        usize = 25;
+pub val SYS_EXIT:          usize = 60;
+pub val SYS_GETDENTS64:    usize = 217;
+pub val SYS_CLOCK_GETTIME: usize = 228;
+pub val SYS_OPENAT:        usize = 257;
+pub val SYS_MKDIRAT:       usize = 258;
+pub val SYS_NEWFSTATAT:    usize = 262;
+pub val SYS_UNLINKAT:      usize = 263;
+pub val SYS_RENAMEAT:      usize = 264;
+pub val SYS_FACCESSAT:     usize = 269;
 
 # file access modes
-pub val O_RDONLY: i32 = p.O_RDONLY;
-pub val O_WRONLY: i32 = p.O_WRONLY;
-pub val O_RDWR:   i32 = p.O_RDWR;
-pub val O_CREAT:  i32 = p.O_CREAT;
-pub val O_EXCL:   i32 = p.O_EXCL;
-pub val O_TRUNC:  i32 = p.O_TRUNC;
-pub val O_APPEND: i32 = p.O_APPEND;
+pub val O_RDONLY: i32 = 0;
+pub val O_WRONLY: i32 = 1;
+pub val O_RDWR:   i32 = 2;
+pub val O_CREAT:  i32 = 64;
+pub val O_EXCL:   i32 = 128;
+pub val O_TRUNC:  i32 = 512;
+pub val O_APPEND: i32 = 1024;
 
 # directory helpers
-pub val AT_FDCWD:            i32 = p.AT_FDCWD;
-pub val AT_SYMLINK_NOFOLLOW: i32 = p.AT_SYMLINK_NOFOLLOW;
-pub val AT_REMOVEDIR:        i32 = p.AT_REMOVEDIR;
+pub val AT_FDCWD:            i32 = -100;
+pub val AT_SYMLINK_NOFOLLOW: i32 = 0x0100;
+pub val AT_REMOVEDIR:        i32 = 0x0200;
 
 # stat mode flags
-pub val S_IFMT:  u32 = p.S_IFMT;
-pub val S_IFDIR: u32 = p.S_IFDIR;
-pub val S_IFREG: u32 = p.S_IFREG;
-pub val S_IFLNK: u32 = p.S_IFLNK;
+pub val S_IFMT:  u32 = 0o170000;
+pub val S_IFDIR: u32 = 0o040000;
+pub val S_IFREG: u32 = 0o100000;
+pub val S_IFLNK: u32 = 0o120000;
 
 # mmap protection
-pub val PROT_NONE:  i32 = p.PROT_NONE;
-pub val PROT_READ:  i32 = p.PROT_READ;
-pub val PROT_WRITE: i32 = p.PROT_WRITE;
-pub val PROT_EXEC:  i32 = p.PROT_EXEC;
+pub val PROT_NONE:  i32 = 0;
+pub val PROT_READ:  i32 = 1;
+pub val PROT_WRITE: i32 = 2;
+pub val PROT_EXEC:  i32 = 4;
 
 # mmap flags
-pub val MAP_SHARED:    i32 = p.MAP_SHARED;
-pub val MAP_PRIVATE:   i32 = p.MAP_PRIVATE;
-pub val MAP_FIXED:     i32 = p.MAP_FIXED;
-pub val MAP_ANONYMOUS: i32 = p.MAP_ANONYMOUS;
+pub val MAP_SHARED:    i32 = 1;
+pub val MAP_PRIVATE:   i32 = 2;
+pub val MAP_FIXED:     i32 = 16;
+pub val MAP_ANONYMOUS: i32 = 32;
 
 # mremap flags
-pub val MREMAP_MAYMOVE: usize = p.MREMAP_MAYMOVE;
+pub val MREMAP_MAYMOVE: usize = 1;
 
 # lseek whence constants
-pub val SEEK_SET: i32 = p.SEEK_SET;
-pub val SEEK_CUR: i32 = p.SEEK_CUR;
-pub val SEEK_END: i32 = p.SEEK_END;
+pub val SEEK_SET: i32 = 0;
+pub val SEEK_CUR: i32 = 1;
+pub val SEEK_END: i32 = 2;
 
 # standard fds
-pub val STDIN_FILENO:  i32 = p.STDIN_FILENO;
-pub val STDOUT_FILENO: i32 = p.STDOUT_FILENO;
-pub val STDERR_FILENO: i32 = p.STDERR_FILENO;
+pub val STDIN_FILENO:  i32 = 0;
+pub val STDOUT_FILENO: i32 = 1;
+pub val STDERR_FILENO: i32 = 2;

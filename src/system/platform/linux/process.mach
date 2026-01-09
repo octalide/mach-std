@@ -2,12 +2,19 @@
 #
 # this is intentionally minimal: enough for runtime entry and hard termination.
 
-use impl: std.platform.linux.process;
+$if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
+    $error("std.system.platform.linux.process: unsupported arch");
+}
 
 pub fun terminate(code: i64) {
-    impl.terminate(code);
+    masm {
+        mov rax, 60
+        mov rdi, code
+        syscall
+        hlt
+    }
 }
 
 pub fun abort() {
-    impl.abort();
+    terminate(255);
 }
