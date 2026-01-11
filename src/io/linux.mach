@@ -1,0 +1,93 @@
+use std.types.size;
+use std.types.result;
+use std.types.string;
+use int: std.types.int;
+use sc: std.system.platform.linux.syscall;
+use c: std.system.platform.linux.constants;
+use std.collections.slice;
+use std.collections.view;
+
+# linux backend for std.io
+# simple wrappers around SYS_write and small helpers for "write all" semantics.
+
+pub fun write_ptr(fd: i32, data: &u8, size: usize) Result[usize, i64] {
+    if (size == 0) { ret ok[usize, i64](0); }
+
+    val raw: i64 = sc.syscall3(c.SYS_WRITE, int.zext_i32_to_usize(fd), data::usize, size);
+    if (raw < 0) { ret err[usize, i64](raw); }
+    ret ok[usize, i64](raw::usize);
+}
+
+pub fun write_slice(fd: i32, bytes: Slice[u8]) Result[usize, i64] {
+    if (bytes.size == 0) { ret ok[usize, i64](0); }
+
+    val raw: i64 = sc.syscall3(c.SYS_WRITE, int.zext_i32_to_usize(fd), bytes.data::usize, bytes.size);
+    if (raw < 0) { ret err[usize, i64](raw); }
+    ret ok[usize, i64](raw::usize);
+}
+
+pub fun write_view(fd: i32, bytes: View[u8]) Result[usize, i64] {
+    if (bytes.is_empty()) { ret ok[usize, i64](0); }
+
+    val raw: i64 = sc.syscall3(c.SYS_WRITE, int.zext_i32_to_usize(fd), bytes.data::usize, bytes.size);
+    if (raw < 0) { ret err[usize, i64](raw); }
+    ret ok[usize, i64](raw::usize);
+}
+
+pub fun write_cstr(fd: i32, s: str) Result[usize, i64] {
+    ret write_ptr(fd, s, s.len());
+}
+
+# internal helper: write all bytes from a base address (in bytes)
+fun write_all_base(fd: i32, base: usize, size: usize) Result[usize, i64] {
+    if (size == 0) { ret ok[usize, i64](0); }
+
+    var total: usize = 0;
+    var retries: usize = 0;
+    val MAX_RETRIES: usize = 8;
+    val EINTR: i64 = -4;
+    val fdarg: usize = int.zext_i32_to_usize(fd);
+
+    for (total < size) {
+        val addr: usize = base + total;
+        val res: i64 = sc.syscall3(c.SYS_WRITE, fdarg, addr, (size - total));
+        if (res < 0) {
+            if (res == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            ret err[usize, i64](res);
+        }
+
+        # successful write -> reset retries
+        retries = 0;
+        val wrote: usize = res::usize;
+
+        # avoid infinite loop on 0 bytes written
+        if (wrote == 0 && total < size) { ret err[usize, i64](-1); }
+
+        total = total + wrote;
+    }
+
+    ret ok[usize, i64](total);
+}
+
+pub fun write_all_ptr(fd: i32, data: &u8, size: usize) Result[usize, i64] {
+    ret write_all_base(fd, data::usize, size);
+}
+
+pub fun write_all_slice(fd: i32, bytes: Slice[u8]) Result[usize, i64] {
+    ret write_all_base(fd, bytes.data::usize, bytes.size);
+}
+
+pub fun write_all_view(fd: i32, bytes: View[u8]) Result[usize, i64] {
+    ret write_all_base(fd, bytes.data::usize, bytes.size);
+}
+
+pub fun write_all_cstr(fd: i32, s: str) Result[usize, i64] {
+    ret write_all_base(fd, s::usize, s.len());
+}
+
+pub fun stdin() i32 { ret c.STDIN_FILENO; }
+pub fun stdout() i32 { ret c.STDOUT_FILENO; }
+pub fun stderr() i32 { ret c.STDERR_FILENO; }
