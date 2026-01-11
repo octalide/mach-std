@@ -1,0 +1,95 @@
+use std.types.size;
+
+# integer conversion helpers
+#
+# note: casts (`::`) are bit reinterpretation only. conversions are implemented here
+# as pure functions for use across the stdlib.
+
+rec U32Bytes {
+    b0: u8;
+    b1: u8;
+    b2: u8;
+    b3: u8;
+}
+
+rec U64Bytes {
+    b0: u8;
+    b1: u8;
+    b2: u8;
+    b3: u8;
+    b4: u8;
+    b5: u8;
+    b6: u8;
+    b7: u8;
+}
+
+pub fun zext_u8_to_u64(x: u8) u64 {
+    val bytes: U64Bytes = U64Bytes{b0: x, b1: 0, b2: 0, b3: 0, b4: 0, b5: 0, b6: 0, b7: 0};
+    ret bytes::u64;
+}
+
+pub fun zext_u8_to_i32(x: u8) i32 {
+    val bytes: U32Bytes = U32Bytes{b0: x, b1: 0, b2: 0, b3: 0};
+    ret bytes::i32;
+}
+
+pub fun trunc_u64_to_u8(x: u64) u8 {
+    # read the low byte (little-endian)
+    val p: &u8 = (?x)::&u8;
+    ret @p;
+}
+
+pub fun trunc_usize_to_u8(x: usize) u8 {
+    # read the low byte (little-endian)
+    val p: &u8 = (?x)::&u8;
+    ret @p;
+}
+
+$if ($mach.build.target.pointer_width == 4) {
+    pub fun sext_i32_to_isize(x: i32) isize {
+        ret x;
+    }
+
+    pub fun zext_u32_to_usize(x: u32) usize {
+        ret x;
+    }
+}
+$or ($mach.build.target.pointer_width == 8) {
+    pub fun sext_i32_to_isize(x: i32) isize {
+        val p: &u8 = (?x)::&u8;
+        var fill: u8 = 0;
+        if ((p[3] & 0x80) != 0) { fill = 0xff; }
+
+        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: fill, b5: fill, b6: fill, b7: fill};
+        ret bytes::i64;
+    }
+
+    pub fun zext_u32_to_usize(x: u32) usize {
+        val p: &u8 = (?x)::&u8;
+        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: 0, b5: 0, b6: 0, b7: 0};
+        ret bytes::u64;
+    }
+}
+$or {
+    # default to 64-bit semantics
+    pub fun sext_i32_to_isize(x: i32) isize {
+        val p: &u8 = (?x)::&u8;
+        var fill: u8 = 0;
+        if ((p[3] & 0x80) != 0) { fill = 0xff; }
+
+        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: fill, b5: fill, b6: fill, b7: fill};
+        ret bytes::i64;
+    }
+
+    pub fun zext_u32_to_usize(x: u32) usize {
+        val p: &u8 = (?x)::&u8;
+        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: 0, b5: 0, b6: 0, b7: 0};
+        ret bytes::u64;
+    }
+}
+
+pub fun zext_i32_to_usize(x: i32) usize {
+    # reinterpret i32 bits as u32, then zero-extend
+    val u: u32 = x::u32;
+    ret zext_u32_to_usize(u);
+}

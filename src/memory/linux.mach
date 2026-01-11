@@ -2,6 +2,7 @@ use c: std.system.platform.linux.constants;
 use sc: std.system.platform.linux.syscall;
 use std.types.size;
 use std.types.bool;
+use int: std.types.int;
 
 # linux backend for std.memory byte allocation.
 #
@@ -16,8 +17,8 @@ pub fun allocate(size: usize) ptr {
         c.SYS_MMAP,
         0,
         size,
-        (c.PROT_READ | c.PROT_WRITE)::usize,
-        (c.MAP_PRIVATE | c.MAP_ANONYMOUS)::usize,
+        int.zext_i32_to_usize(c.PROT_READ | c.PROT_WRITE),
+        int.zext_i32_to_usize(c.MAP_PRIVATE | c.MAP_ANONYMOUS),
         (-1)::isize::usize,
         0
     );

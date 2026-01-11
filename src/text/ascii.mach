@@ -1,5 +1,6 @@
 use std.types.bool;
 use std.types.string;
+use int: std.types.int;
 
 pub fun is_space(c: char) bool {
     ret (c == 9 || c == 10 || c == 11 || c == 12 || c == 13 || c == 32);
@@ -35,12 +36,12 @@ pub fun to_upper(c: char) u8 {
 
 pub fun digit_val(c: char) i32 {
     if (c >= '0' && c <= '9') {
-        ret (c - '0')::i32;
+        ret int.zext_u8_to_i32(c - '0');
     }
 
     val lo: u8 = to_lower(c);
     if (lo >= 'a' && lo <= 'z') {
-        ret ((lo - 'a')::i32) + 10;
+        ret int.zext_u8_to_i32(lo - 'a') + 10;
     }
     
     ret -1;

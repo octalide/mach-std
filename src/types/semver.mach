@@ -3,6 +3,7 @@ use        std.types.size;
 use        std.types.option;
 use        std.types.result;
 use        std.types.string;
+use int:   std.types.int;
 use ascii: std.text.ascii;
 use mem:   std.memory;
 
@@ -226,7 +227,7 @@ fun parse_number(input: str, pos: *usize) Option[u64] {
         }
         
         found_digit = true;
-        value       = value * 10 + ((c - '0')::u64);
+        value       = value * 10 + int.zext_u8_to_u64(c - '0');
         @pos        = @pos + 1;
     }
     
@@ -368,7 +369,7 @@ fun parse_identifier_num(s: str) u64 {
     for (s[i] != 0) {
         val c: u8 = s[i];
         if (ascii.is_digit(c)) {
-            value = value * 10 + ((c - '0')::u64);
+            value = value * 10 + int.zext_u8_to_u64(c - '0');
         }
         i = i + 1;
     }
