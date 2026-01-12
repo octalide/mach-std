@@ -1,84 +1,62 @@
 use std.types.size;
 use std.types.result;
-use int: std.types.int;
 
 use fs: std.filesystem;
 use stream: std.stream;
 
-# std.stream.fd: adapt file descriptors to std.stream.Reader/Writer.
+# std.stream.fd: file-descriptor based Reader/Writer types.
 #
-# this is intentionally thin and relies on std.filesystem as the syscall layer.
+# this module sits just above std.filesystem (raw i64 syscalls) and converts to Result.
 
-fun fd_from_ctx(ctx: ptr) i32 {
-    ret int.trunc_usize_to_i32(ctx::usize);
+pub rec FdWriter {
+    fd: i32;
 }
 
-fun write_once(fd: i32, buf: &u8, len: usize) Result[usize, stream.Error] {
-    val raw: i64 = fs.write(fd, buf, len);
-    if (raw < 0) { ret err[usize, stream.Error](raw); }
-    ret ok[usize, stream.Error](raw::usize);
+pub rec FdReader {
+    fd: i32;
 }
 
-fun read_once(fd: i32, buf: *u8, len: usize) Result[usize, stream.Error] {
-    val raw: i64 = fs.read(fd, buf, len);
-    if (raw < 0) { ret err[usize, stream.Error](raw); }
-    ret ok[usize, stream.Error](raw::usize);
-}
-
-fun fd_write(ctx: ptr, buf: &u8, len: usize) Result[usize, stream.Error] {
+pub fun (this: FdWriter) write(buf: &u8, len: usize) Result[usize, stream.Error] {
     val EINTR: i64 = -4;
     val MAX_RETRIES: usize = 8;
 
     var retries: usize = 0;
     for {
-        val fd: i32 = fd_from_ctx(ctx);
-        val r: Result[usize, stream.Error] = write_once(fd, buf, len);
-        if (r.is_ok()) { ret r; }
-
-        val e: i64 = r.unwrap_err();
-        if (e == EINTR && retries < MAX_RETRIES) {
-            retries = retries + 1;
-            cnt;
+        val raw: i64 = fs.write(this.fd, buf, len);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            ret err[usize, stream.Error](raw);
         }
 
-        ret r;
+        ret ok[usize, stream.Error](raw::usize);
     }
 
     ret err[usize, stream.Error](-1);
 }
 
-fun fd_read(ctx: ptr, buf: *u8, len: usize) Result[usize, stream.Error] {
+pub fun (this: FdReader) read(buf: *u8, len: usize) Result[usize, stream.Error] {
     val EINTR: i64 = -4;
     val MAX_RETRIES: usize = 8;
 
     var retries: usize = 0;
     for {
-        val fd: i32 = fd_from_ctx(ctx);
-        val r: Result[usize, stream.Error] = read_once(fd, buf, len);
-        if (r.is_ok()) { ret r; }
-
-        val e: i64 = r.unwrap_err();
-        if (e == EINTR && retries < MAX_RETRIES) {
-            retries = retries + 1;
-            cnt;
+        val raw: i64 = fs.read(this.fd, buf, len);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            ret err[usize, stream.Error](raw);
         }
 
-        ret r;
+        ret ok[usize, stream.Error](raw::usize);
     }
 
     ret err[usize, stream.Error](-1);
 }
 
-pub fun writer(fd: i32) stream.Writer {
-    var w: stream.Writer;
-    w.ctx = int.sext_i32_to_isize(fd)::usize::ptr;
-    w.write_fn = fd_write;
-    ret w;
-}
-
-pub fun reader(fd: i32) stream.Reader {
-    var r: stream.Reader;
-    r.ctx = int.sext_i32_to_isize(fd)::usize::ptr;
-    r.read_fn = fd_read;
-    ret r;
-}
+pub fun writer(fd: i32) FdWriter { ret FdWriter{fd: fd}; }
+pub fun reader(fd: i32) FdReader { ret FdReader{fd: fd}; }

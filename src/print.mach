@@ -15,7 +15,7 @@ pub fun print(s: str) Result[usize, stream.Error] {
 }
 
 pub fun println(s: str) Result[usize, stream.Error] {
-    val w: stream.Writer = stdio.stdout();
+    val w = stdio.stdout();
 
     val r1: Result[usize, stream.Error] = fmt.write_str(w, s);
     if (r1.is_err()) { ret r1; }
@@ -31,7 +31,7 @@ pub fun eprint(s: str) Result[usize, stream.Error] {
 }
 
 pub fun eprintln(s: str) Result[usize, stream.Error] {
-    val w: stream.Writer = stdio.stderr();
+    val w = stdio.stderr();
 
     val r1: Result[usize, stream.Error] = fmt.write_str(w, s);
     if (r1.is_err()) { ret r1; }

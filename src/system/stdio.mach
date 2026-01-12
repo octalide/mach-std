@@ -1,6 +1,5 @@
 use std.types.size;
 
-use stream: std.stream;
 use fd: std.stream.fd;
 
 # std.system.stdio: canonical stdin/stdout/stderr handles.
@@ -18,6 +17,6 @@ pub fun stdin_fd() i32 { ret c.STDIN_FILENO; }
 pub fun stdout_fd() i32 { ret c.STDOUT_FILENO; }
 pub fun stderr_fd() i32 { ret c.STDERR_FILENO; }
 
-pub fun stdin() stream.Reader { ret fd.reader(stdin_fd()); }
-pub fun stdout() stream.Writer { ret fd.writer(stdout_fd()); }
-pub fun stderr() stream.Writer { ret fd.writer(stderr_fd()); }
+pub fun stdin() fd.FdReader { ret fd.reader(stdin_fd()); }
+pub fun stdout() fd.FdWriter { ret fd.writer(stdout_fd()); }
+pub fun stderr() fd.FdWriter { ret fd.writer(stderr_fd()); }
