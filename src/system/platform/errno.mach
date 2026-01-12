@@ -1,0 +1,14 @@
+use std.types.string;
+
+$if ($mach.build.target.os.id == $mach.os.linux.id) {
+    use impl: std.system.platform.linux.errno;
+} $or {
+    $error("std.system.platform.errno: unsupported target OS");
+}
+
+pub fun message(code: i64) str {
+    if (code >= 0) {
+        ret "not an error";
+    }
+    ret impl.message(code);
+}

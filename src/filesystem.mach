@@ -6,6 +6,7 @@ use std.types.string;
 use int: std.types.int;
 
 use pfs: std.system.platform.filesystem;
+use errno: std.system.platform.errno;
 
 # std.filesystem: higher-level filesystem helpers.
 #
@@ -20,127 +21,153 @@ $or {
     $error("std.filesystem: unsupported target");
 }
 
-pub def Error: i64;
 pub def Stat: types.stat_t;
 
 pub rec File {
     fd: i32;
 }
 
-pub fun open(path: str) Result[File, Error] {
+pub fun open(path: str) Result[File, str] {
     # open for read-only
-    val raw: i64 = pfs.openat(c.AT_FDCWD, path, c.O_RDONLY, 0);
-    if (raw < 0) {
-        ret err[File, Error](raw);
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = pfs.openat(c.AT_FDCWD, path, c.O_RDONLY, 0);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[File, str](File{fd: int.trunc_i64_to_i32(raw)});
     }
 
-    ret ok[File, Error](File{fd: int.trunc_i64_to_i32(raw)});
+    ret err[File, str](errno.message(raw));
 }
 
-pub fun create(path: str, mode: i32) Result[File, Error] {
+pub fun create(path: str, mode: i32) Result[File, str] {
     val flags: i32 = c.O_CREAT | c.O_TRUNC | c.O_WRONLY;
-    val raw: i64 = pfs.openat(c.AT_FDCWD, path, flags, mode);
-    if (raw < 0) {
-        ret err[File, Error](raw);
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = pfs.openat(c.AT_FDCWD, path, flags, mode);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[File, str](File{fd: int.trunc_i64_to_i32(raw)});
     }
 
-    ret ok[File, Error](File{fd: int.trunc_i64_to_i32(raw)});
+    ret err[File, str](errno.message(raw));
 }
 
-pub fun (this: *File) close() Result[bool, Error] {
+pub fun (this: *File) close() Result[bool, str] {
     if (this == nil) {
-        ret ok[bool, Error](true);
+        ret ok[bool, str](true);
     }
 
     val EINTR: i64 = -4;
     val MAX_RETRIES: usize = 8;
 
     var retries: usize = 0;
+    var raw: i64 = 0;
     for {
-        val raw: i64 = pfs.close(this.fd);
+        raw = pfs.close(this.fd);
         if (raw < 0) {
             if (raw == EINTR && retries < MAX_RETRIES) {
                 retries = retries + 1;
                 cnt;
             }
-            ret err[bool, Error](raw);
+            brk;
         }
-        ret ok[bool, Error](true);
+        ret ok[bool, str](true);
     }
 
-    ret err[bool, Error](-1);
+    ret err[bool, str](errno.message(raw));
 }
 
-pub fun (this: *File) read(buf: *u8, len: usize) Result[usize, Error] {
+pub fun (this: *File) read(buf: *u8, len: usize) Result[usize, str] {
     if (this == nil) {
-        ret err[usize, Error](-1);
+        ret err[usize, str]("io error");
     }
 
     val EINTR: i64 = -4;
     val MAX_RETRIES: usize = 8;
 
     var retries: usize = 0;
+    var raw: i64 = 0;
     for {
-        val raw: i64 = pfs.read(this.fd, buf, len);
+        raw = pfs.read(this.fd, buf, len);
         if (raw < 0) {
             if (raw == EINTR && retries < MAX_RETRIES) {
                 retries = retries + 1;
                 cnt;
             }
-            ret err[usize, Error](raw);
+            brk;
         }
-        ret ok[usize, Error](raw::usize);
+        ret ok[usize, str](raw::usize);
     }
 
-    ret err[usize, Error](-1);
+    ret err[usize, str](errno.message(raw));
 }
 
-pub fun (this: *File) write(buf: &u8, len: usize) Result[usize, Error] {
+pub fun (this: *File) write(buf: &u8, len: usize) Result[usize, str] {
     if (this == nil) {
-        ret err[usize, Error](-1);
+        ret err[usize, str]("io error");
     }
 
     val EINTR: i64 = -4;
     val MAX_RETRIES: usize = 8;
 
     var retries: usize = 0;
+    var raw: i64 = 0;
     for {
-        val raw: i64 = pfs.write(this.fd, buf, len);
+        raw = pfs.write(this.fd, buf, len);
         if (raw < 0) {
             if (raw == EINTR && retries < MAX_RETRIES) {
                 retries = retries + 1;
                 cnt;
             }
-            ret err[usize, Error](raw);
+            brk;
         }
-        ret ok[usize, Error](raw::usize);
+        ret ok[usize, str](raw::usize);
     }
 
-    ret err[usize, Error](-1);
+    ret err[usize, str](errno.message(raw));
 }
 
-pub fun (this: *File) stat() Result[Stat, Error] {
+pub fun (this: *File) stat() Result[Stat, str] {
     if (this == nil) {
-        ret err[Stat, Error](-1);
+        ret err[Stat, str]("io error");
     }
 
     var st: Stat;
     val raw: i64 = pfs.fstat(this.fd, ?st);
     if (raw < 0) {
-        ret err[Stat, Error](raw);
+        ret err[Stat, str](errno.message(raw));
     }
-    ret ok[Stat, Error](st);
+    ret ok[Stat, str](st);
 }
 
-pub fun (this: *File) seek(offset: i64, whence: i32) Result[i64, Error] {
+pub fun (this: *File) seek(offset: i64, whence: i32) Result[i64, str] {
     if (this == nil) {
-        ret err[i64, Error](-1);
+        ret err[i64, str]("io error");
     }
 
     val raw: i64 = pfs.lseek(this.fd, offset, whence);
     if (raw < 0) {
-        ret err[i64, Error](raw);
+        ret err[i64, str](errno.message(raw));
     }
 
-    ret ok[i64, Error](raw);
+    ret ok[i64, str](raw);
 }
