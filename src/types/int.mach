@@ -45,6 +45,13 @@ pub fun trunc_usize_to_u8(x: usize) u8 {
     ret @p;
 }
 
+pub fun trunc_i64_to_i32(x: i64) i32 {
+    # read the low 4 bytes (little-endian)
+    val p: &u8 = (?x)::&u8;
+    val bytes: U32Bytes = U32Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3]};
+    ret bytes::i32;
+}
+
 $if ($mach.build.target.pointer_width == 4) {
     pub fun sext_i32_to_isize(x: i32) isize {
         ret x;

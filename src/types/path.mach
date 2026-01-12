@@ -1,0 +1,105 @@
+use std.types.bool;
+use std.types.result;
+use std.types.size;
+use std.types.string;
+
+use std.allocator;
+use mem: std.memory;
+use ppath: std.system.platform.path;
+
+# std.types.path: owned/portable-ish path helpers.
+#
+# this is intentionally lightweight for stage1:
+# - Path is a null-terminated string type alias
+# - functions that produce new paths require an Allocator
+
+pub def Path: str;
+
+pub fun separator() u8 {
+    ret ppath.separator;
+}
+
+pub fun is_empty(p: Path) bool {
+    if (p == nil) { ret true; }
+    ret p[0] == 0;
+}
+
+pub fun is_abs(p: Path) bool {
+    if (p == nil) { ret false; }
+
+    # linux-style absolute paths (future targets can override semantics)
+    ret p[0] == separator();
+}
+
+pub fun clone(a: *Allocator, p: Path) Result[Path, AllocError] {
+    if (a == nil) {
+        ret err[Path, AllocError]("allocator is nil");
+    }
+
+    if (p == nil) {
+        ret ok[Path, AllocError](nil);
+    }
+
+    val n: usize = p.len();
+    val r: Result[*u8, AllocError] = a.alloc[u8](n + 1);
+    if (!r.tag) {
+        ret err[Path, AllocError](r.value.err);
+    }
+
+    val buf: *u8 = r.value.ok;
+    mem.raw_copy(buf::ptr, p::ptr, n);
+    buf[n] = 0;
+    ret ok[Path, AllocError](buf::&u8);
+}
+
+pub fun join(a: *Allocator, left: Path, right: Path) Result[Path, AllocError] {
+    if (a == nil) {
+        ret err[Path, AllocError]("allocator is nil");
+    }
+
+    if (is_empty(left)) {
+        ret clone(a, right);
+    }
+
+    if (is_empty(right)) {
+        ret clone(a, left);
+    }
+
+    val sep: u8 = separator();
+
+    val left_len: usize = left.len();
+    val right_len: usize = right.len();
+
+    val left_has_sep: bool = left[left_len - 1] == sep;
+    val right_has_sep: bool = right[0] == sep;
+
+    var need_sep: bool = true;
+    if (left_has_sep || right_has_sep) {
+        need_sep = false;
+    }
+
+    var extra: usize = 0;
+    if (need_sep) {
+        extra = 1;
+    }
+
+    val out_len: usize = left_len + right_len + extra;
+    val r: Result[*u8, AllocError] = a.alloc[u8](out_len + 1);
+    if (!r.tag) {
+        ret err[Path, AllocError](r.value.err);
+    }
+
+    val buf: *u8 = r.value.ok;
+    mem.raw_copy(buf::ptr, left::ptr, left_len);
+
+    var off: usize = left_len;
+    if (need_sep) {
+        buf[off] = sep;
+        off = off + 1;
+    }
+
+    mem.raw_copy((buf::usize + off)::ptr, right::ptr, right_len);
+    buf[out_len] = 0;
+
+    ret ok[Path, AllocError](buf::&u8);
+}

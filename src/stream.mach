@@ -1,7 +1,7 @@
 use std.types.size;
 use std.types.result;
 
-use fs: std.filesystem;
+use fs: std.system.platform.filesystem;
 
 # std.stream: generic reader/writer interfaces and small helpers.
 #
