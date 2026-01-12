@@ -15,9 +15,9 @@ pub def AllocError: str;
 
 pub rec Allocator {
     ctx: ptr;
-    alloc_fn:  fun(ctx: ptr, size: usize, align: usize) ptr;
-    resize_fn: fun(ctx: ptr, p: ptr, old_size: usize, new_size: usize, align: usize) ptr;
-    free_fn:   fun(ctx: ptr, p: ptr, size: usize, align: usize) bool;
+    alloc_fn:  fun(ptr, usize, usize) ptr;
+    resize_fn: fun(ptr, ptr, usize, usize, usize) ptr;
+    free_fn:   fun(ptr, ptr, usize, usize) bool;
 }
 
 pub fun (this: *Allocator) alloc_bytes(size: usize, align: usize) Result[ptr, AllocError] {

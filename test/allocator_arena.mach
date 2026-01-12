@@ -1,0 +1,50 @@
+use alloc: std.allocator;
+use std.types.result;
+
+# small compile-time test that exercises fixed buffer and arena allocators
+
+fun main(argc: i64, argv: &&u8) i64 {
+    # fixed buffer: allocate two small blocks, third should fail
+    var buf: [40]u8;
+    val f: alloc.Allocator = alloc.fixed_buffer_allocator(?buf[0], 40::usize);
+
+    val r1: Result[ptr, alloc.AllocError] = f.alloc_bytes(16::usize, 8::usize);
+    if (r1.is_err()) {
+        ret 1;
+    }
+    val p1: ptr = r1.unwrap_ok();
+
+    val r2: Result[ptr, alloc.AllocError] = f.alloc_bytes(16::usize, 8::usize);
+    if (r2.is_err()) {
+        ret 2;
+    }
+    val p2: ptr = r2.unwrap_ok();
+
+    val r3: Result[ptr, alloc.AllocError] = f.alloc_bytes(16::usize, 8::usize);
+    if (r3.is_ok()) {
+        # expected to fail (out of space)
+        ret 3;
+    }
+
+    # arena: allocate then resize-grow; ensure non-nil on grow
+    var arena: alloc.Arena = alloc.arena_init(alloc.default(), 1024::usize);
+    var aa: alloc.Allocator = alloc.arena_allocator(?arena);
+
+    val a1: Result[ptr, alloc.AllocError] = aa.alloc_bytes(256::usize, 8::usize);
+    if (a1.is_err()) {
+        ret 4;
+    }
+    val p: ptr = a1.unwrap_ok();
+
+    val r: Result[ptr, alloc.AllocError] = aa.resize_bytes(p, 256::usize, 512::usize, 8::usize);
+    if (r.is_err()) {
+        ret 5;
+    }
+
+    val p3: ptr = r.unwrap_ok();
+    if (p3 == nil) {
+        ret 6;
+    }
+
+    ret 0;
+}
