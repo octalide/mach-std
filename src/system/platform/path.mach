@@ -1,0 +1,10 @@
+# std.system.platform.path provides target-specific path conventions.
+
+$if ($mach.build.target.os.id == $mach.os.linux.id) {
+    use impl: std.system.platform.linux.path;
+}
+$or {
+    $error("std.system.platform.path: unsupported target");
+}
+
+pub val separator: u8 = impl.separator;

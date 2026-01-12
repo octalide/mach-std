@@ -1,0 +1,149 @@
+use std.types.bool;
+use std.types.option;
+use std.types.result;
+use std.types.size;
+use std.types.string;
+
+use pmem: std.system.platform.memory;
+
+# std.allocator: zig-style allocator interface.
+#
+# this is intended to be the glue between platform memory primitives and higher
+# level containers/types.
+
+pub def AllocError: str;
+
+pub rec Allocator {
+    ctx: ptr;
+    alloc_fn:  fun(ctx: ptr, size: usize, align: usize) ptr;
+    resize_fn: fun(ctx: ptr, p: ptr, old_size: usize, new_size: usize, align: usize) ptr;
+    free_fn:   fun(ctx: ptr, p: ptr, size: usize, align: usize) bool;
+}
+
+pub fun (this: *Allocator) alloc_bytes(size: usize, align: usize) Result[ptr, AllocError] {
+    if (size == 0) {
+        ret ok[ptr, AllocError](nil);
+    }
+
+    val p: ptr = this.alloc_fn(this.ctx, size, align);
+    if (p == nil) {
+        ret err[ptr, AllocError]("out of memory");
+    }
+
+    ret ok[ptr, AllocError](p);
+}
+
+pub fun (this: *Allocator) resize_bytes(p: ptr, old_size: usize, new_size: usize, align: usize) Result[ptr, AllocError] {
+    if (new_size == 0) {
+        val ok_free: bool = this.free_fn(this.ctx, p, old_size, align);
+        ret ok[ptr, AllocError](nil);
+    }
+
+    val q: ptr = this.resize_fn(this.ctx, p, old_size, new_size, align);
+    if (q == nil) {
+        ret err[ptr, AllocError]("out of memory");
+    }
+
+    ret ok[ptr, AllocError](q);
+}
+
+pub fun (this: *Allocator) free_bytes(p: ptr, size: usize, align: usize) bool {
+    ret this.free_fn(this.ctx, p, size, align);
+}
+
+pub fun (this: *Allocator) alloc[T](count: usize) Result[*T, AllocError] {
+    if (count == 0) {
+        ret ok[*T, AllocError](nil::*T);
+    }
+
+    # check for size overflow
+    val size:  usize = $size_of(T);
+    val total: usize = size * count;
+    if (size != 0 && total / size != count) {
+        ret err[*T, AllocError]("allocation size overflow");
+    }
+
+    val r: Result[ptr, AllocError] = this.alloc_bytes(total, $align_of(T));
+    if (r.is_err()) {
+        ret err[*T, AllocError](r.unwrap_err());
+    }
+
+    ret ok[*T, AllocError](r.unwrap_ok()::*T);
+}
+
+pub fun (this: *Allocator) zalloc[T](count: usize) Result[*T, AllocError] {
+    val r: Result[*T, AllocError] = this.alloc[T](count);
+    if (r.is_err()) {
+        ret r;
+    }
+
+    val p: *T = r.unwrap_ok();
+    if (p != nil && count != 0) {
+        val total: usize = $size_of(T) * count;
+        val bytes: *u8 = p::ptr::*u8;
+        var i: usize = 0;
+        for (i < total) {
+            bytes[i] = 0;
+            i = i + 1;
+        }
+    }
+
+    ret ok[*T, AllocError](p);
+}
+
+pub fun (this: *Allocator) free[T](p: *T, count: usize) bool {
+    if (p == nil || count == 0) {
+        ret true;
+    }
+
+    ret this.free_bytes(p::ptr, $size_of(T) * count, $align_of(T));
+}
+
+pub fun (this: *Allocator) resize[T](p: *T, old_count: usize, new_count: usize) Result[*T, AllocError] {
+    if (new_count == 0) {
+        val ok_free: bool = this.free[T](p, old_count);
+        ret ok[*T, AllocError](nil::*T);
+    }
+
+    val elem_size: usize = $size_of(T);
+    val old_size:  usize = elem_size * old_count;
+    val new_size:  usize = elem_size * new_count;
+
+    if (elem_size != 0 && new_size / elem_size != new_count) {
+        ret err[*T, AllocError]("allocation size overflow");
+    }
+
+    val r: Result[ptr, AllocError] = this.resize_bytes(p::ptr, old_size, new_size, $align_of(T));
+    if (r.is_err()) {
+        ret err[*T, AllocError](r.unwrap_err());
+    }
+
+    ret ok[*T, AllocError](r.unwrap_ok()::*T);
+}
+
+# default allocator (page-granular) backed by platform memory.
+
+fun page_alloc(ctx: ptr, size: usize, align: usize) ptr {
+    ret pmem.allocate(size);
+}
+
+fun page_resize(ctx: ptr, p: ptr, old_size: usize, new_size: usize, align: usize) ptr {
+    ret pmem.reallocate(p, old_size, new_size);
+}
+
+fun page_free(ctx: ptr, p: ptr, size: usize, align: usize) bool {
+    ret pmem.deallocate(p, size);
+}
+
+pub fun page_allocator() Allocator {
+    var a: Allocator;
+    a.ctx = nil;
+    a.alloc_fn = page_alloc;
+    a.resize_fn = page_resize;
+    a.free_fn = page_free;
+    ret a;
+}
+
+pub fun default() Allocator {
+    ret page_allocator();
+}

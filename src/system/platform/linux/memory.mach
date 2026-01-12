@@ -1,0 +1,55 @@
+use c: std.system.platform.linux.constants;
+use sc: std.system.platform.linux.syscall;
+use std.types.size;
+use std.types.bool;
+use int: std.types.int;
+
+# linux backend for std.system.platform.memory.
+#
+# this is intentionally minimal and reflects the platform conventions:
+# - returns nil on allocation failure
+# - deallocate returns bool success
+
+pub fun allocate(size: usize) ptr {
+    if (size == 0) { ret nil; }
+
+    val res: i64 = sc.syscall6(
+        c.SYS_MMAP,
+        0,
+        size,
+        int.zext_i32_to_usize(c.PROT_READ | c.PROT_WRITE),
+        int.zext_i32_to_usize(c.MAP_PRIVATE | c.MAP_ANONYMOUS),
+        (-1)::isize::usize,
+        0
+    );
+
+    if (res < 0) { ret nil; }
+    ret res::usize::ptr;
+}
+
+pub fun deallocate(p: ptr, size: usize) bool {
+    if (p == nil || size == 0) { ret true; }
+
+    val r: i64 = sc.syscall2(c.SYS_MUNMAP, p::usize, size);
+    ret r == 0;
+}
+
+pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
+    if (p == nil) { ret allocate(new_size); }
+
+    if (new_size == 0) {
+        val ok: bool = deallocate(p, old_size);
+        ret nil;
+    }
+
+    val res: i64 = sc.syscall4(
+        c.SYS_MREMAP,
+        p::usize,
+        old_size,
+        new_size,
+        c.MREMAP_MAYMOVE
+    );
+
+    if (res < 0) { ret nil; }
+    ret res::usize::ptr;
+}
