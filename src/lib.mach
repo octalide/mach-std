@@ -8,6 +8,7 @@ use std.collections.slice;
 use std.collections.view;
 
 use std.allocator;
+use std.allocator.arena;
 use std.memory;
 use std.stream;
 use std.filesystem;
