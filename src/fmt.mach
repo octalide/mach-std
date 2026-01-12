@@ -1,0 +1,52 @@
+use std.types.size;
+use std.types.result;
+use std.types.string;
+use int: std.types.int;
+
+use stream: std.stream;
+
+# std.fmt: minimal formatting primitives.
+#
+# for now this focuses on writing to a stream.Writer without allocations.
+
+pub fun write_bytes(w: stream.Writer, buf: &u8, len: usize) Result[usize, stream.Error] {
+    ret stream.write_all(w, buf, len);
+}
+
+pub fun write_str(w: stream.Writer, s: str) Result[usize, stream.Error] {
+    if (s == nil) { ret ok[usize, stream.Error](0); }
+    ret stream.write_all(w, s, s.len());
+}
+
+pub fun write_byte(w: stream.Writer, b: u8) Result[usize, stream.Error] {
+    val x: u8 = b;
+    ret stream.write_all(w, ?x, 1);
+}
+
+pub fun write_newline(w: stream.Writer) Result[usize, stream.Error] {
+    ret write_byte(w, 10);
+}
+
+pub fun write_u64(w: stream.Writer, n: u64) Result[usize, stream.Error] {
+    var buf: [32]u8;
+    var idx: usize = 32;
+    var x:   u64 = n;
+    var len: usize = 0;
+
+    if (x == 0) {
+        idx = idx - 1;
+        buf[idx] = 48; # '0'
+        len = 1;
+    } or {
+        for (x > 0) {
+            val digit: u8 = int.trunc_u64_to_u8(x % 10) + 48;
+            x = x / 10;
+            idx = idx - 1;
+            buf[idx] = digit;
+            len = len + 1;
+        }
+    }
+
+    val start: *u8 = ?buf[idx];
+    ret stream.write_all(w, start, len);
+}

@@ -1,0 +1,68 @@
+use std.types.size;
+use std.types.result;
+
+# std.stream: generic reader/writer interfaces and small helpers.
+#
+# convention:
+# - low-level syscalls typically return negative i64 error codes directly
+# - above that layer, we use Result[T, i64]
+# - reserve values <= -4096 for library-level errors to avoid colliding with -errno (-1..-4095)
+
+pub def Error: i64;
+
+pub val ERR_EOF:         Error = -4096;
+pub val ERR_SHORT_WRITE: Error = -4097;
+
+pub rec Writer {
+    ctx: ptr;
+    write_fn: fun(ptr, &u8, usize) Result[usize, Error];
+}
+
+pub rec Reader {
+    ctx: ptr;
+    read_fn: fun(ptr, *u8, usize) Result[usize, Error];
+}
+
+pub fun (this: Writer) write(buf: &u8, len: usize) Result[usize, Error] {
+    ret this.write_fn(this.ctx, buf, len);
+}
+
+pub fun (this: Reader) read(buf: *u8, len: usize) Result[usize, Error] {
+    ret this.read_fn(this.ctx, buf, len);
+}
+
+pub fun write_all(w: Writer, buf: &u8, len: usize) Result[usize, Error] {
+    if (len == 0) { ret ok[usize, Error](0); }
+
+    var total: usize = 0;
+    for (total < len) {
+        val p: &u8 = (buf::usize + total)::&u8;
+        val r: Result[usize, Error] = w.write(p, len - total);
+        if (r.is_err()) { ret r; }
+
+        val wrote: usize = r.unwrap_ok();
+        if (wrote == 0) { ret err[usize, Error](ERR_SHORT_WRITE); }
+
+        total = total + wrote;
+    }
+
+    ret ok[usize, Error](total);
+}
+
+pub fun read_exact(r: Reader, buf: *u8, len: usize) Result[usize, Error] {
+    if (len == 0) { ret ok[usize, Error](0); }
+
+    var total: usize = 0;
+    for (total < len) {
+        val p: *u8 = (buf::usize + total)::*u8;
+        val res: Result[usize, Error] = r.read(p, len - total);
+        if (res.is_err()) { ret res; }
+
+        val got: usize = res.unwrap_ok();
+        if (got == 0) { ret err[usize, Error](ERR_EOF); }
+
+        total = total + got;
+    }
+
+    ret ok[usize, Error](total);
+}

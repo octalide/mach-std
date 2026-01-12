@@ -1,0 +1,23 @@
+use std.types.size;
+
+use stream: std.stream;
+use fd: std.stream.fd;
+
+# std.system.stdio: canonical stdin/stdout/stderr handles.
+#
+# this is not a terminal control module; it's just standard streams.
+
+$if ($mach.build.target.os.id == $mach.os.linux.id) {
+    use c: std.system.platform.linux.constants;
+}
+$or {
+    $error("std.system.stdio: unsupported target");
+}
+
+pub fun stdin_fd() i32 { ret c.STDIN_FILENO; }
+pub fun stdout_fd() i32 { ret c.STDOUT_FILENO; }
+pub fun stderr_fd() i32 { ret c.STDERR_FILENO; }
+
+pub fun stdin() stream.Reader { ret fd.reader(stdin_fd()); }
+pub fun stdout() stream.Writer { ret fd.writer(stdout_fd()); }
+pub fun stderr() stream.Writer { ret fd.writer(stderr_fd()); }
