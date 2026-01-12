@@ -11,41 +11,45 @@ use stdio: std.system.stdio;
 # longer-term this may be absorbed into std.fmt or std.types.string.
 
 pub fun print(s: str) Result[usize, stream.Error] {
-    ret fmt.write_str(stdio.stdout(), s);
+    val w: stream.Writer = stdio.stdout();
+    ret fmt.write_str(?w, s);
 }
 
 pub fun println(s: str) Result[usize, stream.Error] {
     val w: stream.Writer = stdio.stdout();
 
-    val r1: Result[usize, stream.Error] = fmt.write_str(w, s);
+    val r1: Result[usize, stream.Error] = fmt.write_str(?w, s);
     if (r1.is_err()) { ret r1; }
 
-    val r2: Result[usize, stream.Error] = fmt.write_newline(w);
+    val r2: Result[usize, stream.Error] = fmt.write_newline(?w);
     if (r2.is_err()) { ret r2; }
 
     ret ok[usize, stream.Error](r1.unwrap_ok() + r2.unwrap_ok());
 }
 
 pub fun eprint(s: str) Result[usize, stream.Error] {
-    ret fmt.write_str(stdio.stderr(), s);
+    val w: stream.Writer = stdio.stderr();
+    ret fmt.write_str(?w, s);
 }
 
 pub fun eprintln(s: str) Result[usize, stream.Error] {
     val w: stream.Writer = stdio.stderr();
 
-    val r1: Result[usize, stream.Error] = fmt.write_str(w, s);
+    val r1: Result[usize, stream.Error] = fmt.write_str(?w, s);
     if (r1.is_err()) { ret r1; }
 
-    val r2: Result[usize, stream.Error] = fmt.write_newline(w);
+    val r2: Result[usize, stream.Error] = fmt.write_newline(?w);
     if (r2.is_err()) { ret r2; }
 
     ret ok[usize, stream.Error](r1.unwrap_ok() + r2.unwrap_ok());
 }
 
 pub fun u64(n: u64) Result[usize, stream.Error] {
-    ret fmt.write_u64(stdio.stdout(), n);
+    val w: stream.Writer = stdio.stdout();
+    ret fmt.write_u64(?w, n);
 }
 
 pub fun eu64(n: u64) Result[usize, stream.Error] {
-    ret fmt.write_u64(stdio.stderr(), n);
+    val w: stream.Writer = stdio.stderr();
+    ret fmt.write_u64(?w, n);
 }

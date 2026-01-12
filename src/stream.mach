@@ -66,7 +66,7 @@ pub fun (this: &Reader) read(buf: *u8, len: usize) Result[usize, Error] {
     ret err[usize, Error](-1);
 }
 
-pub fun write_all(w: Writer, buf: &u8, len: usize) Result[usize, Error] {
+pub fun write_all(w: &Writer, buf: &u8, len: usize) Result[usize, Error] {
     if (len == 0) { ret ok[usize, Error](0); }
 
     var total: usize = 0;
@@ -84,7 +84,7 @@ pub fun write_all(w: Writer, buf: &u8, len: usize) Result[usize, Error] {
     ret ok[usize, Error](total);
 }
 
-pub fun read_exact(r: Reader, buf: *u8, len: usize) Result[usize, Error] {
+pub fun read_exact(r: &Reader, buf: *u8, len: usize) Result[usize, Error] {
     if (len == 0) { ret ok[usize, Error](0); }
 
     var total: usize = 0;

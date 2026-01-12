@@ -9,25 +9,25 @@ use stream: std.stream;
 #
 # for now this focuses on writing to a stream.Writer without allocations.
 
-pub fun write_bytes(w: stream.Writer, buf: &u8, len: usize) Result[usize, stream.Error] {
+pub fun write_bytes(w: &stream.Writer, buf: &u8, len: usize) Result[usize, stream.Error] {
     ret stream.write_all(w, buf, len);
 }
 
-pub fun write_str(w: stream.Writer, s: str) Result[usize, stream.Error] {
+pub fun write_str(w: &stream.Writer, s: str) Result[usize, stream.Error] {
     if (s == nil) { ret ok[usize, stream.Error](0); }
     ret stream.write_all(w, s, s.len());
 }
 
-pub fun write_byte(w: stream.Writer, b: u8) Result[usize, stream.Error] {
+pub fun write_byte(w: &stream.Writer, b: u8) Result[usize, stream.Error] {
     val x: u8 = b;
     ret stream.write_all(w, ?x, 1);
 }
 
-pub fun write_newline(w: stream.Writer) Result[usize, stream.Error] {
+pub fun write_newline(w: &stream.Writer) Result[usize, stream.Error] {
     ret write_byte(w, 10);
 }
 
-pub fun write_u64(w: stream.Writer, n: u64) Result[usize, stream.Error] {
+pub fun write_u64(w: &stream.Writer, n: u64) Result[usize, stream.Error] {
     var buf: [32]u8;
     var idx: usize = 32;
     var x:   u64 = n;
