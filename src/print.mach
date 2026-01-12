@@ -4,6 +4,7 @@ use std.types.string;
 
 use fmt: std.fmt;
 use stream: std.stream;
+use fd: std.stream.fd;
 use stdio: std.system.stdio;
 
 # std.print: temporary glue for writing common formatted values to stdio.
@@ -11,41 +12,41 @@ use stdio: std.system.stdio;
 # longer-term this may be absorbed into std.fmt or std.types.string.
 
 pub fun print(s: str) Result[usize, stream.Error] {
-    ret fmt.write_str(stdio.stdout(), s);
+    ret fmt.write_str[fd.FdWriter](stdio.stdout(), s);
 }
 
 pub fun println(s: str) Result[usize, stream.Error] {
-    val w = stdio.stdout();
+    val w: fd.FdWriter = stdio.stdout();
 
-    val r1: Result[usize, stream.Error] = fmt.write_str(w, s);
+    val r1: Result[usize, stream.Error] = fmt.write_str[fd.FdWriter](w, s);
     if (r1.is_err()) { ret r1; }
 
-    val r2: Result[usize, stream.Error] = fmt.write_newline(w);
+    val r2: Result[usize, stream.Error] = fmt.write_newline[fd.FdWriter](w);
     if (r2.is_err()) { ret r2; }
 
     ret ok[usize, stream.Error](r1.unwrap_ok() + r2.unwrap_ok());
 }
 
 pub fun eprint(s: str) Result[usize, stream.Error] {
-    ret fmt.write_str(stdio.stderr(), s);
+    ret fmt.write_str[fd.FdWriter](stdio.stderr(), s);
 }
 
 pub fun eprintln(s: str) Result[usize, stream.Error] {
-    val w = stdio.stderr();
+    val w: fd.FdWriter = stdio.stderr();
 
-    val r1: Result[usize, stream.Error] = fmt.write_str(w, s);
+    val r1: Result[usize, stream.Error] = fmt.write_str[fd.FdWriter](w, s);
     if (r1.is_err()) { ret r1; }
 
-    val r2: Result[usize, stream.Error] = fmt.write_newline(w);
+    val r2: Result[usize, stream.Error] = fmt.write_newline[fd.FdWriter](w);
     if (r2.is_err()) { ret r2; }
 
     ret ok[usize, stream.Error](r1.unwrap_ok() + r2.unwrap_ok());
 }
 
 pub fun u64(n: u64) Result[usize, stream.Error] {
-    ret fmt.write_u64(stdio.stdout(), n);
+    ret fmt.write_u64[fd.FdWriter](stdio.stdout(), n);
 }
 
 pub fun eu64(n: u64) Result[usize, stream.Error] {
-    ret fmt.write_u64(stdio.stderr(), n);
+    ret fmt.write_u64[fd.FdWriter](stdio.stderr(), n);
 }
