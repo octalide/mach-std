@@ -1,6 +1,8 @@
 use std.types.size;
 use std.types.result;
 
+use fs: std.filesystem;
+
 # std.stream: generic reader/writer interfaces and small helpers.
 #
 # convention:
@@ -13,7 +15,58 @@ pub def Error: i64;
 pub val ERR_EOF:         Error = -4096;
 pub val ERR_SHORT_WRITE: Error = -4097;
 
-pub fun write_all[W](w: W, buf: &u8, len: usize) Result[usize, Error] {
+pub rec Writer {
+    fd: i32;
+}
+
+pub rec Reader {
+    fd: i32;
+}
+
+pub fun writer(fd: i32) Writer { ret Writer{fd: fd}; }
+pub fun reader(fd: i32) Reader { ret Reader{fd: fd}; }
+
+pub fun (this: Writer) write(buf: &u8, len: usize) Result[usize, Error] {
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    for {
+        val raw: i64 = fs.write(this.fd, buf, len);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            ret err[usize, Error](raw);
+        }
+        ret ok[usize, Error](raw::usize);
+    }
+
+    ret err[usize, Error](-1);
+}
+
+pub fun (this: Reader) read(buf: *u8, len: usize) Result[usize, Error] {
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    for {
+        val raw: i64 = fs.read(this.fd, buf, len);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            ret err[usize, Error](raw);
+        }
+        ret ok[usize, Error](raw::usize);
+    }
+
+    ret err[usize, Error](-1);
+}
+
+pub fun write_all(w: Writer, buf: &u8, len: usize) Result[usize, Error] {
     if (len == 0) { ret ok[usize, Error](0); }
 
     var total: usize = 0;
@@ -31,7 +84,7 @@ pub fun write_all[W](w: W, buf: &u8, len: usize) Result[usize, Error] {
     ret ok[usize, Error](total);
 }
 
-pub fun read_exact[R](r: R, buf: *u8, len: usize) Result[usize, Error] {
+pub fun read_exact(r: Reader, buf: *u8, len: usize) Result[usize, Error] {
     if (len == 0) { ret ok[usize, Error](0); }
 
     var total: usize = 0;
