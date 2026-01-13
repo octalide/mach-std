@@ -1,0 +1,142 @@
+use std.types.bool;
+use std.types.size;
+use std.types.result;
+use std.types.string;
+
+use std.allocator;
+
+# minimal generic vector: resizable array backed by allocator
+pub rec Vector[T] {
+    alloc: Allocator;
+    data: *T;
+    len: usize;
+    cap: usize;
+}
+
+# initialize an empty vector with allocator
+pub fun init[T](alloc: Allocator) Vector[T] {
+    var v: Vector[T];
+    v.alloc = alloc;
+    v.data = nil;
+    v.len = 0;
+    v.cap = 0;
+    ret v;
+}
+
+# free the backing buffer; return true on success
+pub fun (this: *Vector[T]) deinit() bool {
+    if (this == nil) { ret true; }
+    if (this.cap == 0) {
+        this.data = nil;
+        this.len = 0;
+        ret true;
+    }
+
+    val ok_free: bool = this.alloc.free[T](this.data, this.cap);
+    if (ok_free) {
+        this.data = nil;
+        this.len = 0;
+        this.cap = 0;
+    }
+
+    ret ok_free;
+}
+
+# check if empty
+pub fun (this: Vector[T]) is_empty() bool {
+    ret this.len == 0;
+}
+
+# current number of elements
+pub fun (this: Vector[T]) length() usize {
+    ret this.len;
+}
+
+# current capacity in elements
+pub fun (this: Vector[T]) capacity() usize {
+    ret this.cap;
+}
+
+# clear contents but keep capacity
+pub fun (this: *Vector[T]) clear() {
+    if (this == nil) { ret; }
+    this.len = 0;
+}
+
+# ensure there is room for additional elements
+pub fun (this: *Vector[T]) reserve(additional: usize) Result[usize, str] {
+    if (this == nil) { ret err[usize, str]("vector is nil"); }
+
+    val required: usize = this.len + additional;
+    if (required < this.len) { # overflow
+        ret err[usize, str]("capacity overflow");
+    }
+
+    if (this.cap >= required) {
+        ret ok[usize, str](this.cap);
+    }
+
+    var new_cap: usize;
+    if (this.cap == 0) {
+        new_cap = 8;
+    } or {
+        new_cap = this.cap * 2;
+    }
+
+    for (new_cap < required) {
+        val prev: usize = new_cap;
+        new_cap = new_cap * 2;
+        if (new_cap < prev) {
+            new_cap = required;
+            brk;
+        }
+    }
+
+    val r: Result[*T, AllocError] = this.alloc.resize[T](this.data, this.cap, new_cap);
+    if (!r.tag) {
+        ret err[usize, str](r.value.err);
+    }
+
+    this.data = r.value.ok;
+    this.cap = new_cap;
+
+    ret ok[usize, str](this.cap);
+}
+
+# append value and return new length
+pub fun (this: *Vector[T]) push(value: T) Result[usize, str] {
+    val r: Result[usize, str] = this.reserve(1);
+    if (!r.tag) {
+        ret err[usize, str](r.value.err);
+    }
+
+    this.data[this.len] = value;
+    this.len = this.len + 1;
+    ret ok[usize, str](this.len);
+}
+
+# pop last element; error on empty
+pub fun (this: *Vector[T]) pop() Result[T, str] {
+    if (this.len == 0) {
+        ret err[T, str]("pop from empty vector");
+    }
+
+    this.len = this.len - 1;
+    ret ok[T, str](this.data[this.len]);
+}
+
+# mutable pointer to element
+pub fun (this: *Vector[T]) get(index: usize) Result[*T, str] {
+    if (index >= this.len) {
+        ret err[*T, str]("index out of bounds");
+    }
+    ret ok[*T, str](?this.data[index]);
+}
+
+# read-only reference to element
+pub fun (this: Vector[T]) get_ref(index: usize) Result[&T, str] {
+    if (index >= this.len) {
+        ret err[&T, str]("index out of bounds");
+    }
+    ret ok[&T, str](?this.data[index]);
+}

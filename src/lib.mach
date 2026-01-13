@@ -7,6 +7,7 @@ use std.types.path;
 
 use std.collections.slice;
 use std.collections.view;
+use std.collections.vector;
 
 use std.allocator;
 use std.allocator.arena;
@@ -16,6 +17,7 @@ use std.filesystem;
 
 use std.fmt;
 use std.print;
+use std.text.builder;
 
 use std.runtime;
 
