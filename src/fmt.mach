@@ -1,3 +1,4 @@
+use std.types.bool;
 use std.types.size;
 use std.types.result;
 use std.types.string;
@@ -9,25 +10,25 @@ use stream: std.stream;
 #
 # for now this focuses on writing to a stream.Writer without allocations.
 
-pub fun write_bytes(w: *stream.Writer, buf: &u8, len: usize) Result[usize, stream.Error] {
+pub fun write_bytes(w: *stream.Writer, buf: &u8, len: usize) Result[usize, str] {
     ret stream.write_all(w, buf, len);
 }
 
-pub fun write_str(w: *stream.Writer, s: str) Result[usize, stream.Error] {
-    if (s == nil) { ret ok[usize, stream.Error](0); }
+pub fun write_str(w: *stream.Writer, s: str) Result[usize, str] {
+    if (s == nil) { ret ok[usize, str](0); }
     ret stream.write_all(w, s, s.len());
 }
 
-pub fun write_byte(w: *stream.Writer, b: u8) Result[usize, stream.Error] {
+pub fun write_byte(w: *stream.Writer, b: u8) Result[usize, str] {
     val x: u8 = b;
     ret stream.write_all(w, ?x, 1);
 }
 
-pub fun write_newline(w: *stream.Writer) Result[usize, stream.Error] {
+pub fun write_newline(w: *stream.Writer) Result[usize, str] {
     ret write_byte(w, 10);
 }
 
-pub fun write_u64(w: *stream.Writer, n: u64) Result[usize, stream.Error] {
+pub fun write_u64(w: *stream.Writer, n: u64) Result[usize, str] {
     var buf: [32]u8;
     var idx: usize = 32;
     var x:   u64 = n;
@@ -49,4 +50,181 @@ pub fun write_u64(w: *stream.Writer, n: u64) Result[usize, stream.Error] {
 
     val start: *u8 = ?buf[idx];
     ret stream.write_all(w, start, len);
+}
+
+pub fun write_i64(w: *stream.Writer, n: i64) Result[usize, str] {
+    if (n >= 0) {
+        ret write_u64(w, n::u64);
+    }
+
+    # handle i64 min explicitly to avoid overflow in negation.
+    val I64_MIN: i64 = -9223372036854775808;
+    if (n == I64_MIN) {
+        ret write_str(w, "-9223372036854775808");
+    }
+
+    val r1: Result[usize, str] = write_byte(w, 45); # '-'
+    if (r1.is_err()) { ret r1; }
+
+    val pos: i64 = 0 - n;
+    val r2: Result[usize, str] = write_u64(w, pos::u64);
+    if (r2.is_err()) { ret r2; }
+
+    ret ok[usize, str](r1.unwrap_ok() + r2.unwrap_ok());
+}
+
+pub fun write_hex_u64(w: *stream.Writer, n: u64, upper: bool) Result[usize, str] {
+    var buf: [16]u8;
+    var idx: usize = 16;
+    var x:   u64 = n;
+    var len: usize = 0;
+
+    var a: u8 = 97; # 'a'
+    if (upper) { a = 65; } # 'A'
+
+    if (x == 0) {
+        idx = idx - 1;
+        buf[idx] = 48; # '0'
+        len = 1;
+    } or {
+        for (x > 0) {
+            val digit: u8 = int.trunc_u64_to_u8(x & 15);
+            x = x >> 4;
+
+            idx = idx - 1;
+            if (digit < 10) {
+                buf[idx] = digit + 48;
+            } or {
+                buf[idx] = (digit - 10) + a;
+            }
+            len = len + 1;
+        }
+    }
+
+    val start: *u8 = ?buf[idx];
+    ret stream.write_all(w, start, len);
+}
+
+pub fun write_ptr(w: *stream.Writer, p: ptr) Result[usize, str] {
+    val r1: Result[usize, str] = write_str(w, "0x");
+    if (r1.is_err()) { ret r1; }
+
+    val r2: Result[usize, str] = write_hex_u64(w, p::usize::u64, false);
+    if (r2.is_err()) { ret r2; }
+
+    ret ok[usize, str](r1.unwrap_ok() + r2.unwrap_ok());
+}
+
+pub val ERR_BAD_FORMAT: str = "bad format";
+
+pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize, str] {
+    if (w == nil || ap == nil) {
+        ret err[usize, str](ERR_BAD_FORMAT);
+    }
+
+    var total: usize = 0;
+    var i: usize = 0;
+
+    for (format[i] != 0) {
+        val b: u8 = format[i];
+        if (b != 37) { # '%'
+            val r: Result[usize, str] = write_byte(w, b);
+            if (r.is_err()) { ret r; }
+            total = total + r.unwrap_ok();
+            i = i + 1;
+            cnt;
+        }
+
+        # format directive
+        i = i + 1;
+        val c: u8 = format[i];
+        if (c == 0) {
+            ret err[usize, str](ERR_BAD_FORMAT);
+        }
+
+        if (c == 37) { # '%%'
+            val r: Result[usize, str] = write_byte(w, 37);
+            if (r.is_err()) { ret r; }
+            total = total + r.unwrap_ok();
+            i = i + 1;
+            cnt;
+        }
+
+        if (c == 115) { # %s
+            val arg: str = va_arg[str](ap);
+            val r: Result[usize, str] = write_str(w, arg);
+            if (r.is_err()) { ret r; }
+            total = total + r.unwrap_ok();
+            i = i + 1;
+            cnt;
+        }
+
+        if (c == 100) { # %d
+            val arg: i64 = va_arg[i64](ap);
+            val r: Result[usize, str] = write_i64(w, arg);
+            if (r.is_err()) { ret r; }
+            total = total + r.unwrap_ok();
+            i = i + 1;
+            cnt;
+        }
+
+        if (c == 117) { # %u
+            val arg: u64 = va_arg[u64](ap);
+            val r: Result[usize, str] = write_u64(w, arg);
+            if (r.is_err()) { ret r; }
+            total = total + r.unwrap_ok();
+            i = i + 1;
+            cnt;
+        }
+
+        if (c == 120) { # %x
+            val arg: u64 = va_arg[u64](ap);
+            val r: Result[usize, str] = write_hex_u64(w, arg, false);
+            if (r.is_err()) { ret r; }
+            total = total + r.unwrap_ok();
+            i = i + 1;
+            cnt;
+        }
+
+        if (c == 88) { # %X
+            val arg: u64 = va_arg[u64](ap);
+            val r: Result[usize, str] = write_hex_u64(w, arg, true);
+            if (r.is_err()) { ret r; }
+            total = total + r.unwrap_ok();
+            i = i + 1;
+            cnt;
+        }
+
+        if (c == 99) { # %c
+            val arg: u8 = va_arg[u8](ap);
+            val r: Result[usize, str] = write_byte(w, arg);
+            if (r.is_err()) { ret r; }
+            total = total + r.unwrap_ok();
+            i = i + 1;
+            cnt;
+        }
+
+        if (c == 112) { # %p
+            val arg: ptr = va_arg[ptr](ap);
+            val r: Result[usize, str] = write_ptr(w, arg);
+            if (r.is_err()) { ret r; }
+            total = total + r.unwrap_ok();
+            i = i + 1;
+            cnt;
+        }
+
+        ret err[usize, str](ERR_BAD_FORMAT);
+    }
+
+    ret ok[usize, str](total);
+}
+
+pub fun format(w: *stream.Writer, format: str, ...) Result[usize, str] {
+    var ap: va_list;
+    va_start(?ap);
+
+    val r: Result[usize, str] = vformat(w, format, ?ap);
+
+    va_end(?ap);
+    ret r;
 }

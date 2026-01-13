@@ -1,0 +1,464 @@
+use std.types.bool;
+use std.types.result;
+use std.types.size;
+use std.types.string;
+
+use std.allocator;
+use int: std.types.int;
+use mem: std.memory;
+
+# std.data.toml: a small toml parser.
+#
+# stage1 goals:
+# - no libc
+# - parse enough toml to load mach.toml-like configs
+# - keep data model simple (linear entries) to avoid needing maps yet
+
+
+pub rec Array {
+    # points to a Value array allocated by the parser.
+    # kept as ptr to avoid recursive type resolution issues.
+    items: ptr;
+    len:   usize;
+}
+
+pub uni Value {
+    string: str;
+    integer: i64;
+    boolean: bool;
+    array: Array;
+}
+
+pub rec Entry {
+    key:   str;
+    value: Value;
+}
+
+pub rec Document {
+    entries: *Entry;
+    len:     usize;
+}
+
+fun is_space(b: u8) bool {
+    ret b == 32 || b == 9 || b == 10 || b == 13;
+}
+
+fun is_ident(b: u8) bool {
+    # toml bare keys: allow a-zA-Z0-9_- and '.' (for dotted keys)
+    ret (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || (b >= 48 && b <= 57) || b == 95 || b == 45 || b == 46;
+}
+
+fun skip_ws_and_comments(src: str, i: *usize) {
+    if (i == nil) { ret; }
+
+    for {
+        # skip whitespace
+        for (is_space(src[@i])) {
+            @i = @i + 1;
+        }
+
+        # comment to end of line
+        if (src[@i] == 35) {
+            for (src[@i] != 0 && src[@i] != 10) {
+                @i = @i + 1;
+            }
+            cnt;
+        }
+
+        brk;
+    }
+}
+
+fun alloc_copy(a: *Allocator, src: str, start: usize, len: usize) Result[str, str] {
+    if (a == nil) {
+        ret err[str, str]("allocator is nil");
+    }
+
+    val r: Result[*u8, AllocError] = a.alloc[u8](len + 1);
+    if (!r.tag) {
+        ret err[str, str](r.value.err);
+    }
+
+    val buf: *u8 = r.value.ok;
+    mem.raw_copy(buf::ptr, (src::usize + start)::ptr, len);
+    buf[len] = 0;
+    ret ok[str, str](buf::&u8);
+}
+
+fun concat_key(a: *Allocator, prefix: str, key: str) Result[str, str] {
+    if (prefix == nil || prefix[0] == 0) {
+        ret alloc_copy(a, key, 0, key.len());
+    }
+
+    val p_len: usize = prefix.len();
+    val k_len: usize = key.len();
+
+    # prefix + '.' + key
+    val out_len: usize = p_len + 1 + k_len;
+    val r: Result[*u8, AllocError] = a.alloc[u8](out_len + 1);
+    if (!r.tag) {
+        ret err[str, str](r.value.err);
+    }
+
+    val buf: *u8 = r.value.ok;
+    mem.raw_copy(buf::ptr, prefix::ptr, p_len);
+    buf[p_len] = 46;
+    mem.raw_copy((buf::usize + p_len + 1)::ptr, key::ptr, k_len);
+    buf[out_len] = 0;
+    ret ok[str, str](buf::&u8);
+}
+
+fun push_entry(a: *Allocator, entries: *Entry, cap: *usize, len: *usize, e: Entry) Result[*Entry, str] {
+    if (a == nil || cap == nil || len == nil) {
+        ret err[*Entry, str]("internal error");
+    }
+
+    var out: *Entry = entries;
+
+    if (@cap == 0) {
+        @cap = 16;
+        val r: Result[*Entry, AllocError] = a.alloc[Entry](@cap);
+        if (!r.tag) {
+            ret err[*Entry, str](r.value.err);
+        }
+        out = r.value.ok;
+    } or (out == nil) {
+        ret err[*Entry, str]("internal error");
+    }
+
+    if (@len >= @cap) {
+        val old: usize = @cap;
+        val new_cap: usize = old * 2;
+        val r2: Result[*Entry, AllocError] = a.resize[Entry](out, old, new_cap);
+        if (!r2.tag) {
+            ret err[*Entry, str](r2.value.err);
+        }
+        out = r2.value.ok;
+        @cap = new_cap;
+    }
+
+    out[@len] = e;
+    @len = @len + 1;
+    ret ok[*Entry, str](out);
+}
+
+fun parse_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
+    # expects opening '"' at src[@i]
+    if (a == nil || i == nil) {
+        ret err[str, str]("internal error");
+    }
+
+    if (src[@i] != 34) {
+        ret err[str, str]("expected string");
+    }
+    @i = @i + 1;
+
+    val start: usize = @i;
+
+    # pass 1: compute output length (handle basic escapes)
+    var out_len: usize = 0;
+    for {
+        val b: u8 = src[@i];
+        if (b == 0) { ret err[str, str]("unterminated string"); }
+        if (b == 34) { brk; }
+
+        if (b == 92) {
+            # backslash escape
+            @i = @i + 1;
+            val e: u8 = src[@i];
+            if (e == 0) { ret err[str, str]("unterminated escape"); }
+            out_len = out_len + 1;
+            @i = @i + 1;
+            cnt;
+        }
+
+        out_len = out_len + 1;
+        @i = @i + 1;
+    }
+
+    # allocate
+    val r: Result[*u8, AllocError] = a.alloc[u8](out_len + 1);
+    if (!r.tag) {
+        ret err[str, str](r.value.err);
+    }
+
+    val buf: *u8 = r.value.ok;
+
+    # pass 2: copy/translate
+    var si: usize = start;
+    var di: usize = 0;
+    for {
+        val b: u8 = src[si];
+        if (b == 34) { brk; }
+
+        if (b == 92) {
+            si = si + 1;
+            val e: u8 = src[si];
+            if (e == 110) { buf[di] = 10; }
+            or (e == 116) { buf[di] = 9; }
+            or (e == 114) { buf[di] = 13; }
+            or (e == 34) { buf[di] = 34; }
+            or (e == 92) { buf[di] = 92; }
+            or { buf[di] = e; }
+
+            di = di + 1;
+            si = si + 1;
+            cnt;
+        }
+
+        buf[di] = b;
+        di = di + 1;
+        si = si + 1;
+    }
+
+    buf[out_len] = 0;
+
+    # consume closing quote
+    @i = @i + 1;
+
+    ret ok[str, str](buf::&u8);
+}
+
+fun parse_int(src: str, i: *usize) Result[i64, str] {
+    if (i == nil) {
+        ret err[i64, str]("internal error");
+    }
+
+    var sign: i64 = 1;
+    if (src[@i] == 45) {
+        sign = -1;
+        @i = @i + 1;
+    }
+
+    var x: i64 = 0;
+    var any: bool = false;
+    for {
+        val b: u8 = src[@i];
+        if (b == 95) { # underscore separator
+            @i = @i + 1;
+            cnt;
+        }
+
+        if (b < 48 || b > 57) {
+            brk;
+        }
+
+        any = true;
+        val d: i64 = int.zext_u8_to_u64(b - 48)::i64;
+        x = (x * 10) + d;
+        @i = @i + 1;
+    }
+
+    if (!any) {
+        ret err[i64, str]("expected integer");
+    }
+
+    ret ok[i64, str](x * sign);
+}
+
+fun parse_bool(src: str, i: *usize) Result[bool, str] {
+    if (i == nil) {
+        ret err[bool, str]("internal error");
+    }
+
+    # true
+    if (src[@i] == 116 && src[@i + 1] == 114 && src[@i + 2] == 117 && src[@i + 3] == 101) {
+        @i = @i + 4;
+        ret ok[bool, str](true);
+    }
+
+    # false
+    if (src[@i] == 102 && src[@i + 1] == 97 && src[@i + 2] == 108 && src[@i + 3] == 115 && src[@i + 4] == 101) {
+        @i = @i + 5;
+        ret ok[bool, str](false);
+    }
+
+    ret err[bool, str]("expected bool");
+}
+
+fun parse_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
+    if (a == nil || i == nil) {
+        ret err[Value, str]("internal error");
+    }
+
+    skip_ws_and_comments(src, i);
+
+    val b: u8 = src[@i];
+    if (b == 34) {
+        val r: Result[str, str] = parse_string(a, src, i);
+        if (!r.tag) { ret err[Value, str](r.value.err); }
+        ret ok[Value, str](Value{string: r.value.ok});
+    }
+
+    if (b == 45 || (b >= 48 && b <= 57)) {
+        val r: Result[i64, str] = parse_int(src, i);
+        if (!r.tag) { ret err[Value, str](r.value.err); }
+        ret ok[Value, str](Value{integer: r.value.ok});
+    }
+
+    if (b == 116 || b == 102) {
+        val r: Result[bool, str] = parse_bool(src, i);
+        if (!r.tag) { ret err[Value, str](r.value.err); }
+        ret ok[Value, str](Value{boolean: r.value.ok});
+    }
+
+    if (b == 91) {
+        # array
+        @i = @i + 1;
+        skip_ws_and_comments(src, i);
+
+        var items: *Value = nil;
+        var cap: usize = 0;
+        var len: usize = 0;
+
+        for {
+            skip_ws_and_comments(src, i);
+            if (src[@i] == 93) { # ']'
+                @i = @i + 1;
+                brk;
+            }
+
+            val vr: Result[Value, str] = parse_value(a, src, i);
+            if (!vr.tag) {
+                ret err[Value, str](vr.value.err);
+            }
+
+            if (cap == 0) {
+                cap = 8;
+                val r0: Result[*Value, AllocError] = a.alloc[Value](cap);
+                if (!r0.tag) { ret err[Value, str](r0.value.err); }
+                items = r0.value.ok;
+            } or (len >= cap) {
+                val old: usize = cap;
+                val new_cap: usize = cap * 2;
+                val r1: Result[*Value, AllocError] = a.resize[Value](items, old, new_cap);
+                if (!r1.tag) { ret err[Value, str](r1.value.err); }
+                items = r1.value.ok;
+                cap = new_cap;
+            }
+
+            items[len] = vr.value.ok;
+            len = len + 1;
+
+            skip_ws_and_comments(src, i);
+            if (src[@i] == 44) { # ','
+                @i = @i + 1;
+                cnt;
+            }
+
+            # must end with ']'
+            skip_ws_and_comments(src, i);
+            if (src[@i] == 93) {
+                @i = @i + 1;
+                brk;
+            }
+
+            ret err[Value, str]("expected ',' or ']'");
+        }
+
+        ret ok[Value, str](Value{array: Array{items: items::ptr, len: len}});
+    }
+
+    ret err[Value, str]("unsupported value");
+}
+
+pub fun parse(a: *Allocator, src: str) Result[Document, str] {
+    if (a == nil) {
+        ret err[Document, str]("allocator is nil");
+    }
+
+    var entries: *Entry = nil;
+    var cap: usize = 0;
+    var len: usize = 0;
+
+    var prefix: str = nil;
+
+    var i: usize = 0;
+    for {
+        skip_ws_and_comments(src, ?i);
+
+        if (src[i] == 0) {
+            brk;
+        }
+
+        # table header
+        if (src[i] == 91) { # '['
+            i = i + 1;
+            skip_ws_and_comments(src, ?i);
+
+            val start: usize = i;
+            for (src[i] != 0 && src[i] != 93) {
+                i = i + 1;
+            }
+            if (src[i] != 93) {
+                ret err[Document, str]("unterminated table header");
+            }
+
+            # trim trailing space
+            var end: usize = i;
+            for (end > start && is_space(src[end - 1])) {
+                end = end - 1;
+            }
+
+            val r: Result[str, str] = alloc_copy(a, src, start, end - start);
+            if (!r.tag) {
+                ret err[Document, str](r.value.err);
+            }
+
+            prefix = r.value.ok;
+
+            # consume ']'
+            i = i + 1;
+            cnt;
+        }
+
+        # key
+        val key_start: usize = i;
+        for (is_ident(src[i])) {
+            i = i + 1;
+        }
+        if (i == key_start) {
+            ret err[Document, str]("expected key");
+        }
+
+        # trim key trailing spaces (shouldn't happen for is_ident loop)
+        val key_r: Result[str, str] = alloc_copy(a, src, key_start, i - key_start);
+        if (!key_r.tag) {
+            ret err[Document, str](key_r.value.err);
+        }
+
+        skip_ws_and_comments(src, ?i);
+        if (src[i] != 61) { # '='
+            ret err[Document, str]("expected '='");
+        }
+        i = i + 1;
+
+        val vr: Result[Value, str] = parse_value(a, src, ?i);
+        if (!vr.tag) {
+            ret err[Document, str](vr.value.err);
+        }
+
+        val full_key_r: Result[str, str] = concat_key(a, prefix, key_r.value.ok);
+        if (!full_key_r.tag) {
+            ret err[Document, str](full_key_r.value.err);
+        }
+
+        val pr: Result[*Entry, str] = push_entry(a, entries, ?cap, ?len, Entry{key: full_key_r.value.ok, value: vr.value.ok});
+        if (!pr.tag) {
+            ret err[Document, str](pr.value.err);
+        }
+
+        entries = pr.value.ok;
+
+        # consume rest of line
+        for (src[i] != 0 && src[i] != 10) {
+            i = i + 1;
+        }
+
+        if (src[i] == 10) {
+            i = i + 1;
+        }
+    }
+
+    ret ok[Document, str](Document{entries: entries, len: len});
+}
