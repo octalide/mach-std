@@ -3,18 +3,23 @@ use std.types.size;
 use std.types.result;
 use std.types.string;
 
-use std.allocator;
+use std.allocator; 
 use mem: std.memory;
 
-# string builder: grows buffer and keeps nul terminator space
+# Mutable string builder that maintains a NUL-terminated buffer
+# ---
+# Keeps an extra byte for the trailing NUL; `cap` includes the NUL.
 pub rec Builder {
     alloc: Allocator;
     buf: *u8;
     len: usize;
     cap: usize; # includes space for nul terminator
-}
+} 
 
-# initialize builder with allocator
+# Create a `Builder` using the provided allocator
+# ---
+# alloc: Allocator to use for allocations
+# ret: A new empty Builder
 pub fun init(alloc: Allocator) Builder {
     var b: Builder;
     b.alloc = alloc;
@@ -24,7 +29,9 @@ pub fun init(alloc: Allocator) Builder {
     ret b;
 }
 
-# free buffer; return true on success
+# Free the builder's buffer and reset fields
+# ---
+# ret: true if memory was freed successfully, false otherwise
 pub fun (this: *Builder) deinit() bool {
     if (this == nil) { ret true; }
     if (this.cap == 0) {
@@ -43,25 +50,34 @@ pub fun (this: *Builder) deinit() bool {
     ret ok_free;
 }
 
-# current length (excludes nul)
+# Return the current length of the builder (excludes NUL)
+# ---
+# ret: Length in bytes (usize)
 pub fun (this: Builder) length() usize {
     ret this.len;
 }
 
-# current capacity (excludes nul)
+# Return the usable capacity of the builder (excludes NUL)
+# ---
+# ret: Capacity in bytes (usize)
 pub fun (this: Builder) capacity() usize {
     if (this.cap == 0) { ret 0; }
     ret this.cap - 1;
 }
 
-# clear contents and ensure nul if allocated
+# Clear the builder contents and ensure a NUL terminator if allocated
+# ---
+# ret: None
 pub fun (this: *Builder) clear() {
     if (this == nil) { ret; }
     this.len = 0;
     if (this.cap != 0) { this.buf[0] = 0; }
 }
 
-# ensure capacity for additional bytes (plus nul); return new capacity (excl nul)
+# Ensure capacity for additional bytes (including space for NUL)
+# ---
+# additional: Number of bytes to reserve
+# ret: Ok(new capacity excluding NUL) or Err(error message)
 pub fun (this: *Builder) reserve(additional: usize) Result[usize, str] {
     if (this == nil) { ret err[usize, str]("builder is nil"); }
 
@@ -101,7 +117,10 @@ pub fun (this: *Builder) reserve(additional: usize) Result[usize, str] {
     ret ok[usize, str](this.cap - 1);
 }
 
-# append one byte
+# Append a single byte to the builder
+# ---
+# b: Byte to append
+# ret: Ok(new length) or Err(error message)
 pub fun (this: *Builder) append_byte(b: u8) Result[usize, str] {
     val r: Result[usize, str] = this.reserve(1);
     if (!r.tag) { ret err[usize, str](r.value.err); }
@@ -112,7 +131,11 @@ pub fun (this: *Builder) append_byte(b: u8) Result[usize, str] {
     ret ok[usize, str](this.len);
 }
 
-# append raw bytes from pointer
+# Append raw bytes from a pointer into the builder
+# ---
+# p: Source pointer to bytes
+# n: Number of bytes to append
+# ret: Ok(new length) or Err(error message)
 pub fun (this: *Builder) append_bytes(p: &u8, n: usize) Result[usize, str] {
     if (n == 0) { ret ok[usize, str](this.len); }
 
@@ -125,12 +148,17 @@ pub fun (this: *Builder) append_bytes(p: &u8, n: usize) Result[usize, str] {
     ret ok[usize, str](this.len);
 }
 
-# append a nul-terminated string
+# Append a NUL-terminated string (without its trailing NUL)
+# ---
+# s: Source string to append
+# ret: Ok(new length) or Err(error message)
 pub fun (this: *Builder) append_str(s: str) Result[usize, str] {
     ret this.append_bytes(s, s.len());
 }
 
-# return c-string (ensure nul); if no allocation and empty return empty string (not nil)
+# Return a NUL-terminated C string backed by the builder
+# ---
+# ret: Ok(c-string) or Err(error message). If unallocated and empty returns Ok("").
 pub fun (this: *Builder) c_str() Result[str, str] {
     if (this.cap == 0) {
         if (this.len == 0) { ret ok[str, str](""); }
@@ -139,4 +167,4 @@ pub fun (this: *Builder) c_str() Result[str, str] {
 
     this.buf[this.len] = 0;
     ret ok[str, str](this.buf::&u8);
-}
+} 

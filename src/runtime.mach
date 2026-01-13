@@ -1,5 +1,5 @@
 # program entrypoint contract
-#
+# ---
 # in your entry module:
 #   use std.runtime;
 #   $main.symbol = "main";

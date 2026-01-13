@@ -362,6 +362,11 @@ fun parse_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
     ret err[Value, str]("unsupported value");
 }
 
+# parse: parse TOML `src` using allocator `a` and return a `Document`.
+# ---
+# The parser uses `a` for all allocations and returns `Err(str)` on parse errors.
+# Table headers produce dotted-prefixed keys (e.g. `table.key`).
+# The result `Document` contains an allocator-owned array of `Entry` elements.
 pub fun parse(a: *Allocator, src: str) Result[Document, str] {
     if (a == nil) {
         ret err[Document, str]("allocator is nil");

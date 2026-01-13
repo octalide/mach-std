@@ -1,11 +1,11 @@
 use std.types.bool;
 use std.types.size;
 
-## Fill a block of raw memory with a specified byte value.
-## ---
-## p:     Pointer to the start of the memory block.
-## value: Byte value to fill the memory with.
-## size:  Number of bytes to fill.
+# Fill a block of raw memory with a byte value.
+# ---
+# p: Pointer to the start of the memory block.
+# value: Byte value to fill the memory with.
+# size: Number of bytes to fill.
 pub fun raw_fill(p: ptr, value: u8, size: usize) {
     if (p == nil || size == 0) {
         ret;
@@ -20,11 +20,11 @@ pub fun raw_fill(p: ptr, value: u8, size: usize) {
     }
 }
 
-## Copy a block of raw memory from source to destination.
-## ---
-## dst:  Pointer to the destination memory block.
-## src:  Pointer to the source memory block.
-## size: Number of bytes to copy.
+# Copy a block of raw memory from source to destination.
+# ---
+# dst: Pointer to the destination memory block.
+# src: Pointer to the source memory block.
+# size: Number of bytes to copy.
 pub fun raw_copy(dst: ptr, src: ptr, size: usize) {
     if (dst == nil || src == nil || size == 0) {
         ret;
@@ -40,20 +40,20 @@ pub fun raw_copy(dst: ptr, src: ptr, size: usize) {
     }
 }
 
-## Zero out a block of raw memory.
-## ---
-## p:    Pointer to the start of the memory block.
-## size: Number of bytes to zero out.
+# Zero out a block of raw memory.
+# ---
+# p: Pointer to the start of the memory block.
+# size: Number of bytes to zero out.
 pub fun raw_zero(p: ptr, size: usize) {
     raw_fill(p, 0, size);
 }
 
-## Fills a block of memory with a specified value.
-## ---
-## T:     The type of elements in the memory block.
-## p:     Pointer to the start of the memory block.
-## value: Value to fill the memory with.
-## count: Number of elements to fill.
+# Fill a block of memory with a value for type T.
+# ---
+# T: The type of elements in the memory block.
+# p: Pointer to the start of the memory block.
+# value: Value to fill the memory with.
+# count: Number of elements to fill.
 pub fun fill[T](p: *T, value: T, count: usize) {
     if (p == nil || count == 0) {
         ret;
@@ -66,12 +66,12 @@ pub fun fill[T](p: *T, value: T, count: usize) {
     }
 }
 
-## Copies a block of memory from a source to a destination.
-## ---
-## T:     The type of elements in the memory block.
-## dst:   Pointer to the destination memory block.
-## src:   Pointer to the source memory block.
-## count: Number of elements to copy.
+# Copy a block of memory from a source to a destination.
+# ---
+# T: The type of elements in the memory block.
+# dst: Pointer to the destination memory block.
+# src: Pointer to the source memory block.
+# count: Number of elements to copy.
 pub fun copy[T](dst: *T, src: &T, count: usize) {
     if (dst == nil || src == nil || count == 0) {
         ret;
@@ -84,11 +84,11 @@ pub fun copy[T](dst: *T, src: &T, count: usize) {
     }
 }
 
-## Zero out a block of memory for a specified number of elements of type T.
-## ---
-## T:     The type of elements in the memory block.
-## p:     Pointer to the start of the memory block.
-## count: Number of elements to zero out.
+# Zero out a block of memory for a number of elements of type T.
+# ---
+# T: The type of elements in the memory block.
+# p: Pointer to the start of the memory block.
+# count: Number of elements to zero out.
 pub fun zero[T](p: *T, count: usize) {
     raw_zero(p::ptr, $size_of(T) * count);
 }

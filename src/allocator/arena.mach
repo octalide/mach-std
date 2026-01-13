@@ -7,12 +7,20 @@ use a: std.allocator;
 use mem: std.memory;
 
 # std.allocator.arena: a simple bump allocator backed by another allocator.
-#
+# ---
 # properties:
 # - allocation is O(1)
 # - free is a no-op (optionally rolls back only the most recent allocation)
 # - resize is best-effort in-place for the most recent allocation; otherwise it alloc+copies
 
+# Arena: simple bump allocator state backed by another allocator.
+# ---
+# backing: allocator used for backing storage.
+# buf: backing buffer pointer.
+# cap: backing buffer capacity.
+# off: current allocation offset.
+# last_off: offset of most recent allocation for rollback/resize.
+# last_size: size of most recent allocation for rollback/resize.
 pub rec Arena {
     backing: a.Allocator;
 
@@ -37,6 +45,11 @@ fun min_usize(a: usize, b: usize) usize {
     ret b;
 }
 
+# Create and initialize an Arena with cap bytes using backing allocator.
+# ---
+# backing: allocator used to provide backing storage for the arena.
+# cap: if 0 produces an empty arena that does not allocate backing storage.
+# ret: Ok(Arena) or Err(AllocError) on failure to allocate backing buffer.
 pub fun init(backing: a.Allocator, cap: usize) Result[Arena, a.AllocError] {
     var ar: Arena;
     ar.backing   = backing;
@@ -60,6 +73,9 @@ pub fun init(backing: a.Allocator, cap: usize) Result[Arena, a.AllocError] {
     ret ok[Arena, a.AllocError](ar);
 }
 
+# Free any backing storage associated with the arena.
+# ---
+# ret: true if the backing allocator reports success; no-op for nil or empty arenas.
 pub fun (this: *Arena) deinit() bool {
     if (this == nil) { ret true; }
     if (this.buf == nil || this.cap == 0) { ret true; }
@@ -73,6 +89,7 @@ pub fun (this: *Arena) deinit() bool {
     ret ok_free;
 }
 
+# Reset the arena to an empty state without freeing backing storage; existing allocations become invalid.
 pub fun (this: *Arena) reset() {
     if (this == nil) { ret; }
     this.off = 0;
@@ -151,6 +168,9 @@ fun arena_free(ctx: ptr, p: ptr, size: usize, align: usize) bool {
     ret true;
 }
 
+# Return an a.Allocator view that delegates to this arena.
+# ---
+# ret: Allocator view that delegates to this arena.
 pub fun (this: *Arena) allocator() a.Allocator {
     var al: a.Allocator;
     al.ctx = this::ptr;

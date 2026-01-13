@@ -7,27 +7,52 @@ use int: std.types.int;
 use stream: std.stream;
 
 # std.fmt: minimal formatting primitives.
-#
-# for now this focuses on writing to a stream.Writer without allocations.
+# ---
+# For now this focuses on writing to a stream.Writer without allocations.
 
+# write_bytes: write `len` bytes from `buf` to `w`.
+# ---
+# w: writer to write to.
+# buf: buffer to read bytes from.
+# len: number of bytes to write.
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun write_bytes(w: *stream.Writer, buf: &u8, len: usize) Result[usize, str] {
     ret stream.write_all(w, buf, len);
 }
 
+# write_str: write a null-terminated string `s` to `w`.
+# ---
+# w: writer to write to.
+# s: null-terminated string (nil treated as empty).
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun write_str(w: *stream.Writer, s: str) Result[usize, str] {
     if (s == nil) { ret ok[usize, str](0); }
     ret stream.write_all(w, s, s.len());
 }
 
+# write_byte: write a single byte `b` to `w`.
+# ---
+# w: writer to write to.
+# b: byte to write.
+# ret: Ok(1) on success or Err(str) on error.
 pub fun write_byte(w: *stream.Writer, b: u8) Result[usize, str] {
     val x: u8 = b;
     ret stream.write_all(w, ?x, 1);
 }
 
+# write_newline: write a platform-neutral newline (LF).
+# ---
+# w: writer to write to.
+# ret: Ok(1) on success or Err(str) on error.
 pub fun write_newline(w: *stream.Writer) Result[usize, str] {
     ret write_byte(w, 10);
 }
 
+# write_u64: write an unsigned integer `n` in decimal to `w`.
+# ---
+# w: writer to write to.
+# n: unsigned integer to write in decimal.
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun write_u64(w: *stream.Writer, n: u64) Result[usize, str] {
     var buf: [32]u8;
     var idx: usize = 32;
@@ -52,6 +77,11 @@ pub fun write_u64(w: *stream.Writer, n: u64) Result[usize, str] {
     ret stream.write_all(w, start, len);
 }
 
+# write_i64: write a signed 64-bit integer n in decimal to w.
+# ---
+# w: writer to write to.
+# n: signed integer to write in decimal.
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun write_i64(w: *stream.Writer, n: i64) Result[usize, str] {
     if (n >= 0) {
         ret write_u64(w, n::u64);
@@ -73,6 +103,12 @@ pub fun write_i64(w: *stream.Writer, n: i64) Result[usize, str] {
     ret ok[usize, str](r1.unwrap_ok() + r2.unwrap_ok());
 }
 
+# write_hex_u64: write a 64-bit value in hexadecimal.
+# ---
+# w: writer to write to.
+# n: value to write in hexadecimal.
+# upper: true for uppercase hex digits, false for lowercase.
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun write_hex_u64(w: *stream.Writer, n: u64, upper: bool) Result[usize, str] {
     var buf: [16]u8;
     var idx: usize = 16;
@@ -105,6 +141,11 @@ pub fun write_hex_u64(w: *stream.Writer, n: u64, upper: bool) Result[usize, str]
     ret stream.write_all(w, start, len);
 }
 
+# write_ptr: write pointer value as 0x followed by hex digits.
+# ---
+# w: writer to write to.
+# p: pointer to format as hexadecimal.
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun write_ptr(w: *stream.Writer, p: ptr) Result[usize, str] {
     val r1: Result[usize, str] = write_str(w, "0x");
     if (r1.is_err()) { ret r1; }
@@ -115,8 +156,17 @@ pub fun write_ptr(w: *stream.Writer, p: ptr) Result[usize, str] {
     ret ok[usize, str](r1.unwrap_ok() + r2.unwrap_ok());
 }
 
+# ERR_BAD_FORMAT: returned when a format string is invalid.
+# ---
+# ret: sentinel error string indicating an invalid format string.
 pub val ERR_BAD_FORMAT: str = "bad format";
 
+# vformat: format arguments from `ap` according to `format` into `w`. Supports: `%%`, `%s` (string), `%d` (signed), `%u` (unsigned), `%x`/`%X` (hex), `%c` (char), `%p` (pointer).
+# ---
+# w: writer to write to.
+# format: null-terminated format string.
+# ap: pointer to `va_list` containing the arguments.
+# ret: Ok(total number of bytes written) on success; Err(ERR_BAD_FORMAT) for invalid format; or Err(str) on other errors.
 pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize, str] {
     if (w == nil || ap == nil) {
         ret err[usize, str](ERR_BAD_FORMAT);
@@ -219,6 +269,11 @@ pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize,
     ret ok[usize, str](total);
 }
 
+# format: convenience wrapper around vformat that manages va_list.
+# ---
+# w: writer to write to.
+# format: null-terminated format string.
+# ret: Ok(total) with number of bytes written or Err(ERR_BAD_FORMAT) for bad format or Err(str) on other errors.
 pub fun format(w: *stream.Writer, format: str, ...) Result[usize, str] {
     var ap: va_list;
     va_start(?ap);

@@ -3,7 +3,10 @@ use std.types.size;
 use std.types.option;
 use std.types.result;
 
+# A single byte representing a character in a null-terminated string.
 pub def char: u8;
+
+# A pointer to a null-terminated sequence of `char` (C-style string).
 pub def str:  &char;
 
 # Calculate the length of a null-terminated string
@@ -17,6 +20,9 @@ pub fun (this: str) len() usize {
     ret len;
 }
 
+# Return true if the string is empty
+# ---
+# ret: true if the string has zero length, false otherwise
 pub fun (this: str) empty() bool {
     ret this.len() == 0;
 }

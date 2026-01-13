@@ -1,6 +1,5 @@
-# std.system.platform.memory is a low-level, platform-selected interface for
-# raw byte allocation.
-#
+# std.system.platform.memory: low-level, platform-selected interface for raw byte allocation.
+# ---
 # it reflects platform conventions directly (nil on failure).
 
 use std.types.size;
@@ -13,6 +12,21 @@ $or {
     $error("std.system.platform.memory: unsupported target");
 }
 
+# Allocate size bytes using platform allocator.
+# ---
+# size: number of bytes to allocate
+# ret: pointer to allocated memory or nil on failure
 pub fun allocate(size: usize) ptr { ret impl.allocate(size); }
+# Deallocate memory previously allocated by allocate.
+# ---
+# p: pointer to memory to deallocate
+# size: size of the allocation
+# ret: true on success, false on failure
 pub fun deallocate(p: ptr, size: usize) bool { ret impl.deallocate(p, size); }
+# Reallocate a memory block to new size.
+# ---
+# p: pointer to existing block or nil
+# old_size: current size of p (0 if p is nil)
+# new_size: desired new size
+# ret: pointer to reallocated memory or nil on failure
 pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr { ret impl.reallocate(p, old_size, new_size); }

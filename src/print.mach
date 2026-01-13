@@ -7,14 +7,22 @@ use stream: std.stream;
 use stdio: std.system.stdio;
 
 # std.print: temporary glue for writing common formatted values to stdio.
-#
-# longer-term this may be absorbed into std.fmt or std.types.string.
+# ---
+# Convenience wrappers around std.fmt for writing formatted output to stdio.
 
+# print: write `s` to stdout.
+# ---
+# s: string to write (nil treated as empty).
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun print(s: str) Result[usize, str] {
     var w: stream.Writer = stdio.stdout();
     ret f.write_str(?w, s);
 }
 
+# println: write `s` followed by a newline to stdout.
+# ---
+# s: string to write (nil treated as empty).
+# ret: Ok(total number of bytes written) on success or Err(str) on error.
 pub fun println(s: str) Result[usize, str] {
     var w: stream.Writer = stdio.stdout();
 
@@ -27,11 +35,19 @@ pub fun println(s: str) Result[usize, str] {
     ret ok[usize, str](r1.unwrap_ok() + r2.unwrap_ok());
 }
 
+# eprint: write `s` to stderr.
+# ---
+# s: string to write (nil treated as empty).
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun eprint(s: str) Result[usize, str] {
     var w: stream.Writer = stdio.stderr();
     ret f.write_str(?w, s);
 }
 
+# eprintln: write `s` followed by a newline to stderr.
+# ---
+# s: string to write (nil treated as empty).
+# ret: Ok(total number of bytes written) on success or Err(str) on error.
 pub fun eprintln(s: str) Result[usize, str] {
     var w: stream.Writer = stdio.stderr();
 
@@ -44,16 +60,28 @@ pub fun eprintln(s: str) Result[usize, str] {
     ret ok[usize, str](r1.unwrap_ok() + r2.unwrap_ok());
 }
 
+# u64: write unsigned 64-bit integer n to stdout.
+# ---
+# n: unsigned integer to write.
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun u64(n: u64) Result[usize, str] {
     var w: stream.Writer = stdio.stdout();
     ret f.write_u64(?w, n);
 }
 
+# eu64: write unsigned 64-bit integer n to stderr.
+# ---
+# n: unsigned integer to write.
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun eu64(n: u64) Result[usize, str] {
     var w: stream.Writer = stdio.stderr();
     ret f.write_u64(?w, n);
 }
 
+# printf: formatted output to stdout using `std.fmt`.
+# ---
+# format: format string (followed by varargs matching the format directives).
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun printf(format: str, ...) Result[usize, str] {
     var w: stream.Writer = stdio.stdout();
 
@@ -65,6 +93,10 @@ pub fun printf(format: str, ...) Result[usize, str] {
     ret r;
 }
 
+# eprintf: formatted output to stderr.
+# ---
+# format: format string.
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun eprintf(format: str, ...) Result[usize, str] {
     var w: stream.Writer = stdio.stderr();
 
@@ -76,6 +108,10 @@ pub fun eprintf(format: str, ...) Result[usize, str] {
     ret r;
 }
 
+# printlnf: formatted output to stdout followed by a newline.
+# ---
+# format: format string.
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun printlnf(format: str, ...) Result[usize, str] {
     var w: stream.Writer = stdio.stdout();
 
@@ -91,6 +127,10 @@ pub fun printlnf(format: str, ...) Result[usize, str] {
     ret ok[usize, str](r1.unwrap_ok() + r2.unwrap_ok());
 }
 
+# eprintlnf: formatted output to stderr followed by a newline.
+# ---
+# format: format string.
+# ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun eprintlnf(format: str, ...) Result[usize, str] {
     var w: stream.Writer = stdio.stderr();
 

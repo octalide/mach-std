@@ -8,22 +8,34 @@ use mem: std.memory;
 use ppath: std.system.platform.path;
 
 # std.types.path: owned/portable-ish path helpers.
-#
+# ---
 # this is intentionally lightweight for stage1:
 # - Path is a null-terminated string type alias
 # - functions that produce new paths require an Allocator
 
+# Path represents an owned, null-terminated path string.
 pub def Path: str;
 
+# Return the platform path separator character.
+# ---
+# ret: Platform path separator as `u8` (e.g., '/' or '\').
 pub fun separator() u8 {
     ret ppath.separator;
 }
 
+# Check whether a `Path` is empty or nil.
+# ---
+# p: Path to check.
+# ret: true if `p` is nil or empty, false otherwise.
 pub fun is_empty(p: Path) bool {
     if (p == nil) { ret true; }
     ret p[0] == 0;
 }
 
+# Check whether a `Path` is absolute.
+# ---
+# p: Path to check.
+# ret: true if `p` is an absolute path according to platform semantics.
 pub fun is_abs(p: Path) bool {
     if (p == nil) { ret false; }
 
@@ -31,6 +43,11 @@ pub fun is_abs(p: Path) bool {
     ret p[0] == separator();
 }
 
+# Clone a `Path` using the provided allocator.
+# ---
+# a: Allocator to use for the new `Path`.
+# p: Path to clone; may be nil.
+# ret: Ok with cloned `Path` on success, or Err `AllocError` on allocation failure.
 pub fun clone(a: *Allocator, p: Path) Result[Path, AllocError] {
     if (a == nil) {
         ret err[Path, AllocError]("allocator is nil");
@@ -52,6 +69,12 @@ pub fun clone(a: *Allocator, p: Path) Result[Path, AllocError] {
     ret ok[Path, AllocError](buf::&u8);
 }
 
+# Join two `Path`s with the platform separator.
+# ---
+# a: Allocator to use for the resulting `Path`.
+# left: Left-side path.
+# right: Right-side path.
+# ret: Ok with joined `Path` on success, or Err `AllocError` on allocation failure.
 pub fun join(a: *Allocator, left: Path, right: Path) Result[Path, AllocError] {
     if (a == nil) {
         ret err[Path, AllocError]("allocator is nil");

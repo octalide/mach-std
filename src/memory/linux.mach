@@ -4,12 +4,14 @@ use std.types.size;
 use std.types.bool;
 use int: std.types.int;
 
-# linux backend for std.memory byte allocation.
-#
-# this is intentionally minimal and reflects the platform conventions:
-# - returns nil on allocation failure
-# - deallocate returns bool success
+# linux backend for `std.memory` using mmap/mremap/munmap
+# - returns `nil` on allocation failure
+# - `deallocate` returns `bool` success
 
+# allocate memory via mmap; returns nil on failure
+# ---
+# size: number of bytes to allocate
+# ret: pointer to allocated memory, or nil on failure
 pub fun allocate(size: usize) ptr {
     if (size == 0) { ret nil; }
 
@@ -27,6 +29,11 @@ pub fun allocate(size: usize) ptr {
     ret res::usize::ptr;
 }
 
+# deallocate memory via munmap; returns success flag
+# ---
+# p: pointer to memory to free (nil is allowed)
+# size: size in bytes of the allocation
+# ret: true on success, false on failure
 pub fun deallocate(p: ptr, size: usize) bool {
     if (p == nil || size == 0) { ret true; }
 
@@ -34,6 +41,12 @@ pub fun deallocate(p: ptr, size: usize) bool {
     ret r == 0;
 }
 
+# reallocate memory using mremap; may move allocation
+# ---
+# p: existing allocation pointer (nil to allocate new)
+# old_size: current allocation size in bytes
+# new_size: desired allocation size in bytes (0 frees and returns nil)
+# ret: pointer to reallocated memory, or nil on failure
 pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
     if (p == nil) { ret allocate(new_size); }
 

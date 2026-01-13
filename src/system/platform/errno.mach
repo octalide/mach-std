@@ -1,11 +1,19 @@
 use std.types.string;
 
+# std.system.platform.errno: platform-specific errno helpers.
+# ---
+# delegates to the platform-specific implementation for error messages.
+
 $if ($mach.build.target.os.id == $mach.os.linux.id) {
     use impl: std.system.platform.linux.errno;
 } $or {
     $error("std.system.platform.errno: unsupported target OS");
 }
 
+# Return a human-readable message for an error code.
+# ---
+# code: error code (negative system error numbers); non-negative codes are not errors.
+# ret: message string describing the code
 pub fun message(code: i64) str {
     if (code >= 0) {
         ret "not an error";

@@ -1,7 +1,8 @@
 # x86_64 SysV linux entrypoint
-# - decodes argc/argv from the initial stack
-# - calls user `main(argc, argv)` (user must set `$main.symbol = "main"`)
-# - exits with `main` return value via sys_exit
+# - decodes argc/argv from the initial stack and calls user `main(argc, argv)`
+# - exits via `sys_exit` with the return value from `main`
+# ---
+# ret: does not return; exits via `sys_call`/`sys_exit`
 $_start.symbol = "_start";
 pub fun _start() {
     masm {

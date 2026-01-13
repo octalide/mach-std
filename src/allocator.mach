@@ -7,12 +7,21 @@ use std.types.string;
 use pmem: std.system.platform.memory;
 
 # std.allocator: zig-style allocator interface.
-#
+# ---
 # this is intended to be the glue between platform memory primitives and higher
 # level containers/types.
 
+# AllocError: textual allocation error messages returned by allocator Result types.
+# ---
+# these are short, human-readable strings (for example: "out of memory").
 pub def AllocError: str;
 
+# Allocator: backend-agnostic allocator interface.
+# ---
+# ctx: opaque context passed to callbacks.
+# alloc_fn: allocate (ctx, size, align) -> ptr (nil on OOM).
+# resize_fn: resize (ctx, p, old_size, new_size, align) -> ptr (nil on OOM).
+# free_fn: free (ctx, p, size, align) -> bool.
 pub rec Allocator {
     ctx: ptr;
     alloc_fn:  fun(ptr, usize, usize) ptr;
@@ -20,6 +29,11 @@ pub rec Allocator {
     free_fn:   fun(ptr, ptr, usize, usize) bool;
 }
 
+# Allocate raw bytes using this allocator.
+# ---
+# size: number of bytes (0 returns nil).
+# align: requested alignment in bytes.
+# ret: Ok(ptr) on success or Err(AllocError) on out-of-memory.
 pub fun (this: *Allocator) alloc_bytes(size: usize, align: usize) Result[ptr, AllocError] {
     if (size == 0) {
         ret ok[ptr, AllocError](nil);
@@ -33,6 +47,13 @@ pub fun (this: *Allocator) alloc_bytes(size: usize, align: usize) Result[ptr, Al
     ret ok[ptr, AllocError](p);
 }
 
+# Resize an allocation in-place if possible, otherwise may return a new pointer.
+# ---
+# p: existing pointer (or nil to allocate new).
+# old_size: previous size in bytes.
+# new_size: desired size in bytes (0 frees the allocation).
+# align: alignment in bytes.
+# ret: Ok(ptr) with the new pointer (or nil for freed) or Err(AllocError) on OOM.
 pub fun (this: *Allocator) resize_bytes(p: ptr, old_size: usize, new_size: usize, align: usize) Result[ptr, AllocError] {
     if (new_size == 0) {
         val ok_free: bool = this.free_fn(this.ctx, p, old_size, align);
@@ -47,10 +68,20 @@ pub fun (this: *Allocator) resize_bytes(p: ptr, old_size: usize, new_size: usize
     ret ok[ptr, AllocError](q);
 }
 
+# Free an allocation previously returned by alloc_bytes or resize_bytes.
+# ---
+# p: pointer previously returned by alloc_bytes or resize_bytes.
+# size: size in bytes that was allocated.
+# align: alignment in bytes.
+# ret: true on success.
 pub fun (this: *Allocator) free_bytes(p: ptr, size: usize, align: usize) bool {
     ret this.free_fn(this.ctx, p, size, align);
 }
 
+# Allocate count elements of type T.
+# ---
+# count: number of elements to allocate
+# ret: Ok(*T) pointer (nil for count == 0) or Err(AllocError) on OOM or overflow.
 pub fun (this: *Allocator) alloc[T](count: usize) Result[*T, AllocError] {
     if (count == 0) {
         ret ok[*T, AllocError](nil::*T);
@@ -71,6 +102,10 @@ pub fun (this: *Allocator) alloc[T](count: usize) Result[*T, AllocError] {
     ret ok[*T, AllocError](r.unwrap_ok()::*T);
 }
 
+# Allocate and zero-initialize count elements of T.
+# ---
+# count: number of elements to allocate
+# ret: Ok(*T) pointer (nil for count == 0) or Err(AllocError) on OOM or overflow.
 pub fun (this: *Allocator) zalloc[T](count: usize) Result[*T, AllocError] {
     val r: Result[*T, AllocError] = this.alloc[T](count);
     if (r.is_err()) {
@@ -91,6 +126,11 @@ pub fun (this: *Allocator) zalloc[T](count: usize) Result[*T, AllocError] {
     ret ok[*T, AllocError](p);
 }
 
+# Free memory previously returned by alloc/zalloc for count elements.
+# ---
+# p: pointer returned by alloc/zalloc (may be nil)
+# count: number of elements to free
+# ret: true on success; no-op for nil pointer or count == 0.
 pub fun (this: *Allocator) free[T](p: *T, count: usize) bool {
     if (p == nil || count == 0) {
         ret true;
@@ -99,6 +139,12 @@ pub fun (this: *Allocator) free[T](p: *T, count: usize) bool {
     ret this.free_bytes(p::ptr, $size_of(T) * count, $align_of(T));
 }
 
+# Resize an allocation of T elements.
+# ---
+# p: existing pointer (may be nil to allocate new)
+# old_count: previous number of elements
+# new_count: desired number of elements (0 frees)
+# ret: Ok(*T) with new pointer or Err(AllocError) on error.
 pub fun (this: *Allocator) resize[T](p: *T, old_count: usize, new_count: usize) Result[*T, AllocError] {
     if (new_count == 0) {
         val ok_free: bool = this.free[T](p, old_count);
@@ -135,6 +181,9 @@ fun page_free(ctx: ptr, p: ptr, size: usize, align: usize) bool {
     ret pmem.deallocate(p, size);
 }
 
+# page_allocator: allocator backed by platform page allocator (coarse-grained).
+# ---
+# ret: Allocator backed by platform page allocator (coarse-grained).
 pub fun page_allocator() Allocator {
     var a: Allocator;
     a.ctx = nil;
@@ -144,6 +193,9 @@ pub fun page_allocator() Allocator {
     ret a;
 }
 
+# default: the default allocator for this platform (currently page_allocator).
+# ---
+# ret: default allocator for the platform (page_allocator).
 pub fun default() Allocator {
     ret page_allocator();
 }

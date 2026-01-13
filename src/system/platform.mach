@@ -10,10 +10,16 @@ $or {
     $error("std.system.platform: unsupported target");
 }
 
+# terminate: exit the process with the given exit `code`.
+# ---
+# Delegates to the platform-specific implementation.
 pub fun terminate(code: i64) {
     impl.terminate(code);
 }
 
+# abort: abort the process immediately (no clean shutdown).
+# ---
+# Delegates to the platform-specific implementation.
 pub fun abort() {
     impl.abort();
 }

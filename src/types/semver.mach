@@ -7,7 +7,13 @@ use int:   std.types.int;
 use ascii: std.text.ascii;
 use mem:   std.memory;
 
-## Semantic version record following semver 2.0.0 spec
+# Semver represents a semantic version per SemVer 2.0.0.
+# ---
+# major: Major version number.
+# patch: Patch version number.
+# minor: Minor version number.
+# prerelease: Optional prerelease identifier string (e.g. "alpha.1").
+# build: Optional build metadata string.
 pub rec Semver {
     major:      u64;
     patch:      u64;
@@ -16,10 +22,10 @@ pub rec Semver {
     build:      str;
 }
 
-## Parse a version string into a semver
-## ---
-## input: major.minor.patch[-prerelease][+build]
-## ret:   parsed Semver or error message
+# Parse a version string into a semver
+# ---
+# input: major.minor.patch[-prerelease][+build]
+# ret:   parsed Semver or error message
 pub fun semver_parse(input: str) Result[Semver, str] {
     if (input == nil || input.len() == 0) {
         ret err[Semver, str]("empty version string");
@@ -102,9 +108,9 @@ pub fun semver_parse(input: str) Result[Semver, str] {
     ret ok[Semver, str](v);
 }
 
-## Validate that a semver is well-formed
-## ---
-## ret: true if valid, false otherwise
+# Validate that a `Semver` is well-formed.
+# ---
+# ret: true if valid, false otherwise.
 pub fun (this: &Semver) is_valid() bool {
     # check prerelease characters if present
     if (!(this.prerelease == nil || this.prerelease.len() == 0)) {
@@ -133,10 +139,10 @@ pub fun (this: &Semver) is_valid() bool {
     ret true;
 }
 
-## Compare two semvers for precedence (ignores build metadata per spec)
-## ---
-## other: version to compare against
-## ret: <0 if this < other, 0 if equal, >0 if this > other
+# Compare two semvers for precedence (ignores build metadata per spec)
+# ---
+# other: version to compare against
+# ret: <0 if this < other, 0 if equal, >0 if this > other
 pub fun (this: &Semver) compare(other: &Semver) i64 {
     # compare major
     if (this.major < other.major) { ret -1; }
@@ -165,56 +171,56 @@ pub fun (this: &Semver) compare(other: &Semver) i64 {
     ret 0;
 }
 
-## Check if this version is less than other
-## ---
-## other: version to compare against
-## ret:   true if less, false otherwise
+# Return true if `this` Semver is less than `other`.
+# ---
+# other: Version to compare against.
+# ret: true if less, false otherwise.
 pub fun (this: &Semver) is_less(other: &Semver) bool {
     ret this.compare(other) < 0;
 }
 
-## Check if this version is greater than other
-## ---
-## other: version to compare against
-## ret:   true if greater, false otherwise
+# Return true if `this` Semver is greater than `other`.
+# ---
+# other: Version to compare against.
+# ret: true if greater, false otherwise.
 pub fun (this: &Semver) is_greater(other: &Semver) bool {
     ret this.compare(other) > 0;
 }
 
-## Check if this version equals other (ignores build metadata)
-## ---
-## other: version to compare against
-## ret:   true if equal, false otherwise
+# Return true if `this` Semver equals `other` (ignoring build metadata).
+# ---
+# other: Version to compare against.
+# ret: true if equal, false otherwise.
 pub fun (this: &Semver) equals(other: &Semver) bool {
     ret this.compare(other) == 0;
 }
 
-## Check if this is a stable release (no prerelease)
-## ---
-## ret: true if stable, false otherwise
+# Check whether `this` Semver is a stable release (no prerelease).
+# ---
+# ret: true if stable, false otherwise.
 pub fun (this: &Semver) is_stable() bool {
     ret this.prerelease == nil || this.prerelease.len() == 0;
 }
 
-## Check if this is a prerelease version
-## ---
-## ret: true if prerelease, false otherwise
+# Check whether `this` Semver is a prerelease version.
+# ---
+# ret: true if prerelease, false otherwise.
 pub fun (this: &Semver) is_prerelease() bool {
     ret !(this.prerelease == nil || this.prerelease.len() == 0);
 }
 
-## Check if this has build metadata
-## ---
-## ret: true if has build metadata, false otherwise
+# Check whether `this` Semver has build metadata.
+# ---
+# ret: true if has build metadata, false otherwise.
 pub fun (this: &Semver) has_build() bool {
     ret !(this.build == nil || this.build.len() == 0);
 }
 
-## Parse a number from input starting at pos, updates pos
-## ---
-## input: input string
-## pos:   pointer to current position in string
-## ret:   parsed number or none on failure
+# Parse an unsigned number from `input` starting at `pos`, updating `pos`.
+# ---
+# input: input string.
+# pos: pointer to current position in the string; advanced past the number on success.
+# ret: Some(parsed number) or None on failure.
 fun parse_number(input: str, pos: *usize) Option[u64] {
     val start:       usize = @pos;
     var value:       u64   = 0;
@@ -238,25 +244,27 @@ fun parse_number(input: str, pos: *usize) Option[u64] {
     ret some[u64](value);
 }
 
-## Check if character is valid for prerelease
-## ---
-## ret: true if valid, false otherwise
+# Check if a byte is valid in a prerelease identifier.
+# ---
+# c: byte to check.
+# ret: true if valid, false otherwise.
 fun is_valid_prerelease_char(c: u8) bool {
     ret ascii.is_alnum(c) || c == '.' || c == '-';
 }
 
-## Check if character is valid for build metadata
-## ---
-## ret: true if valid, false otherwise
+# Check if a byte is valid in build metadata.
+# ---
+# c: byte to check.
+# ret: true if valid, false otherwise.
 fun is_valid_build_char(c: u8) bool {
     ret ascii.is_alnum(c) || c == '.' || c == '-';
 }
 
-## Compare two prerelease strings per semver spec
-## ---
-## a:   first prerelease string
-## b:   second prerelease string
-## ret: <0 if a < b, 0 if equal, >0 if a > b
+# Compare two prerelease strings per SemVer precedence rules.
+# ---
+# a: first prerelease string.
+# b: second prerelease string.
+# ret: <0 if `a < b`, 0 if equal, >0 if `a > b`.
 fun compare_prerelease(a: str, b: str) i64 {
     # split by dots and compare identifiers
     var a_pos: usize = 0;
@@ -302,11 +310,11 @@ fun compare_prerelease(a: str, b: str) i64 {
     ret 0;
 }
 
-## Compare two identifiers per semver spec
-## ---
-## a:   first identifier
-## b:   second identifier
-## ret: <0 if a < b, 0 if equal, >0 if a > b
+# Compare two identifiers per SemVer rules.
+# ---
+# a: first identifier.
+# b: second identifier.
+# ret: <0 if `a < b`, 0 if equal, >0 if `a > b`.
 fun compare_identifier(a: str, b: str) i64 {
     # check if identifiers are numeric
     val a_numeric: bool = is_numeric(a);
@@ -338,10 +346,10 @@ fun compare_identifier(a: str, b: str) i64 {
     ret a.compare(b);
 }
 
-## Check if string is all digits
-## ---
-## s:   string to check
-## ret: true if all digits, false otherwise
+# Check whether a string consists entirely of digits.
+# ---
+# s: string to check.
+# ret: true if all digits, false otherwise.
 fun is_numeric(s: str) bool {
     if (s.len() == 0) {
         ret false;
@@ -358,10 +366,10 @@ fun is_numeric(s: str) bool {
     ret true;
 }
 
-## Parse identifier string as number
-## ---
-## s:   identifier string
-## ret: parsed number
+# Parse an identifier string as a number (assumes digits).
+# ---
+# s: identifier string.
+# ret: parsed number.
 fun parse_identifier_num(s: str) u64 {
     var value: u64 = 0;
     var i: usize = 0;

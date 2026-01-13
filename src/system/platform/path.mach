@@ -1,4 +1,6 @@
-# std.system.platform.path provides target-specific path conventions.
+# std.system.platform.path: target-specific path conventions.
+# ---
+# exposes platform-specific path conventions such as the path separator.
 
 $if ($mach.build.target.os.id == $mach.os.linux.id) {
     use impl: std.system.platform.linux.path;
@@ -7,4 +9,7 @@ $or {
     $error("std.system.platform.path: unsupported target");
 }
 
+# Path component separator for the target platform.
+# ---
+# ret: separator byte (u8)
 pub val separator: u8 = impl.separator;

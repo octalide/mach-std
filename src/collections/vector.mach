@@ -5,15 +5,20 @@ use std.types.string;
 
 use std.allocator;
 
-# minimal generic vector: resizable array backed by allocator
+# Resizable vector backed by an allocator
+# ---
+# T: Element type stored in the vector
 pub rec Vector[T] {
     alloc: Allocator;
     data: *T;
     len: usize;
     cap: usize;
-}
+} 
 
-# initialize an empty vector with allocator
+# Create an empty vector using the provided allocator
+# ---
+# alloc: Allocator to use for allocations
+# ret: A new empty Vector[T]
 pub fun init[T](alloc: Allocator) Vector[T] {
     var v: Vector[T];
     v.alloc = alloc;
@@ -21,9 +26,11 @@ pub fun init[T](alloc: Allocator) Vector[T] {
     v.len = 0;
     v.cap = 0;
     ret v;
-}
+} 
 
-# free the backing buffer; return true on success
+# Free the backing buffer and reset the vector fields
+# ---
+# ret: true if memory was freed successfully, false otherwise
 pub fun (this: *Vector[T]) deinit() bool {
     if (this == nil) { ret true; }
     if (this.cap == 0) {
@@ -42,28 +49,39 @@ pub fun (this: *Vector[T]) deinit() bool {
     ret ok_free;
 }
 
-# check if empty
+# Check if the vector is empty
+# ---
+# ret: true if the vector has no elements, false otherwise
 pub fun (this: Vector[T]) is_empty() bool {
     ret this.len == 0;
 }
 
-# current number of elements
+# Return the current number of elements in the vector
+# ---
+# ret: Number of elements (usize)
 pub fun (this: Vector[T]) length() usize {
     ret this.len;
 }
 
-# current capacity in elements
+# Return the current capacity in elements
+# ---
+# ret: Capacity in elements (usize)
 pub fun (this: Vector[T]) capacity() usize {
     ret this.cap;
 }
 
-# clear contents but keep capacity
+# Clear the vector contents but keep allocated capacity
+# ---
+# ret: None
 pub fun (this: *Vector[T]) clear() {
     if (this == nil) { ret; }
     this.len = 0;
 }
 
-# ensure there is room for additional elements
+# Ensure there is room for additional elements
+# ---
+# additional: Number of extra elements to reserve space for
+# ret: Ok(new capacity) or Err(error message)
 pub fun (this: *Vector[T]) reserve(additional: usize) Result[usize, str] {
     if (this == nil) { ret err[usize, str]("vector is nil"); }
 
@@ -103,7 +121,10 @@ pub fun (this: *Vector[T]) reserve(additional: usize) Result[usize, str] {
     ret ok[usize, str](this.cap);
 }
 
-# append value and return new length
+# Append a value to the vector and return the new length
+# ---
+# value: Value to append
+# ret: Ok(new length) or Err(error message)
 pub fun (this: *Vector[T]) push(value: T) Result[usize, str] {
     val r: Result[usize, str] = this.reserve(1);
     if (!r.tag) {
@@ -115,7 +136,9 @@ pub fun (this: *Vector[T]) push(value: T) Result[usize, str] {
     ret ok[usize, str](this.len);
 }
 
-# pop last element; error on empty
+# Pop the last element from the vector
+# ---
+# ret: Ok(value) or Err(error message if vector is empty)
 pub fun (this: *Vector[T]) pop() Result[T, str] {
     if (this.len == 0) {
         ret err[T, str]("pop from empty vector");
@@ -125,7 +148,10 @@ pub fun (this: *Vector[T]) pop() Result[T, str] {
     ret ok[T, str](this.data[this.len]);
 }
 
-# mutable pointer to element
+# Get a mutable pointer to the element at the given index
+# ---
+# index: Element index
+# ret: Ok(pointer) or Err("index out of bounds")
 pub fun (this: *Vector[T]) get(index: usize) Result[*T, str] {
     if (index >= this.len) {
         ret err[*T, str]("index out of bounds");
@@ -133,7 +159,10 @@ pub fun (this: *Vector[T]) get(index: usize) Result[*T, str] {
     ret ok[*T, str](?this.data[index]);
 }
 
-# read-only reference to element
+# Get an immutable reference to the element at the given index
+# ---
+# index: Element index
+# ret: Ok(reference) or Err("index out of bounds")
 pub fun (this: Vector[T]) get_ref(index: usize) Result[&T, str] {
     if (index >= this.len) {
         ret err[&T, str]("index out of bounds");

@@ -2,38 +2,86 @@ use std.types.bool;
 use std.types.string;
 use int: std.types.int;
 
+# std.text.ascii: ASCII character classification utilities
+# ---
+# Small helpers for ASCII character tests and conversions
+
+# Return true if the character is ASCII whitespace (space or control whitespace)
+# ---
+# c: character to test
+# ret: true if c is a whitespace character
 pub fun is_space(c: char) bool {
     ret (c == 9 || c == 10 || c == 11 || c == 12 || c == 13 || c == 32);
 }
 
+
+# Return true if the character is an ASCII digit (0-9)
+# ---
+# c: character to test
+# ret: true if c is a digit
 pub fun is_digit(c: char) bool {
     ret (c >= '0' && c <= '9');
 }
 
+
+# Return true if the character is an ASCII alphabetic letter (a-z or A-Z)
+# ---
+# c: character to test
+# ret: true if c is alphabetic
 pub fun is_alpha(c: char) bool {
     ret ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
 }
 
+
+# Return true if the character is alphanumeric (letter or digit)
+# ---
+# c: character to test
+# ret: true if c is a letter or digit
 pub fun is_alnum(c: char) bool {
     ret (is_alpha(c) || is_digit(c));
 }
 
+
+# Return true if the character is a lowercase ASCII letter
+# ---
+# c: character to test
+# ret: true if c is lowercase
 pub fun is_lower(c: char) bool {
     ret (c >= 'a' && c <= 'z');
 }
 
+
+# Return true if the character is an uppercase ASCII letter
+# ---
+# c: character to test
+# ret: true if c is uppercase
 pub fun is_upper(c: char) bool {
     ret (c >= 'A' && c <= 'Z');
 }
 
+
+# Convert an ASCII character to lowercase (no-op for non-letters)
+# ---
+# c: character to convert
+# ret: lowercase equivalent as u8
 pub fun to_lower(c: char) u8 {
     ret c | ((c >= 'A' && c <= 'Z') << 5);
 }
 
+
+# Convert an ASCII character to uppercase (no-op for non-letters)
+# ---
+# c: character to convert
+# ret: uppercase equivalent as u8
 pub fun to_upper(c: char) u8 {
     ret c & ~((c >= 'a' && c <= 'z') << 5);
 }
 
+
+# Convert an ASCII digit or letter to its numeric value, or -1 if not a digit/letter
+# ---
+# c: character to evaluate
+# ret: numeric value (0..35) for digits/letters, or -1 if invalid
 pub fun digit_val(c: char) i32 {
     if (c >= '0' && c <= '9') {
         ret int.zext_u8_to_i32(c - '0');
@@ -46,3 +94,4 @@ pub fun digit_val(c: char) i32 {
     
     ret -1;
 }
+
