@@ -1,0 +1,9 @@
+use impl: std.runtime.linux.x86_64;
+
+# compatibility shim for older code; delegates to `std.runtime.linux.x86_64`.
+# ---
+# ret: does not return; forwards to `impl._start` which terminates the process
+$_start.symbol = "_start";
+pub fun _start() {
+    impl._start();
+}

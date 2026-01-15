@@ -1,0 +1,128 @@
+use std.types.bool;
+use std.types.result;
+use std.types.size;
+use std.types.string;
+
+use std.allocator;
+use mem: std.memory;
+use ppath: std.system.platform.path;
+
+# std.types.path: owned/portable-ish path helpers.
+# ---
+# this is intentionally lightweight for stage1:
+# - Path is a null-terminated string type alias
+# - functions that produce new paths require an Allocator
+
+# Path represents an owned, null-terminated path string.
+pub def Path: str;
+
+# Return the platform path separator character.
+# ---
+# ret: Platform path separator as `u8` (e.g., '/' or '\').
+pub fun separator() u8 {
+    ret ppath.separator;
+}
+
+# Check whether a `Path` is empty or nil.
+# ---
+# p: Path to check.
+# ret: true if `p` is nil or empty, false otherwise.
+pub fun is_empty(p: Path) bool {
+    if (p == nil) { ret true; }
+    ret p[0] == 0;
+}
+
+# Check whether a `Path` is absolute.
+# ---
+# p: Path to check.
+# ret: true if `p` is an absolute path according to platform semantics.
+pub fun is_abs(p: Path) bool {
+    if (p == nil) { ret false; }
+
+    # linux-style absolute paths (future targets can override semantics)
+    ret p[0] == separator();
+}
+
+# Clone a `Path` using the provided allocator.
+# ---
+# a: Allocator to use for the new `Path`.
+# p: Path to clone; may be nil.
+# ret: Ok with cloned `Path` on success, or Err `AllocError` on allocation failure.
+pub fun clone(a: *Allocator, p: Path) Result[Path, AllocError] {
+    if (a == nil) {
+        ret err[Path, AllocError]("allocator is nil");
+    }
+
+    if (p == nil) {
+        ret ok[Path, AllocError](nil);
+    }
+
+    val n: usize = p.len();
+    val r: Result[*u8, AllocError] = a.alloc[u8](n + 1);
+    if (!r.tag) {
+        ret err[Path, AllocError](r.value.err);
+    }
+
+    val buf: *u8 = r.value.ok;
+    mem.raw_copy(buf::ptr, p::ptr, n);
+    buf[n] = 0;
+    ret ok[Path, AllocError](buf::&u8);
+}
+
+# Join two `Path`s with the platform separator.
+# ---
+# a: Allocator to use for the resulting `Path`.
+# left: Left-side path.
+# right: Right-side path.
+# ret: Ok with joined `Path` on success, or Err `AllocError` on allocation failure.
+pub fun join(a: *Allocator, left: Path, right: Path) Result[Path, AllocError] {
+    if (a == nil) {
+        ret err[Path, AllocError]("allocator is nil");
+    }
+
+    if (is_empty(left)) {
+        ret clone(a, right);
+    }
+
+    if (is_empty(right)) {
+        ret clone(a, left);
+    }
+
+    val sep: u8 = separator();
+
+    val left_len: usize = left.len();
+    val right_len: usize = right.len();
+
+    val left_has_sep: bool = left[left_len - 1] == sep;
+    val right_has_sep: bool = right[0] == sep;
+
+    var need_sep: bool = true;
+    if (left_has_sep || right_has_sep) {
+        need_sep = false;
+    }
+
+    var extra: usize = 0;
+    if (need_sep) {
+        extra = 1;
+    }
+
+    val out_len: usize = left_len + right_len + extra;
+    val r: Result[*u8, AllocError] = a.alloc[u8](out_len + 1);
+    if (!r.tag) {
+        ret err[Path, AllocError](r.value.err);
+    }
+
+    val buf: *u8 = r.value.ok;
+    mem.raw_copy(buf::ptr, left::ptr, left_len);
+
+    var off: usize = left_len;
+    if (need_sep) {
+        buf[off] = sep;
+        off = off + 1;
+    }
+
+    mem.raw_copy((buf::usize + off)::ptr, right::ptr, right_len);
+    buf[out_len] = 0;
+
+    ret ok[Path, AllocError](buf::&u8);
+}

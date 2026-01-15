@@ -1,0 +1,181 @@
+use std.types.bool;
+use std.types.result;
+use std.types.size;
+use std.types.string;
+
+use a: std.allocator;
+use mem: std.memory;
+
+# std.allocator.arena: a simple bump allocator backed by another allocator.
+# ---
+# properties:
+# - allocation is O(1)
+# - free is a no-op (optionally rolls back only the most recent allocation)
+# - resize is best-effort in-place for the most recent allocation; otherwise it alloc+copies
+
+# Arena: simple bump allocator state backed by another allocator.
+# ---
+# backing: allocator used for backing storage.
+# buf: backing buffer pointer.
+# cap: backing buffer capacity.
+# off: current allocation offset.
+# last_off: offset of most recent allocation for rollback/resize.
+# last_size: size of most recent allocation for rollback/resize.
+pub rec Arena {
+    backing: a.Allocator;
+
+    buf: ptr;
+    cap: usize;
+    off: usize;
+
+    last_off:  usize;
+    last_size: usize;
+}
+
+fun align_up(v: usize, align: usize) usize {
+    if (align <= 1) { ret v; }
+
+    val r: usize = v % align;
+    if (r == 0) { ret v; }
+    ret v + (align - r);
+}
+
+fun min_usize(a: usize, b: usize) usize {
+    if (a < b) { ret a; }
+    ret b;
+}
+
+# Create and initialize an Arena with cap bytes using backing allocator.
+# ---
+# backing: allocator used to provide backing storage for the arena.
+# cap: if 0 produces an empty arena that does not allocate backing storage.
+# ret: Ok(Arena) or Err(AllocError) on failure to allocate backing buffer.
+pub fun init(backing: a.Allocator, cap: usize) Result[Arena, a.AllocError] {
+    var ar: Arena;
+    ar.backing   = backing;
+    ar.buf       = nil;
+    ar.cap       = cap;
+    ar.off       = 0;
+    ar.last_off  = 0;
+    ar.last_size = 0;
+
+    if (cap == 0) {
+        ret ok[Arena, a.AllocError](ar);
+    }
+
+    # arena memory is typically page-aligned already; request a conservative alignment.
+    val p: ptr = backing.alloc_fn(backing.ctx, cap, 16);
+    if (p == nil) {
+        ret err[Arena, a.AllocError]("out of memory");
+    }
+
+    ar.buf = p;
+    ret ok[Arena, a.AllocError](ar);
+}
+
+# Free any backing storage associated with the arena.
+# ---
+# ret: true if the backing allocator reports success; no-op for nil or empty arenas.
+pub fun (this: *Arena) deinit() bool {
+    if (this == nil) { ret true; }
+    if (this.buf == nil || this.cap == 0) { ret true; }
+
+    val ok_free: bool = this.backing.free_fn(this.backing.ctx, this.buf, this.cap, 16);
+    this.buf = nil;
+    this.cap = 0;
+    this.off = 0;
+    this.last_off  = 0;
+    this.last_size = 0;
+    ret ok_free;
+}
+
+# Reset the arena to an empty state without freeing backing storage; existing allocations become invalid.
+pub fun (this: *Arena) reset() {
+    if (this == nil) { ret; }
+    this.off = 0;
+    this.last_off  = 0;
+    this.last_size = 0;
+}
+
+fun arena_alloc(ctx: ptr, size: usize, align: usize) ptr {
+    if (ctx == nil) { ret nil; }
+
+    val this: *Arena = ctx::*Arena;
+    if (size == 0) { ret nil; }
+    if (this.buf == nil || this.cap == 0) { ret nil; }
+
+    val start: usize = align_up(this.off, align);
+    if (start > this.cap) { ret nil; }
+
+    val end: usize = start + size;
+    if (end > this.cap) { ret nil; }
+
+    this.last_off  = start;
+    this.last_size = size;
+    this.off       = end;
+
+    ret (this.buf::usize + start)::ptr;
+}
+
+fun arena_resize(ctx: ptr, p: ptr, old_size: usize, new_size: usize, align: usize) ptr {
+    if (ctx == nil) { ret nil; }
+
+    val this: *Arena = ctx::*Arena;
+
+    if (p == nil) {
+        ret arena_alloc(ctx, new_size, align);
+    }
+
+    if (new_size == 0) {
+        # arena does not reclaim; callers should drop the pointer.
+        ret nil;
+    }
+
+    # try in-place if this is the most recent allocation
+    val last_ptr: ptr = (this.buf::usize + this.last_off)::ptr;
+    if (this.buf != nil && p == last_ptr && old_size == this.last_size) {
+        val end: usize = this.last_off + new_size;
+        if (end <= this.cap) {
+            this.off       = end;
+            this.last_size = new_size;
+            ret p;
+        }
+    }
+
+    # fallback: alloc+copy
+    val q: ptr = arena_alloc(ctx, new_size, align);
+    if (q == nil) { ret nil; }
+
+    val n: usize = min_usize(old_size, new_size);
+    mem.raw_copy(q, p, n);
+    ret q;
+}
+
+fun arena_free(ctx: ptr, p: ptr, size: usize, align: usize) bool {
+    if (ctx == nil) { ret false; }
+
+    val this: *Arena = ctx::*Arena;
+    if (p == nil) { ret true; }
+
+    # best-effort rollback for last allocation
+    val last_ptr: ptr = (this.buf::usize + this.last_off)::ptr;
+    if (this.buf != nil && p == last_ptr && size == this.last_size) {
+        this.off = this.last_off;
+        this.last_off  = 0;
+        this.last_size = 0;
+    }
+
+    ret true;
+}
+
+# Return an a.Allocator view that delegates to this arena.
+# ---
+# ret: Allocator view that delegates to this arena.
+pub fun (this: *Arena) allocator() a.Allocator {
+    var al: a.Allocator;
+    al.ctx = this::ptr;
+    al.alloc_fn  = arena_alloc;
+    al.resize_fn = arena_resize;
+    al.free_fn   = arena_free;
+    ret al;
+}

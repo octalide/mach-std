@@ -1,0 +1,25 @@
+# std.system.platform is a low-level target interface intended for use by
+# std.runtime and other core facilities.
+#
+# it reflects platform conventions directly (e.g. syscalls return i64).
+
+$if ($mach.build.target.os.id == $mach.os.linux.id) {
+    use impl: std.system.platform.linux.process;
+}
+$or {
+    $error("std.system.platform: unsupported target");
+}
+
+# terminate: exit the process with the given exit `code`.
+# ---
+# Delegates to the platform-specific implementation.
+pub fun terminate(code: i64) {
+    impl.terminate(code);
+}
+
+# abort: abort the process immediately (no clean shutdown).
+# ---
+# Delegates to the platform-specific implementation.
+pub fun abort() {
+    impl.abort();
+}

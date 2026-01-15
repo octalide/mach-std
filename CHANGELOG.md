@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-11-18
+
+### Added
+- `std.collections` with new `Slice` type for safer array/slice handling
+- Added `std.os` and `std.arch` modules and implementations for platform/architecture detection
+- Introduced readonly pointers.
+
+### Changed
+- Complete rework of most modules to be up to date with latest Mach language features including readonly pointers, the removal of slices, and the new native `str` type.
+- Complete rework of the fundamental structure of the standard library.
+- Too many to reasonably count.
+
+### Fixed
+- Several bugs across all modules.
+
 ## [0.2.5] - 2025-11-17
 
 ### Fixed
@@ -33,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.1] - 2025-11-15
 
 ### Fixed
-- Updated OS conditional checks to use 'target.os' for platform-specific imports
+- Updated OS conditional checks to use '$mach.build.target.os' for platform-specific imports
 
 ## [0.2.0] - 2025-11-15
 

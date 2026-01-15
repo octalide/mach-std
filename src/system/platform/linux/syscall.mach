@@ -1,75 +1,100 @@
 use std.types.size;
 
-asm {
-.text
-.globl syscall0
-syscall0:
-	mov %rdi, %rax
-	syscall
-	ret
+# stable linux syscall helpers for std.system.platform.
+#
+# these return the raw i64 convention used by linux.
 
-.globl syscall1
-syscall1:
-	mov %rdi, %rax
-	mov %rsi, %rdi
-	syscall
-	ret
+$if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
+	$error("std.system.platform.linux.syscall: unsupported arch");
+}
 
-.globl syscall2
-syscall2:
-	mov %rdi, %rax
-	mov %rsi, %rdi
-	mov %rdx, %rsi
-	syscall
-	ret
+pub fun syscall0(n: usize) i64 {
+	var out: i64;
+	masm {
+		mov rax, n
+		syscall
+		mov out, rax
+	}
+	ret out;
+}
 
-.globl syscall3
-syscall3:
-	mov %rdi, %rax
-	mov %rsi, %rdi
-	mov %rdx, %rsi
-	mov %rcx, %rdx
-	syscall
-	ret
+pub fun syscall1(n: usize, a0: usize) i64 {
+	var out: i64;
+	masm {
+		mov rax, n
+		mov rdi, a0
+		syscall
+		mov out, rax
+	}
+	ret out;
+}
 
-.globl syscall4
-syscall4:
-	mov %rdi, %rax
-	mov %rsi, %rdi
-	mov %rdx, %rsi
-	mov %rcx, %rdx
-	mov %r8, %r10
-	syscall
-	ret
+pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
+	var out: i64;
+	masm {
+		mov rax, n
+		mov rdi, a0
+		mov rsi, a1
+		syscall
+		mov out, rax
+	}
+	ret out;
+}
 
-.globl syscall5
-syscall5:
-	mov %rdi, %rax
-	mov %rsi, %rdi
-	mov %rdx, %rsi
-	mov %rcx, %rdx
-	mov %r8, %r10
-	mov %r9, %r8
-	syscall
-	ret
+pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
+	var out: i64;
+	masm {
+		mov rax, n
+		mov rdi, a0
+		mov rsi, a1
+		mov rdx, a2
+		syscall
+		mov out, rax
+	}
+	ret out;
+}
 
-.globl syscall6
-syscall6:
-	mov %rdi, %rax
-	mov %rsi, %rdi
-	mov %rdx, %rsi
-	mov %rcx, %rdx
-	mov %r8, %r10
-	mov %r9, %r8
-	mov 8(%rsp), %r9
-	syscall
-	ret
-};
+pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
+	var out: i64;
+	masm {
+		mov rax, n
+		mov rdi, a0
+		mov rsi, a1
+		mov rdx, a2
+		mov r10, a3
+		syscall
+		mov out, rax
+	}
+	ret out;
+}
 
-pub ext "syscall0" syscall0: fun(usize) i64;
-pub ext "syscall1" syscall1: fun(usize, usize) i64;
-pub ext "syscall2" syscall2: fun(usize, usize, usize) i64;
-pub ext "syscall3" syscall3: fun(usize, usize, usize, usize) i64;
-pub ext "syscall4" syscall4: fun(usize, usize, usize, usize, usize) i64;
-pub ext "syscall5" syscall5: fun(usize, usize, usize, usize, usize, usize) i64;
-pub ext "syscall6" syscall6: fun(usize, usize, usize, usize, usize, usize, usize) i64;
+pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
+	var out: i64;
+	masm {
+		mov rax, n
+		mov rdi, a0
+		mov rsi, a1
+		mov rdx, a2
+		mov r10, a3
+		mov r8,  a4
+		syscall
+		mov out, rax
+	}
+	ret out;
+}
+
+pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
+	var out: i64;
+	masm {
+		mov rax, n
+		mov rdi, a0
+		mov rsi, a1
+		mov rdx, a2
+		mov r10, a3
+		mov r8,  a4
+		mov r9,  a5
+		syscall
+		mov out, rax
+	}
+	ret out;
+}

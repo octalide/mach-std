@@ -1,0 +1,151 @@
+use std.types.size;
+
+# integer conversion helpers
+# ---
+# note: casts (`::`) are bit reinterpretation only. conversions are implemented here
+# as pure functions for use across the stdlib.
+
+rec U32Bytes {
+    b0: u8;
+    b1: u8;
+    b2: u8;
+    b3: u8;
+}
+
+rec U64Bytes {
+    b0: u8;
+    b1: u8;
+    b2: u8;
+    b3: u8;
+    b4: u8;
+    b5: u8;
+    b6: u8;
+    b7: u8;
+}
+
+# Zero-extend an 8-bit unsigned integer to 64-bit unsigned integer
+# ---
+# x: input byte (u8)
+# ret: zero-extended u64 with the same numeric value as x
+pub fun zext_u8_to_u64(x: u8) u64 {
+    val bytes: U64Bytes = U64Bytes{b0: x, b1: 0, b2: 0, b3: 0, b4: 0, b5: 0, b6: 0, b7: 0};
+    ret bytes::u64;
+}
+
+# Zero-extend an 8-bit unsigned integer to 32-bit signed integer
+# ---
+# x: input byte (u8)
+# ret: i32 containing the zero-extended value of x
+pub fun zext_u8_to_i32(x: u8) i32 {
+    val bytes: U32Bytes = U32Bytes{b0: x, b1: 0, b2: 0, b3: 0};
+    ret bytes::i32;
+}
+
+# Truncate a 64-bit unsigned integer to its low 8 bits
+# ---
+# x: input u64
+# ret: low byte (u8)
+pub fun trunc_u64_to_u8(x: u64) u8 {
+    # read the low byte (little-endian)
+    val p: &u8 = (?x)::&u8;
+    ret @p;
+}
+
+# Truncate a machine-sized unsigned integer to its low 8 bits
+# ---
+# x: input usize
+# ret: low byte (u8)
+pub fun trunc_usize_to_u8(x: usize) u8 {
+    # read the low byte (little-endian)
+    val p: &u8 = (?x)::&u8;
+    ret @p;
+}
+
+# Truncate a 64-bit signed integer to its low 32 bits
+# ---
+# x: input i64
+# ret: low 32-bit value as i32
+pub fun trunc_i64_to_i32(x: i64) i32 {
+    # read the low 4 bytes (little-endian)
+    val p: &u8 = (?x)::&u8;
+    val bytes: U32Bytes = U32Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3]};
+    ret bytes::i32;
+}
+
+$if ($mach.build.target.pointer_width == 4) {
+    # Sign-extend a 32-bit signed integer to a machine-sized signed integer
+    # ---
+    # x: input i32
+    # ret: sign-extended isize preserving numeric value
+    pub fun sext_i32_to_isize(x: i32) isize {
+        ret x;
+    }
+
+    # Zero-extend a 32-bit unsigned integer to a machine-sized unsigned integer
+    # ---
+    # x: input u32
+    # ret: zero-extended usize preserving numeric value
+    pub fun zext_u32_to_usize(x: u32) usize {
+        ret x;
+    }
+}
+$or ($mach.build.target.pointer_width == 8) {
+    # Sign-extend a 32-bit signed integer to a machine-sized signed integer
+    # ---
+    # x: input i32
+    # ret: sign-extended isize preserving numeric value
+    pub fun sext_i32_to_isize(x: i32) isize {
+        val p: &u8 = (?x)::&u8;
+        var fill: u8 = 0;
+        if ((p[3] & 0x80) != 0) { fill = 0xff; }
+
+        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: fill, b5: fill, b6: fill, b7: fill};
+        ret bytes::i64;
+    }
+
+    # Zero-extend a 32-bit unsigned integer to a machine-sized unsigned integer
+    # ---
+    # x: input u32
+    # ret: zero-extended usize preserving numeric value
+    pub fun zext_u32_to_usize(x: u32) usize {
+        val p: &u8 = (?x)::&u8;
+        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: 0, b5: 0, b6: 0, b7: 0};
+        ret bytes::u64;
+    }
+}
+$or {
+    # default to 64-bit semantics
+    # Sign-extend a 32-bit signed integer to a machine-sized signed integer
+    # ---
+    # x: input i32
+    # ret: sign-extended isize preserving numeric value
+    pub fun sext_i32_to_isize(x: i32) isize {
+        val p: &u8 = (?x)::&u8;
+        var fill: u8 = 0;
+        if ((p[3] & 0x80) != 0) { fill = 0xff; }
+
+        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: fill, b5: fill, b6: fill, b7: fill};
+        ret bytes::i64;
+    }
+
+    # Zero-extend a 32-bit unsigned integer to a machine-sized unsigned integer
+    # ---
+    # x: input u32
+    # ret: zero-extended usize preserving numeric value
+    pub fun zext_u32_to_usize(x: u32) usize {
+        val p: &u8 = (?x)::&u8;
+        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: 0, b5: 0, b6: 0, b7: 0};
+        ret bytes::u64;
+    }
+}
+
+# Zero-extend a 32-bit signed integer (reinterpreted as u32) to a machine-sized unsigned integer
+# ---
+# x: input i32
+# ret: usize with the zero-extended bit pattern of x
+pub fun zext_i32_to_usize(x: i32) usize {
+    # reinterpret i32 bits as u32, then zero-extend
+    val u: u32 = x::u32;
+    ret zext_u32_to_usize(u);
+}
+

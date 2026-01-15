@@ -1,0 +1,73 @@
+use std.types.size;
+
+# linux constants as exposed through std.system.platform.
+#
+# note: this is intentionally self-contained so `std.platform` can be removed.
+
+$if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
+	$error("std.system.platform.linux.constants: unsupported arch");
+}
+
+# syscall numbers (x86_64 linux)
+pub val SYS_READ:          usize = 0;
+pub val SYS_WRITE:         usize = 1;
+pub val SYS_CLOSE:         usize = 3;
+pub val SYS_FSTAT:         usize = 5;
+pub val SYS_LSEEK:         usize = 8;
+pub val SYS_MMAP:          usize = 9;
+pub val SYS_MUNMAP:        usize = 11;
+pub val SYS_MREMAP:        usize = 25;
+pub val SYS_EXIT:          usize = 60;
+pub val SYS_GETDENTS64:    usize = 217;
+pub val SYS_CLOCK_GETTIME: usize = 228;
+pub val SYS_OPENAT:        usize = 257;
+pub val SYS_MKDIRAT:       usize = 258;
+pub val SYS_NEWFSTATAT:    usize = 262;
+pub val SYS_UNLINKAT:      usize = 263;
+pub val SYS_RENAMEAT:      usize = 264;
+pub val SYS_FACCESSAT:     usize = 269;
+
+# file access modes
+pub val O_RDONLY: i32 = 0;
+pub val O_WRONLY: i32 = 1;
+pub val O_RDWR:   i32 = 2;
+pub val O_CREAT:  i32 = 64;
+pub val O_EXCL:   i32 = 128;
+pub val O_TRUNC:  i32 = 512;
+pub val O_APPEND: i32 = 1024;
+
+# directory helpers
+pub val AT_FDCWD:            i32 = -100;
+pub val AT_SYMLINK_NOFOLLOW: i32 = 0x0100;
+pub val AT_REMOVEDIR:        i32 = 0x0200;
+
+# stat mode flags
+pub val S_IFMT:  u32 = 0o170000;
+pub val S_IFDIR: u32 = 0o040000;
+pub val S_IFREG: u32 = 0o100000;
+pub val S_IFLNK: u32 = 0o120000;
+
+# mmap protection
+pub val PROT_NONE:  i32 = 0;
+pub val PROT_READ:  i32 = 1;
+pub val PROT_WRITE: i32 = 2;
+pub val PROT_EXEC:  i32 = 4;
+
+# mmap flags
+pub val MAP_SHARED:    i32 = 1;
+pub val MAP_PRIVATE:   i32 = 2;
+pub val MAP_FIXED:     i32 = 16;
+pub val MAP_ANONYMOUS: i32 = 32;
+
+# mremap flags
+pub val MREMAP_MAYMOVE: usize = 1;
+
+# lseek whence constants
+pub val SEEK_SET: i32 = 0;
+pub val SEEK_CUR: i32 = 1;
+pub val SEEK_END: i32 = 2;
+
+# standard fds
+pub val STDIN_FILENO:  i32 = 0;
+pub val STDOUT_FILENO: i32 = 1;
+pub val STDERR_FILENO: i32 = 2;

@@ -1,0 +1,209 @@
+use std.types.bool;
+use std.types.result;
+use std.types.size;
+use std.types.string;
+
+use int: std.types.int;
+
+use pfs: std.system.platform.filesystem;
+use errno: std.system.platform.errno;
+
+# std.filesystem: higher-level filesystem helpers.
+# ---
+# Higher-level file helpers that operate on File handles and return Result[T, str].
+# Low-level syscall bindings live under std.system.platform.
+
+$if ($mach.build.target.os.id == $mach.os.linux.id) {
+    use c: std.system.platform.linux.constants;
+    use types: std.system.platform.linux.types;
+}
+$or {
+    $error("std.filesystem: unsupported target");
+}
+
+# Stat: platform file metadata structure.
+# ---
+# Underlying type alias for types.stat_t returned by File.stat.
+pub def Stat: types.stat_t;
+
+# File: wrapper for a file descriptor used for IO.
+# ---
+# fd: underlying file descriptor
+pub rec File {
+    fd: i32;
+}
+
+# open: open file at path for read-only.
+# ---
+# path: file path to open
+# ret: Ok(File) on success or Err(str) with errno message on failure.
+pub fun open(path: str) Result[File, str] {
+    # open for read-only
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = pfs.openat(c.AT_FDCWD, path, c.O_RDONLY, 0);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[File, str](File{fd: int.trunc_i64_to_i32(raw)});
+    }
+
+    ret err[File, str](errno.message(raw));
+}
+
+# create: create/truncate file at path and open for writing.
+# ---
+# path: file path to create
+# mode: file mode bits
+# ret: Ok(File) on success or Err(str) with errno message on failure.
+pub fun create(path: str, mode: i32) Result[File, str] {
+    val flags: i32 = c.O_CREAT | c.O_TRUNC | c.O_WRONLY;
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = pfs.openat(c.AT_FDCWD, path, flags, mode);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[File, str](File{fd: int.trunc_i64_to_i32(raw)});
+    }
+
+    ret err[File, str](errno.message(raw));
+}
+
+# close: close the underlying file descriptor.
+# ---
+# ret: Ok(true) on success or Err(str) with errno message on failure.
+pub fun (this: *File) close() Result[bool, str] {
+    if (this == nil) {
+        ret ok[bool, str](true);
+    }
+
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = pfs.close(this.fd);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[bool, str](true);
+    }
+
+    ret err[bool, str](errno.message(raw));
+}
+
+# read: read up to len bytes into buf.
+# ---
+# buf: buffer to read into
+# len: maximum number of bytes to read
+# ret: Ok(bytes_read) on success or Err(str) with errno message on failure.
+pub fun (this: *File) read(buf: *u8, len: usize) Result[usize, str] {
+    if (this == nil) {
+        ret err[usize, str]("io error");
+    }
+
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = pfs.read(this.fd, buf, len);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[usize, str](raw::usize);
+    }
+
+    ret err[usize, str](errno.message(raw));
+}
+
+# write: write up to len bytes from buf to the file.
+# ---
+# buf: buffer to write from
+# len: number of bytes to write
+# ret: Ok(bytes_written) on success or Err(str) with errno message on failure.
+pub fun (this: *File) write(buf: &u8, len: usize) Result[usize, str] {
+    if (this == nil) {
+        ret err[usize, str]("io error");
+    }
+
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = pfs.write(this.fd, buf, len);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[usize, str](raw::usize);
+    }
+
+    ret err[usize, str](errno.message(raw));
+}
+
+# stat: get file metadata.
+# ---
+# ret: Ok(Stat) on success or Err(str) with errno message on failure.
+pub fun (this: *File) stat() Result[Stat, str] {
+    if (this == nil) {
+        ret err[Stat, str]("io error");
+    }
+
+    var st: Stat;
+    val raw: i64 = pfs.fstat(this.fd, ?st);
+    if (raw < 0) {
+        ret err[Stat, str](errno.message(raw));
+    }
+    ret ok[Stat, str](st);
+}
+
+# seek: reposition file offset using lseek semantics.
+# ---
+# offset: offset to seek to
+# whence: seek mode (e.g., SEEK_SET, SEEK_CUR, SEEK_END)
+# ret: Ok(new_offset) on success or Err(str) with errno message on failure.
+pub fun (this: *File) seek(offset: i64, whence: i32) Result[i64, str] {
+    if (this == nil) {
+        ret err[i64, str]("io error");
+    }
+
+    val raw: i64 = pfs.lseek(this.fd, offset, whence);
+    if (raw < 0) {
+        ret err[i64, str](errno.message(raw));
+    }
+
+    ret ok[i64, str](raw);
+}

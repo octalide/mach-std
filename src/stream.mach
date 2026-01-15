@@ -1,0 +1,144 @@
+use std.types.size;
+use std.types.result;
+use std.types.string;
+
+use fs: std.system.platform.filesystem;
+use errno: std.system.platform.errno;
+
+# std.stream: generic reader/writer interfaces and small helpers.
+# ---
+# convention:
+# - low-level syscalls return negative i64 error codes (see std.system.platform.*)
+# - this layer translates those into stable string messages and returns Result[T, str]
+
+# ERR_EOF: sentinel error string indicating end-of-file when reading.
+pub val ERR_EOF: str = "eof";
+
+# ERR_SHORT_WRITE: indicates an unexpected short write while trying to write all bytes.
+pub val ERR_SHORT_WRITE: str = "short write";
+
+# Writer: wrapper for a file descriptor used for writing.
+# ---
+# fd: underlying file descriptor
+pub rec Writer {
+    fd: i32;
+}
+
+# Reader: wrapper for a file descriptor used for reading.
+# ---
+# fd: underlying file descriptor
+pub rec Reader {
+    fd: i32;
+}
+
+# Construct a Writer for fd.
+# ---
+# fd: file descriptor
+# ret: Writer
+pub fun writer(fd: i32) Writer { ret Writer{fd: fd}; }
+
+# Construct a Reader for fd.
+# ---
+# fd: file descriptor
+# ret: Reader
+pub fun reader(fd: i32) Reader { ret Reader{fd: fd}; }
+
+# Write up to len bytes from buf to the writer's FD; retries on EINTR.
+# ---
+# buf: buffer to write from
+# len: number of bytes to attempt to write
+# ret: Ok(wrote) on success or Err(str) with errno message on failure.
+pub fun (this: *Writer) write(buf: &u8, len: usize) Result[usize, str] {
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = fs.write(this.fd, buf, len);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[usize, str](raw::usize);
+    }
+
+    ret err[usize, str](errno.message(raw));
+}
+
+# Read up to len bytes into buf from the reader's FD; retries on EINTR.
+# ---
+# buf: buffer to read into
+# len: maximum number of bytes to read
+# ret: Ok(got) with bytes read, or Err(str) with errno message on failure.
+pub fun (this: *Reader) read(buf: *u8, len: usize) Result[usize, str] {
+    val EINTR: i64 = -4;
+    val MAX_RETRIES: usize = 8;
+
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = fs.read(this.fd, buf, len);
+        if (raw < 0) {
+            if (raw == EINTR && retries < MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[usize, str](raw::usize);
+    }
+
+    ret err[usize, str](errno.message(raw));
+}
+
+# Write all len bytes from buf to writer w.
+# ---
+# w: pointer to Writer
+# buf: buffer to write from
+# len: number of bytes to write
+# ret: Ok(total) with number of bytes written (== len) on success, or Err(str) on error (ERR_SHORT_WRITE for short write)
+pub fun write_all(w: *Writer, buf: &u8, len: usize) Result[usize, str] {
+    if (len == 0) { ret ok[usize, str](0); }
+
+    var total: usize = 0;
+    for (total < len) {
+        val p: &u8 = (buf::usize + total)::&u8;
+        val r: Result[usize, str] = w.write(p, len - total);
+        if (r.is_err()) { ret r; }
+
+        val wrote: usize = r.unwrap_ok();
+        if (wrote == 0) { ret err[usize, str](ERR_SHORT_WRITE); }
+
+        total = total + wrote;
+    }
+
+    ret ok[usize, str](total);
+}
+
+# Read exactly len bytes into buf, or return ERR_EOF if EOF is reached early.
+# ---
+# r: pointer to Reader
+# buf: buffer to fill
+# len: number of bytes to read
+# ret: Ok(total) when len bytes have been read, or Err(ERR_EOF) on premature EOF.
+pub fun read_exact(r: *Reader, buf: *u8, len: usize) Result[usize, str] {
+    if (len == 0) { ret ok[usize, str](0); }
+
+    var total: usize = 0;
+    for (total < len) {
+        val p: *u8 = (buf::usize + total)::*u8;
+        val res: Result[usize, str] = r.read(p, len - total);
+        if (res.is_err()) { ret res; }
+
+        val got: usize = res.unwrap_ok();
+        if (got == 0) { ret err[usize, str](ERR_EOF); }
+
+        total = total + got;
+    }
+
+    ret ok[usize, str](total);
+}

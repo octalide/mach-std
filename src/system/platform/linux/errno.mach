@@ -1,0 +1,17 @@
+use std.types.string;
+
+pub fun message(code: i64) str {
+    if (code == -2::i64) { ret "no such file or directory"; }
+    or (code == -4::i64) { ret "interrupted"; }
+    or (code == -9::i64) { ret "bad file descriptor"; }
+    or (code == -13::i64) { ret "permission denied"; }
+    or (code == -17::i64) { ret "file exists"; }
+    or (code == -20::i64) { ret "not a directory"; }
+    or (code == -21::i64) { ret "is a directory"; }
+    or (code == -22::i64) { ret "invalid argument"; }
+    or (code == -28::i64) { ret "no space left on device"; }
+    or (code == -30::i64) { ret "read-only file system"; }
+    or (code == -39::i64) { ret "directory not empty"; }
+    or (code == -95::i64) { ret "operation not supported"; }
+    or { ret "io error"; }
+}

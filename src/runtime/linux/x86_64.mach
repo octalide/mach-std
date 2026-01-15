@@ -1,0 +1,21 @@
+# x86_64 SysV linux entrypoint
+# - decodes argc/argv from the initial stack and calls user `main(argc, argv)`
+# - exits via `sys_exit` with the return value from `main`
+# ---
+# ret: does not return; exits via `sys_call`/`sys_exit`
+$_start.symbol = "_start";
+pub fun _start() {
+    masm {
+        mov rax, rsp      # rax = stack base
+        mov rdi, [rax]    # argc -> rdi
+        lea rsi, [rax+8]  # argv -> rsi (&&u8)
+
+        and rsp, -16      # align
+        sub rsp, 8        # keep callee stack aligned
+        call main
+
+        mov rdi, rax      # exit code
+        mov rax, 60       # sys_exit
+        syscall
+    }
+}
