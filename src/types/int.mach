@@ -23,6 +23,11 @@ rec U64Bytes {
     b7: u8;
 }
 
+rec U64Words {
+    lo: u32;
+    hi: u32;
+}
+
 # Zero-extend an 8-bit unsigned integer to 64-bit unsigned integer
 # ---
 # x: input byte (u8)
@@ -95,12 +100,12 @@ $or ($mach.build.target.pointer_width == 8) {
     # x: input i32
     # ret: sign-extended isize preserving numeric value
     pub fun sext_i32_to_isize(x: i32) isize {
-        val p: &u8 = (?x)::&u8;
-        var fill: u8 = 0;
-        if ((p[3] & 0x80) != 0) { fill = 0xff; }
+        val lo: u32 = x::u32;
+        var hi: u32 = 0;
+        if (x < 0) { hi = 0xffffffff; }
 
-        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: fill, b5: fill, b6: fill, b7: fill};
-        ret bytes::i64;
+        val words: U64Words = U64Words{lo: lo, hi: hi};
+        ret words::i64;
     }
 
     # Zero-extend a 32-bit unsigned integer to a machine-sized unsigned integer
@@ -108,9 +113,8 @@ $or ($mach.build.target.pointer_width == 8) {
     # x: input u32
     # ret: zero-extended usize preserving numeric value
     pub fun zext_u32_to_usize(x: u32) usize {
-        val p: &u8 = (?x)::&u8;
-        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: 0, b5: 0, b6: 0, b7: 0};
-        ret bytes::u64;
+        val words: U64Words = U64Words{lo: x, hi: 0};
+        ret words::u64;
     }
 }
 $or {
@@ -120,12 +124,12 @@ $or {
     # x: input i32
     # ret: sign-extended isize preserving numeric value
     pub fun sext_i32_to_isize(x: i32) isize {
-        val p: &u8 = (?x)::&u8;
-        var fill: u8 = 0;
-        if ((p[3] & 0x80) != 0) { fill = 0xff; }
+        val lo: u32 = x::u32;
+        var hi: u32 = 0;
+        if (x < 0) { hi = 0xffffffff; }
 
-        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: fill, b5: fill, b6: fill, b7: fill};
-        ret bytes::i64;
+        val words: U64Words = U64Words{lo: lo, hi: hi};
+        ret words::i64;
     }
 
     # Zero-extend a 32-bit unsigned integer to a machine-sized unsigned integer
@@ -133,9 +137,8 @@ $or {
     # x: input u32
     # ret: zero-extended usize preserving numeric value
     pub fun zext_u32_to_usize(x: u32) usize {
-        val p: &u8 = (?x)::&u8;
-        val bytes: U64Bytes = U64Bytes{b0: p[0], b1: p[1], b2: p[2], b3: p[3], b4: 0, b5: 0, b6: 0, b7: 0};
-        ret bytes::u64;
+        val words: U64Words = U64Words{lo: x, hi: 0};
+        ret words::u64;
     }
 }
 

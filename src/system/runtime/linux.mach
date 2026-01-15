@@ -1,9 +1,0 @@
-use impl: std.runtime.linux;
-
-# compatibility shim for older code; delegates to `std.runtime.linux`.
-# ---
-# stack: initial stack pointer passed by the kernel
-# ret: does not return; forwards to `impl.entry` which terminates the process
-pub fun entry(stack: ptr) {
-	impl.entry(stack);
-}
