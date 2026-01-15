@@ -54,8 +54,9 @@ pub fun (this: *Writer) write(buf: &u8, len: usize) Result[usize, str] {
 
     var retries: usize = 0;
     var raw: i64 = 0;
+    val w: Writer = @this;
     for {
-        raw = fs.write(this.fd, buf, len);
+        raw = fs.write(w.fd, buf, len);
         if (raw < 0) {
             if (raw == EINTR && retries < MAX_RETRIES) {
                 retries = retries + 1;
@@ -80,8 +81,9 @@ pub fun (this: *Reader) read(buf: *u8, len: usize) Result[usize, str] {
 
     var retries: usize = 0;
     var raw: i64 = 0;
+    val r: Reader = @this;
     for {
-        raw = fs.read(this.fd, buf, len);
+        raw = fs.read(r.fd, buf, len);
         if (raw < 0) {
             if (raw == EINTR && retries < MAX_RETRIES) {
                 retries = retries + 1;
@@ -104,10 +106,11 @@ pub fun (this: *Reader) read(buf: *u8, len: usize) Result[usize, str] {
 pub fun write_all(w: *Writer, buf: &u8, len: usize) Result[usize, str] {
     if (len == 0) { ret ok[usize, str](0); }
 
+    val wv: Writer = @w;
     var total: usize = 0;
     for (total < len) {
         val p: &u8 = (buf::usize + total)::&u8;
-        val r: Result[usize, str] = w.write(p, len - total);
+        val r: Result[usize, str] = wv.write(p, len - total);
         if (r.is_err()) { ret r; }
 
         val wrote: usize = r.unwrap_ok();
@@ -128,10 +131,11 @@ pub fun write_all(w: *Writer, buf: &u8, len: usize) Result[usize, str] {
 pub fun read_exact(r: *Reader, buf: *u8, len: usize) Result[usize, str] {
     if (len == 0) { ret ok[usize, str](0); }
 
+    val rv: Reader = @r;
     var total: usize = 0;
     for (total < len) {
         val p: *u8 = (buf::usize + total)::*u8;
-        val res: Result[usize, str] = r.read(p, len - total);
+        val res: Result[usize, str] = rv.read(p, len - total);
         if (res.is_err()) { ret res; }
 
         val got: usize = res.unwrap_ok();
