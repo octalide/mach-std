@@ -3,7 +3,7 @@ use std.types.size;
 use std.types.result;
 use std.types.string;
 
-use std.allocator; 
+use std.allocator;
 use mem: std.memory;
 
 # Mutable string builder that maintains a NUL-terminated buffer
@@ -14,7 +14,7 @@ pub rec Builder {
     buf: *u8;
     len: usize;
     cap: usize; # includes space for nul terminator
-} 
+}
 
 # Create a `Builder` using the provided allocator
 # ---
@@ -108,9 +108,9 @@ pub fun (this: *Builder) reserve(additional: usize) Result[usize, str] {
     }
 
     val r: Result[*u8, AllocError] = this.alloc.resize[u8](this.buf, this.cap, new_cap);
-    if (!r.tag) { ret err[usize, str](r.value.err); }
+    if (r.is_err()) { ret err[usize, str](r.unwrap_err()); }
 
-    this.buf = r.value.ok;
+    this.buf = r.unwrap_ok();
     this.cap = new_cap;
     this.buf[this.len] = 0;
 
@@ -123,7 +123,7 @@ pub fun (this: *Builder) reserve(additional: usize) Result[usize, str] {
 # ret: Ok(new length) or Err(error message)
 pub fun (this: *Builder) append_byte(b: u8) Result[usize, str] {
     val r: Result[usize, str] = this.reserve(1);
-    if (!r.tag) { ret err[usize, str](r.value.err); }
+    if (r.is_err()) { ret err[usize, str](r.unwrap_err()); }
 
     this.buf[this.len] = b;
     this.len = this.len + 1;
@@ -140,7 +140,7 @@ pub fun (this: *Builder) append_bytes(p: &u8, n: usize) Result[usize, str] {
     if (n == 0) { ret ok[usize, str](this.len); }
 
     val r: Result[usize, str] = this.reserve(n);
-    if (!r.tag) { ret err[usize, str](r.value.err); }
+    if (r.is_err()) { ret err[usize, str](r.unwrap_err()); }
 
     mem.raw_copy((this.buf::usize + this.len)::ptr, p::ptr, n);
     this.len = this.len + n;
@@ -167,4 +167,4 @@ pub fun (this: *Builder) c_str() Result[str, str] {
 
     this.buf[this.len] = 0;
     ret ok[str, str](this.buf::&u8);
-} 
+}

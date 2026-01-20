@@ -38,16 +38,12 @@ pub rec File {
 # path: file path to open
 # ret: Ok(File) on success or Err(str) with errno message on failure.
 pub fun open(path: str) Result[File, str] {
-    # open for read-only
-    val EINTR: i64 = -4;
-    val MAX_RETRIES: usize = 8;
-
     var retries: usize = 0;
     var raw: i64 = 0;
     for {
         raw = pfs.openat(c.AT_FDCWD, path, c.O_RDONLY, 0);
         if (raw < 0) {
-            if (raw == EINTR && retries < MAX_RETRIES) {
+            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
                 retries = retries + 1;
                 cnt;
             }
@@ -66,15 +62,13 @@ pub fun open(path: str) Result[File, str] {
 # ret: Ok(File) on success or Err(str) with errno message on failure.
 pub fun create(path: str, mode: i32) Result[File, str] {
     val flags: i32 = c.O_CREAT | c.O_TRUNC | c.O_WRONLY;
-    val EINTR: i64 = -4;
-    val MAX_RETRIES: usize = 8;
 
     var retries: usize = 0;
     var raw: i64 = 0;
     for {
         raw = pfs.openat(c.AT_FDCWD, path, flags, mode);
         if (raw < 0) {
-            if (raw == EINTR && retries < MAX_RETRIES) {
+            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
                 retries = retries + 1;
                 cnt;
             }
@@ -94,15 +88,12 @@ pub fun (this: *File) close() Result[bool, str] {
         ret ok[bool, str](true);
     }
 
-    val EINTR: i64 = -4;
-    val MAX_RETRIES: usize = 8;
-
     var retries: usize = 0;
     var raw: i64 = 0;
     for {
         raw = pfs.close(this.fd);
         if (raw < 0) {
-            if (raw == EINTR && retries < MAX_RETRIES) {
+            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
                 retries = retries + 1;
                 cnt;
             }
@@ -124,15 +115,12 @@ pub fun (this: *File) read(buf: *u8, len: usize) Result[usize, str] {
         ret err[usize, str]("io error");
     }
 
-    val EINTR: i64 = -4;
-    val MAX_RETRIES: usize = 8;
-
     var retries: usize = 0;
     var raw: i64 = 0;
     for {
         raw = pfs.read(this.fd, buf, len);
         if (raw < 0) {
-            if (raw == EINTR && retries < MAX_RETRIES) {
+            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
                 retries = retries + 1;
                 cnt;
             }
@@ -154,15 +142,12 @@ pub fun (this: *File) write(buf: &u8, len: usize) Result[usize, str] {
         ret err[usize, str]("io error");
     }
 
-    val EINTR: i64 = -4;
-    val MAX_RETRIES: usize = 8;
-
     var retries: usize = 0;
     var raw: i64 = 0;
     for {
         raw = pfs.write(this.fd, buf, len);
         if (raw < 0) {
-            if (raw == EINTR && retries < MAX_RETRIES) {
+            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
                 retries = retries + 1;
                 cnt;
             }

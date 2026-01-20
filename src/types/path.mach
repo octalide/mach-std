@@ -59,11 +59,11 @@ pub fun clone(a: *Allocator, p: Path) Result[Path, AllocError] {
 
     val n: usize = p.len();
     val r: Result[*u8, AllocError] = a.alloc[u8](n + 1);
-    if (!r.tag) {
-        ret err[Path, AllocError](r.value.err);
+    if (r.is_err()) {
+        ret err[Path, AllocError](r.unwrap_err());
     }
 
-    val buf: *u8 = r.value.ok;
+    val buf: *u8 = r.unwrap_ok();
     mem.raw_copy(buf::ptr, p::ptr, n);
     buf[n] = 0;
     ret ok[Path, AllocError](buf::&u8);
@@ -108,11 +108,11 @@ pub fun join(a: *Allocator, left: Path, right: Path) Result[Path, AllocError] {
 
     val out_len: usize = left_len + right_len + extra;
     val r: Result[*u8, AllocError] = a.alloc[u8](out_len + 1);
-    if (!r.tag) {
-        ret err[Path, AllocError](r.value.err);
+    if (r.is_err()) {
+        ret err[Path, AllocError](r.unwrap_err());
     }
 
-    val buf: *u8 = r.value.ok;
+    val buf: *u8 = r.unwrap_ok();
     mem.raw_copy(buf::ptr, left::ptr, left_len);
 
     var off: usize = left_len;

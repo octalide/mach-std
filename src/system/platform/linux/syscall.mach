@@ -1,100 +1,115 @@
 use std.types.size;
 
-# stable linux syscall helpers for std.system.platform.
-#
-# these return the raw i64 convention used by linux.
+# std.system.platform.linux.syscall: portable syscall wrappers.
+# ---
+# these use the portable MASM `syscall` IR opcode which handles ABI-specific
+# register placement automatically. returns raw i64 per linux convention.
 
 $if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
 	$error("std.system.platform.linux.syscall: unsupported arch");
 }
 
+# Execute a syscall with no arguments.
+# ---
+# n: syscall number
+# ret: syscall result (negative on error)
 pub fun syscall0(n: usize) i64 {
 	var out: i64;
 	masm {
-		mov rax, n
-		syscall
-		mov out, rax
+		syscall out, n
 	}
 	ret out;
 }
 
+# Execute a syscall with 1 argument.
+# ---
+# n: syscall number
+# a0: first argument
+# ret: syscall result (negative on error)
 pub fun syscall1(n: usize, a0: usize) i64 {
 	var out: i64;
 	masm {
-		mov rax, n
-		mov rdi, a0
-		syscall
-		mov out, rax
+		syscall out, n, a0
 	}
 	ret out;
 }
 
+# Execute a syscall with 2 arguments.
+# ---
+# n: syscall number
+# a0: first argument
+# a1: second argument
+# ret: syscall result (negative on error)
 pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
 	var out: i64;
 	masm {
-		mov rax, n
-		mov rdi, a0
-		mov rsi, a1
-		syscall
-		mov out, rax
+		syscall out, n, a0, a1
 	}
 	ret out;
 }
 
+# Execute a syscall with 3 arguments.
+# ---
+# n: syscall number
+# a0: first argument
+# a1: second argument
+# a2: third argument
+# ret: syscall result (negative on error)
 pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
 	var out: i64;
 	masm {
-		mov rax, n
-		mov rdi, a0
-		mov rsi, a1
-		mov rdx, a2
-		syscall
-		mov out, rax
+		syscall out, n, a0, a1, a2
 	}
 	ret out;
 }
 
+# Execute a syscall with 4 arguments.
+# ---
+# n: syscall number
+# a0: first argument
+# a1: second argument
+# a2: third argument
+# a3: fourth argument
+# ret: syscall result (negative on error)
 pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
 	var out: i64;
 	masm {
-		mov rax, n
-		mov rdi, a0
-		mov rsi, a1
-		mov rdx, a2
-		mov r10, a3
-		syscall
-		mov out, rax
+		syscall out, n, a0, a1, a2, a3
 	}
 	ret out;
 }
 
+# Execute a syscall with 5 arguments.
+# ---
+# n: syscall number
+# a0: first argument
+# a1: second argument
+# a2: third argument
+# a3: fourth argument
+# a4: fifth argument
+# ret: syscall result (negative on error)
 pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
 	var out: i64;
 	masm {
-		mov rax, n
-		mov rdi, a0
-		mov rsi, a1
-		mov rdx, a2
-		mov r10, a3
-		mov r8,  a4
-		syscall
-		mov out, rax
+		syscall out, n, a0, a1, a2, a3, a4
 	}
 	ret out;
 }
 
+# Execute a syscall with 6 arguments.
+# ---
+# n: syscall number
+# a0: first argument
+# a1: second argument
+# a2: third argument
+# a3: fourth argument
+# a4: fifth argument
+# a5: sixth argument
+# ret: syscall result (negative on error)
 pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
 	var out: i64;
 	masm {
-		mov rax, n
-		mov rdi, a0
-		mov rsi, a1
-		mov rdx, a2
-		mov r10, a3
-		mov r8,  a4
-		mov r9,  a5
-		syscall
-		mov out, rax
+		syscall out, n, a0, a1, a2, a3, a4, a5
 	}
 	ret out;
 }

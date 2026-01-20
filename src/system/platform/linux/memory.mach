@@ -38,7 +38,7 @@ pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
     if (p == nil) { ret allocate(new_size); }
 
     if (new_size == 0) {
-        val ok: bool = deallocate(p, old_size);
+        deallocate(p, old_size);
         ret nil;
     }
 

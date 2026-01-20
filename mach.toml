@@ -4,6 +4,7 @@ name = "Mach Standard Library"
 version = "0.2.5"
 dir_src = "src"
 dir_out = "out"
+dir_tests = "tests"
 dir_dep = "dep"
 target = "native"
 

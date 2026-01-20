@@ -13,7 +13,7 @@ pub rec Vector[T] {
     data: *T;
     len: usize;
     cap: usize;
-} 
+}
 
 # Create an empty vector using the provided allocator
 # ---
@@ -26,7 +26,7 @@ pub fun init[T](alloc: Allocator) Vector[T] {
     v.len = 0;
     v.cap = 0;
     ret v;
-} 
+}
 
 # Free the backing buffer and reset the vector fields
 # ---
@@ -111,11 +111,11 @@ pub fun (this: *Vector[T]) reserve(additional: usize) Result[usize, str] {
     }
 
     val r: Result[*T, AllocError] = this.alloc.resize[T](this.data, this.cap, new_cap);
-    if (!r.tag) {
-        ret err[usize, str](r.value.err);
+    if (r.is_err()) {
+        ret err[usize, str](r.unwrap_err());
     }
 
-    this.data = r.value.ok;
+    this.data = r.unwrap_ok();
     this.cap = new_cap;
 
     ret ok[usize, str](this.cap);
@@ -127,8 +127,8 @@ pub fun (this: *Vector[T]) reserve(additional: usize) Result[usize, str] {
 # ret: Ok(new length) or Err(error message)
 pub fun (this: *Vector[T]) push(value: T) Result[usize, str] {
     val r: Result[usize, str] = this.reserve(1);
-    if (!r.tag) {
-        ret err[usize, str](r.value.err);
+    if (r.is_err()) {
+        ret err[usize, str](r.unwrap_err());
     }
 
     this.data[this.len] = value;

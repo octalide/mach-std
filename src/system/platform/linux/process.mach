@@ -1,20 +1,34 @@
-# linux process primitives for std.system.platform.
-#
-# this is intentionally minimal: enough for runtime entry and hard termination.
+use std.types.size;
+use c: std.system.platform.linux.constants;
+
+# std.system.platform.linux.process: process control primitives.
+# ---
+# minimal process control for runtime entry and hard termination.
 
 $if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
     $error("std.system.platform.linux.process: unsupported arch");
 }
 
+# Terminate the process with the given exit code.
+# ---
+# code: exit code to return to the OS
+# ret: does not return
 pub fun terminate(code: i64) {
+    var unused: i64;
     masm {
-        mov rax, 60
-        mov rdi, code
-        syscall
-        hlt
+        syscall unused, c.SYS_EXIT, code
+    }
+    # safety net: halt if syscall somehow returns
+    masm {
+        x86_64 {
+            hlt
+        }
     }
 }
 
+# Abort the process immediately with exit code 255.
+# ---
+# ret: does not return
 pub fun abort() {
     terminate(255);
 }

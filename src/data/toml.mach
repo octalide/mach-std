@@ -75,11 +75,11 @@ fun alloc_copy(a: *Allocator, src: str, start: usize, len: usize) Result[str, st
     }
 
     val r: Result[*u8, AllocError] = a.alloc[u8](len + 1);
-    if (!r.tag) {
-        ret err[str, str](r.value.err);
+    if (r.is_err()) {
+        ret err[str, str](r.unwrap_err());
     }
 
-    val buf: *u8 = r.value.ok;
+    val buf: *u8 = r.unwrap_ok();
     mem.raw_copy(buf::ptr, (src::usize + start)::ptr, len);
     buf[len] = 0;
     ret ok[str, str](buf::&u8);
@@ -96,11 +96,11 @@ fun concat_key(a: *Allocator, prefix: str, key: str) Result[str, str] {
     # prefix + '.' + key
     val out_len: usize = p_len + 1 + k_len;
     val r: Result[*u8, AllocError] = a.alloc[u8](out_len + 1);
-    if (!r.tag) {
-        ret err[str, str](r.value.err);
+    if (r.is_err()) {
+        ret err[str, str](r.unwrap_err());
     }
 
-    val buf: *u8 = r.value.ok;
+    val buf: *u8 = r.unwrap_ok();
     mem.raw_copy(buf::ptr, prefix::ptr, p_len);
     buf[p_len] = 46;
     mem.raw_copy((buf::usize + p_len + 1)::ptr, key::ptr, k_len);
@@ -118,10 +118,10 @@ fun push_entry(a: *Allocator, entries: *Entry, cap: *usize, len: *usize, e: Entr
     if (@cap == 0) {
         @cap = 16;
         val r: Result[*Entry, AllocError] = a.alloc[Entry](@cap);
-        if (!r.tag) {
-            ret err[*Entry, str](r.value.err);
+        if (r.is_err()) {
+            ret err[*Entry, str](r.unwrap_err());
         }
-        out = r.value.ok;
+        out = r.unwrap_ok();
     } or (out == nil) {
         ret err[*Entry, str]("internal error");
     }
@@ -130,10 +130,10 @@ fun push_entry(a: *Allocator, entries: *Entry, cap: *usize, len: *usize, e: Entr
         val old: usize = @cap;
         val new_cap: usize = old * 2;
         val r2: Result[*Entry, AllocError] = a.resize[Entry](out, old, new_cap);
-        if (!r2.tag) {
-            ret err[*Entry, str](r2.value.err);
+        if (r2.is_err()) {
+            ret err[*Entry, str](r2.unwrap_err());
         }
-        out = r2.value.ok;
+        out = r2.unwrap_ok();
         @cap = new_cap;
     }
 
@@ -178,11 +178,11 @@ fun parse_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
 
     # allocate
     val r: Result[*u8, AllocError] = a.alloc[u8](out_len + 1);
-    if (!r.tag) {
-        ret err[str, str](r.value.err);
+    if (r.is_err()) {
+        ret err[str, str](r.unwrap_err());
     }
 
-    val buf: *u8 = r.value.ok;
+    val buf: *u8 = r.unwrap_ok();
 
     # pass 2: copy/translate
     var si: usize = start;
@@ -286,20 +286,20 @@ fun parse_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
     val b: u8 = src[@i];
     if (b == 34) {
         val r: Result[str, str] = parse_string(a, src, i);
-        if (!r.tag) { ret err[Value, str](r.value.err); }
-        ret ok[Value, str](Value{string: r.value.ok});
+        if (r.is_err()) { ret err[Value, str](r.unwrap_err()); }
+        ret ok[Value, str](Value{string: r.unwrap_ok()});
     }
 
     if (b == 45 || (b >= 48 && b <= 57)) {
         val r: Result[i64, str] = parse_int(src, i);
-        if (!r.tag) { ret err[Value, str](r.value.err); }
-        ret ok[Value, str](Value{integer: r.value.ok});
+        if (r.is_err()) { ret err[Value, str](r.unwrap_err()); }
+        ret ok[Value, str](Value{integer: r.unwrap_ok()});
     }
 
     if (b == 116 || b == 102) {
         val r: Result[bool, str] = parse_bool(src, i);
-        if (!r.tag) { ret err[Value, str](r.value.err); }
-        ret ok[Value, str](Value{boolean: r.value.ok});
+        if (r.is_err()) { ret err[Value, str](r.unwrap_err()); }
+        ret ok[Value, str](Value{boolean: r.unwrap_ok()});
     }
 
     if (b == 91) {
@@ -319,25 +319,25 @@ fun parse_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
             }
 
             val vr: Result[Value, str] = parse_value(a, src, i);
-            if (!vr.tag) {
-                ret err[Value, str](vr.value.err);
+            if (vr.is_err()) {
+                ret err[Value, str](vr.unwrap_err());
             }
 
             if (cap == 0) {
                 cap = 8;
                 val r0: Result[*Value, AllocError] = a.alloc[Value](cap);
-                if (!r0.tag) { ret err[Value, str](r0.value.err); }
-                items = r0.value.ok;
+                if (r0.is_err()) { ret err[Value, str](r0.unwrap_err()); }
+                items = r0.unwrap_ok();
             } or (len >= cap) {
                 val old: usize = cap;
                 val new_cap: usize = cap * 2;
                 val r1: Result[*Value, AllocError] = a.resize[Value](items, old, new_cap);
-                if (!r1.tag) { ret err[Value, str](r1.value.err); }
-                items = r1.value.ok;
+                if (r1.is_err()) { ret err[Value, str](r1.unwrap_err()); }
+                items = r1.unwrap_ok();
                 cap = new_cap;
             }
 
-            items[len] = vr.value.ok;
+            items[len] = vr.unwrap_ok();
             len = len + 1;
 
             skip_ws_and_comments(src, i);
@@ -406,11 +406,11 @@ pub fun parse(a: *Allocator, src: str) Result[Document, str] {
             }
 
             val r: Result[str, str] = alloc_copy(a, src, start, end - start);
-            if (!r.tag) {
-                ret err[Document, str](r.value.err);
+            if (r.is_err()) {
+                ret err[Document, str](r.unwrap_err());
             }
 
-            prefix = r.value.ok;
+            prefix = r.unwrap_ok();
 
             # consume ']'
             i = i + 1;
@@ -428,8 +428,8 @@ pub fun parse(a: *Allocator, src: str) Result[Document, str] {
 
         # trim key trailing spaces (shouldn't happen for is_ident loop)
         val key_r: Result[str, str] = alloc_copy(a, src, key_start, i - key_start);
-        if (!key_r.tag) {
-            ret err[Document, str](key_r.value.err);
+        if (key_r.is_err()) {
+            ret err[Document, str](key_r.unwrap_err());
         }
 
         skip_ws_and_comments(src, ?i);
@@ -439,21 +439,21 @@ pub fun parse(a: *Allocator, src: str) Result[Document, str] {
         i = i + 1;
 
         val vr: Result[Value, str] = parse_value(a, src, ?i);
-        if (!vr.tag) {
-            ret err[Document, str](vr.value.err);
+        if (vr.is_err()) {
+            ret err[Document, str](vr.unwrap_err());
         }
 
-        val full_key_r: Result[str, str] = concat_key(a, prefix, key_r.value.ok);
-        if (!full_key_r.tag) {
-            ret err[Document, str](full_key_r.value.err);
+        val full_key_r: Result[str, str] = concat_key(a, prefix, key_r.unwrap_ok());
+        if (full_key_r.is_err()) {
+            ret err[Document, str](full_key_r.unwrap_err());
         }
 
-        val pr: Result[*Entry, str] = push_entry(a, entries, ?cap, ?len, Entry{key: full_key_r.value.ok, value: vr.value.ok});
-        if (!pr.tag) {
-            ret err[Document, str](pr.value.err);
+        val pr: Result[*Entry, str] = push_entry(a, entries, ?cap, ?len, Entry{key: full_key_r.unwrap_ok(), value: vr.unwrap_ok()});
+        if (pr.is_err()) {
+            ret err[Document, str](pr.unwrap_err());
         }
 
-        entries = pr.value.ok;
+        entries = pr.unwrap_ok();
 
         # consume rest of line
         for (src[i] != 0 && src[i] != 10) {

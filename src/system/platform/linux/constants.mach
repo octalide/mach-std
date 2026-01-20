@@ -71,3 +71,33 @@ pub val SEEK_END: i32 = 2;
 pub val STDIN_FILENO:  i32 = 0;
 pub val STDOUT_FILENO: i32 = 1;
 pub val STDERR_FILENO: i32 = 2;
+
+# errno values (negated for syscall return convention)
+pub val EPERM:   i64 = -1;
+pub val ENOENT:  i64 = -2;
+pub val ESRCH:   i64 = -3;
+pub val EINTR:   i64 = -4;
+pub val EIO:     i64 = -5;
+pub val ENXIO:   i64 = -6;
+pub val E2BIG:   i64 = -7;
+pub val EBADF:   i64 = -9;
+pub val EAGAIN:  i64 = -11;
+pub val ENOMEM:  i64 = -12;
+pub val EACCES:  i64 = -13;
+pub val EFAULT:  i64 = -14;
+pub val EBUSY:   i64 = -16;
+pub val EEXIST:  i64 = -17;
+pub val ENODEV:  i64 = -19;
+pub val ENOTDIR: i64 = -20;
+pub val EISDIR:  i64 = -21;
+pub val EINVAL:  i64 = -22;
+pub val ENFILE:  i64 = -23;
+pub val EMFILE:  i64 = -24;
+pub val ENOSPC:  i64 = -28;
+pub val EROFS:   i64 = -30;
+pub val EPIPE:   i64 = -32;
+pub val ENOTEMPTY: i64 = -39;
+pub val ENOTSUP: i64 = -95;
+
+# retry limit for EINTR handling
+pub val EINTR_MAX_RETRIES: usize = 8;

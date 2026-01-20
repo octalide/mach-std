@@ -22,5 +22,5 @@ pub fun view_make[T](data: &T, size: usize) View[T] {
 # ---
 # ret: true if the view is empty, false otherwise.
 pub fun (this: View[T]) is_empty() bool {
-    ret this.data == nil || this.size == 0;
+    ret this.size == 0;
 }
