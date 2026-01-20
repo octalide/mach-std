@@ -1,10 +1,9 @@
 [project]
 id = "std"
 name = "Mach Standard Library"
-version = "0.2.5"
+version = "0.3.0"
 dir_src = "src"
 dir_out = "out"
-dir_tests = "tests"
 dir_dep = "dep"
 target = "native"
 
@@ -15,4 +14,5 @@ abi = "sysv64"
 mode = "library"
 entrypoint = "lib.mach"
 artifacts = "linux"
+dir_tests = "tests"
 binary = "linux/bin/libmachstd.a"
