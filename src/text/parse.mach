@@ -1,0 +1,380 @@
+use std.types.bool;
+use std.types.size;
+use std.types.string;
+use std.types.result;
+use ascii: std.text.ascii;
+use int: std.types.int;
+
+# std.text.parse: number parsing utilities
+# ---
+# Parse integers from strings with various bases and options
+
+# Parse an unsigned 64-bit integer from a string
+# ---
+# s: string to parse
+# base: numeric base (2-36), or 0 for auto-detect (0x, 0b, 0o prefixes)
+# ret: Result containing the parsed value or an error message
+pub fun parse_u64(s: str, base: u8) Result[u64, str] {
+    val len: usize = s.len();
+    if (len == 0) {
+        ret err[u64, str]("empty string");
+    }
+
+    var i: usize = 0;
+    var actual_base: u8 = base;
+
+    # skip leading whitespace
+    for (i < len && ascii.is_space(s[i])) {
+        i = i + 1;
+    }
+
+    if (i >= len) {
+        ret err[u64, str]("empty string after whitespace");
+    }
+
+    # auto-detect base if base == 0
+    if (actual_base == 0) {
+        if (s[i] == '0' && i + 1 < len) {
+            val next: u8 = s[i + 1];
+            if (next == 'x' || next == 'X') {
+                actual_base = 16;
+                i = i + 2;
+            }
+            or (next == 'b' || next == 'B') {
+                actual_base = 2;
+                i = i + 2;
+            }
+            or (next == 'o' || next == 'O') {
+                actual_base = 8;
+                i = i + 2;
+            }
+            or {
+                actual_base = 10;
+            }
+        }
+        or {
+            actual_base = 10;
+        }
+    }
+
+    # validate base
+    if (actual_base < 2 || actual_base > 36) {
+        ret err[u64, str]("invalid base");
+    }
+
+    if (i >= len) {
+        ret err[u64, str]("no digits after prefix");
+    }
+
+    var result: u64 = 0;
+    var has_digit: bool = false;
+    val base_u64: u64 = int.zext_u8_to_u64(actual_base);
+
+    for (i < len) {
+        val c: u8 = s[i];
+
+        # allow underscore separators
+        if (c == '_') {
+            i = i + 1;
+            cnt;
+        }
+
+        val dv: i32 = ascii.digit_val(c);
+        if (dv < 0 || dv >= int.zext_u8_to_i32(actual_base)) {
+            # invalid character for this base
+            if (has_digit) {
+                # stop at first invalid char (might be end of number)
+                brk;
+            }
+            ret err[u64, str]("invalid digit");
+        }
+
+        val digit: u64 = int.zext_u8_to_u64(dv::u8);
+        has_digit = true;
+
+        # check for overflow before multiply
+        val max_before_mul: u64 = 18446744073709551615 / base_u64;
+        if (result > max_before_mul) {
+            ret err[u64, str]("overflow");
+        }
+
+        val new_result: u64 = result * base_u64;
+
+        # check for overflow before add
+        val max_add: u64 = 18446744073709551615 - new_result;
+        if (digit > max_add) {
+            ret err[u64, str]("overflow");
+        }
+
+        result = new_result + digit;
+        i = i + 1;
+    }
+
+    if (!has_digit) {
+        ret err[u64, str]("no digits");
+    }
+
+    ret ok[u64, str](result);
+}
+
+# Parse a signed 64-bit integer from a string
+# ---
+# s: string to parse
+# base: numeric base (2-36), or 0 for auto-detect (0x, 0b, 0o prefixes)
+# ret: Result containing the parsed value or an error message
+pub fun parse_i64(s: str, base: u8) Result[i64, str] {
+    val len: usize = s.len();
+    if (len == 0) {
+        ret err[i64, str]("empty string");
+    }
+
+    var i: usize = 0;
+
+    # skip leading whitespace
+    for (i < len && ascii.is_space(s[i])) {
+        i = i + 1;
+    }
+
+    if (i >= len) {
+        ret err[i64, str]("empty string after whitespace");
+    }
+
+    # check for sign
+    var negative: bool = false;
+    if (s[i] == '-') {
+        negative = true;
+        i = i + 1;
+    }
+    or (s[i] == '+') {
+        i = i + 1;
+    }
+
+    if (i >= len) {
+        ret err[i64, str]("no digits after sign");
+    }
+
+    # parse remaining as unsigned using pointer arithmetic
+    val remaining: str = (?s[i])::str;
+    val u_result: Result[u64, str] = parse_u64(remaining, base);
+
+    if (u_result.is_err()) {
+        ret err[i64, str](u_result.unwrap_err());
+    }
+
+    val u_val: u64 = u_result.unwrap_ok();
+
+    # i64 range: -9223372036854775808 to 9223372036854775807
+    if (negative) {
+        # for negative, magnitude can be up to 9223372036854775808
+        if (u_val > 9223372036854775808) {
+            ret err[i64, str]("overflow");
+        }
+        # special case: exactly i64 min
+        if (u_val == 9223372036854775808) {
+            ret ok[i64, str](-9223372036854775808);
+        }
+        val signed: i64 = u_val::i64;
+        ret ok[i64, str](-signed);
+    }
+
+    # for positive, max is 9223372036854775807
+    if (u_val > 9223372036854775807) {
+        ret err[i64, str]("overflow");
+    }
+    ret ok[i64, str](u_val::i64);
+}
+
+# --- tests ---
+
+test "parse: u64 decimal simple" {
+    val r: Result[u64, str] = parse_u64("12345", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 12345) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 decimal zero" {
+    val r: Result[u64, str] = parse_u64("0", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 0) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 hex lowercase" {
+    val r: Result[u64, str] = parse_u64("ff", 16);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 255) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 hex uppercase" {
+    val r: Result[u64, str] = parse_u64("FF", 16);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 255) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 binary" {
+    val r: Result[u64, str] = parse_u64("1010", 2);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 10) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 octal" {
+    val r: Result[u64, str] = parse_u64("77", 8);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 63) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 auto-detect hex" {
+    val r: Result[u64, str] = parse_u64("0xff", 0);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 255) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 auto-detect binary" {
+    val r: Result[u64, str] = parse_u64("0b1010", 0);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 10) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 auto-detect octal" {
+    val r: Result[u64, str] = parse_u64("0o77", 0);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 63) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 auto-detect decimal" {
+    val r: Result[u64, str] = parse_u64("999", 0);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 999) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 with underscores" {
+    val r: Result[u64, str] = parse_u64("1_000_000", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 1000000) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 max value" {
+    val r: Result[u64, str] = parse_u64("18446744073709551615", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 18446744073709551615) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 overflow" {
+    val r: Result[u64, str] = parse_u64("18446744073709551616", 10);
+    if (r.is_ok()) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 empty string" {
+    val r: Result[u64, str] = parse_u64("", 10);
+    if (r.is_ok()) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 invalid digit" {
+    val r: Result[u64, str] = parse_u64("12g45", 10);
+    # should parse up to 'g' and return 12
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 12) { ret 1; }
+    ret 0;
+}
+
+test "parse: u64 leading whitespace" {
+    val r: Result[u64, str] = parse_u64("  42", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 42) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 positive" {
+    val r: Result[i64, str] = parse_i64("12345", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 12345) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 negative" {
+    val r: Result[i64, str] = parse_i64("-12345", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != -12345) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 explicit positive" {
+    val r: Result[i64, str] = parse_i64("+42", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 42) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 zero" {
+    val r: Result[i64, str] = parse_i64("0", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 0) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 negative zero" {
+    val r: Result[i64, str] = parse_i64("-0", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 0) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 max value" {
+    val r: Result[i64, str] = parse_i64("9223372036854775807", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != 9223372036854775807) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 min value" {
+    val r: Result[i64, str] = parse_i64("-9223372036854775808", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != -9223372036854775808) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 overflow positive" {
+    val r: Result[i64, str] = parse_i64("9223372036854775808", 10);
+    if (r.is_ok()) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 overflow negative" {
+    val r: Result[i64, str] = parse_i64("-9223372036854775809", 10);
+    if (r.is_ok()) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 hex with sign" {
+    val r: Result[i64, str] = parse_i64("-0xff", 0);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != -255) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 with underscores" {
+    val r: Result[i64, str] = parse_i64("-1_000_000", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != -1000000) { ret 1; }
+    ret 0;
+}
+
+test "parse: i64 leading whitespace" {
+    val r: Result[i64, str] = parse_i64("  -42", 10);
+    if (r.is_err()) { ret 1; }
+    if (r.unwrap_ok() != -42) { ret 1; }
+    ret 0;
+}
