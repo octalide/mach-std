@@ -152,3 +152,170 @@ pub fun zext_i32_to_usize(x: i32) usize {
     ret zext_u32_to_usize(u);
 }
 
+# --- tests ---
+
+test "int: zext_u8_to_u64 zero extends byte" {
+    val x: u8 = 255;
+    val y: u64 = zext_u8_to_u64(x);
+    if (y != 255) { ret 1; }
+    ret 0;
+}
+
+test "int: zext_u8_to_u64 with zero" {
+    val x: u8 = 0;
+    val y: u64 = zext_u8_to_u64(x);
+    if (y != 0) { ret 1; }
+    ret 0;
+}
+
+test "int: zext_u8_to_u64 with small value" {
+    val x: u8 = 42;
+    val y: u64 = zext_u8_to_u64(x);
+    if (y != 42) { ret 1; }
+    ret 0;
+}
+
+test "int: zext_u8_to_i32 zero extends byte to i32" {
+    val x: u8 = 200;
+    val y: i32 = zext_u8_to_i32(x);
+    if (y != 200) { ret 1; }
+    ret 0;
+}
+
+test "int: zext_u8_to_i32 with max byte" {
+    val x: u8 = 255;
+    val y: i32 = zext_u8_to_i32(x);
+    if (y != 255) { ret 1; }
+    ret 0;
+}
+
+test "int: trunc_u64_to_u8 truncates to low byte" {
+    val x: u64 = 0xDEADBEEF;
+    val y: u8 = trunc_u64_to_u8(x);
+    if (y != 0xEF) { ret 1; }
+    ret 0;
+}
+
+test "int: trunc_u64_to_u8 preserves low byte" {
+    val x: u64 = 0x123456789ABCDE42;
+    val y: u8 = trunc_u64_to_u8(x);
+    if (y != 0x42) { ret 1; }
+    ret 0;
+}
+
+test "int: trunc_u64_to_u8 with small value" {
+    val x: u64 = 100;
+    val y: u8 = trunc_u64_to_u8(x);
+    if (y != 100) { ret 1; }
+    ret 0;
+}
+
+test "int: trunc_usize_to_u8 truncates to low byte" {
+    val x: usize = 0xABCD;
+    val y: u8 = trunc_usize_to_u8(x);
+    if (y != 0xCD) { ret 1; }
+    ret 0;
+}
+
+test "int: trunc_i64_to_i32 truncates to low 32 bits" {
+    val x: i64 = 0x123456789ABCDEF0;
+    val y: i32 = trunc_i64_to_i32(x);
+    # low 32 bits: 0x9ABCDEF0, interpreted as i32
+    # 0x9ABCDEF0 = -1698898192 as signed
+    if (y != -1698898192) { ret 1; }
+    ret 0;
+}
+
+test "int: trunc_i64_to_i32 preserves small positive" {
+    val x: i64 = 12345;
+    val y: i32 = trunc_i64_to_i32(x);
+    if (y != 12345) { ret 1; }
+    ret 0;
+}
+
+test "int: trunc_i64_to_i32 preserves small negative" {
+    val x: i64 = -500;
+    val y: i32 = trunc_i64_to_i32(x);
+    if (y != -500) { ret 1; }
+    ret 0;
+}
+
+test "int: sext_i32_to_isize positive value" {
+    val x: i32 = 1000000;
+    val y: isize = sext_i32_to_isize(x);
+    if (y != 1000000) { ret 1; }
+    ret 0;
+}
+
+test "int: sext_i32_to_isize negative value" {
+    val x: i32 = -1000000;
+    val y: isize = sext_i32_to_isize(x);
+    if (y != -1000000) { ret 1; }
+    ret 0;
+}
+
+test "int: sext_i32_to_isize with -1" {
+    val x: i32 = -1;
+    val y: isize = sext_i32_to_isize(x);
+    if (y != -1) { ret 1; }
+    ret 0;
+}
+
+test "int: sext_i32_to_isize with zero" {
+    val x: i32 = 0;
+    val y: isize = sext_i32_to_isize(x);
+    if (y != 0) { ret 1; }
+    ret 0;
+}
+
+test "int: zext_u32_to_usize zero extends" {
+    val x: u32 = 0xFFFFFFFF;
+    val y: usize = zext_u32_to_usize(x);
+    if (y != 0xFFFFFFFF) { ret 1; }
+    ret 0;
+}
+
+test "int: zext_u32_to_usize with small value" {
+    val x: u32 = 42;
+    val y: usize = zext_u32_to_usize(x);
+    if (y != 42) { ret 1; }
+    ret 0;
+}
+
+test "int: zext_u32_to_usize with zero" {
+    val x: u32 = 0;
+    val y: usize = zext_u32_to_usize(x);
+    if (y != 0) { ret 1; }
+    ret 0;
+}
+
+test "int: zext_i32_to_usize reinterprets bits" {
+    val x: i32 = -1;
+    val y: usize = zext_i32_to_usize(x);
+    # -1 as i32 is 0xFFFFFFFF, zero extended stays 0xFFFFFFFF
+    if (y != 0xFFFFFFFF) { ret 1; }
+    ret 0;
+}
+
+test "int: zext_i32_to_usize with positive" {
+    val x: i32 = 100;
+    val y: usize = zext_i32_to_usize(x);
+    if (y != 100) { ret 1; }
+    ret 0;
+}
+
+test "int: roundtrip u8 through u64" {
+    val orig: u8 = 0xAB;
+    val wide: u64 = zext_u8_to_u64(orig);
+    val back: u8 = trunc_u64_to_u8(wide);
+    if (back != orig) { ret 1; }
+    ret 0;
+}
+
+test "int: roundtrip i32 through isize" {
+    val orig: i32 = -999;
+    val wide: isize = sext_i32_to_isize(orig);
+    val back: i32 = trunc_i64_to_i32(wide);
+    if (back != orig) { ret 1; }
+    ret 0;
+}

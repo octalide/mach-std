@@ -2,8 +2,8 @@ use std.types.bool;
 
 # Option[T] represents an optional value that may or may not be present.
 pub rec Option[T] {
-    is_some: bool;
-    value:   T;
+    has_value: bool;
+    value:     T;
 }
 
 # Unwraps the Option[T], returning the contained value.
@@ -17,14 +17,14 @@ pub fun (this: Option[T]) unwrap() T {
 # ---
 # ret: true if no value is present, false otherwise.
 pub fun (this: Option[T]) is_none() bool {
-    ret this.is_some == false;
+    ret this.has_value == false;
 }
 
 # Checks if the Option[T] is some (value is present).
 # ---
 # ret: true if a value is present, false otherwise.
 pub fun (this: Option[T]) is_some() bool {
-    ret this.is_some == true;
+    ret this.has_value == true;
 }
 
 # Creates an Option[T] containing a value.
@@ -33,8 +33,8 @@ pub fun (this: Option[T]) is_some() bool {
 # ret:   An Option[T] with the value present.
 pub fun some[T](value: T) Option[T] {
     var opt: Option[T];
-    opt.is_some = true;
-    opt.value   = value;
+    opt.has_value = true;
+    opt.value     = value;
     ret opt;
 }
 
@@ -43,6 +43,78 @@ pub fun some[T](value: T) Option[T] {
 # ret: An Option[T] with no value present.
 pub fun none[T]() Option[T] {
     var opt: Option[T];
-    opt.is_some = false;
+    opt.has_value = false;
     ret opt;
+}
+
+# --- tests ---
+
+test "option: some creates value with is_some true" {
+    val opt: Option[i64] = some[i64](42);
+    if (!opt.is_some()) { ret 1; }
+    ret 0;
+}
+
+test "option: some creates value with is_none false" {
+    val opt: Option[i64] = some[i64](42);
+    if (opt.is_none()) { ret 1; }
+    ret 0;
+}
+
+test "option: none creates value with is_none true" {
+    val opt: Option[i64] = none[i64]();
+    if (!opt.is_none()) { ret 1; }
+    ret 0;
+}
+
+test "option: none creates value with is_some false" {
+    val opt: Option[i64] = none[i64]();
+    if (opt.is_some()) { ret 1; }
+    ret 0;
+}
+
+test "option: unwrap returns contained value" {
+    val opt: Option[i64] = some[i64](123);
+    val v: i64 = opt.unwrap();
+    if (v != 123) { ret 1; }
+    ret 0;
+}
+
+test "option: some with zero value" {
+    val opt: Option[i64] = some[i64](0);
+    if (!opt.is_some()) { ret 1; }
+    if (opt.unwrap() != 0) { ret 1; }
+    ret 0;
+}
+
+test "option: some with negative value" {
+    val opt: Option[i64] = some[i64](-999);
+    if (!opt.is_some()) { ret 1; }
+    if (opt.unwrap() != -999) { ret 1; }
+    ret 0;
+}
+
+test "option: some with pointer type" {
+    var x: i64 = 42;
+    val opt: Option[*i64] = some[*i64](?x);
+    if (!opt.is_some()) { ret 1; }
+    val p: *i64 = opt.unwrap();
+    if (@p != 42) { ret 1; }
+    ret 0;
+}
+
+test "option: none with pointer type" {
+    val opt: Option[*i64] = none[*i64]();
+    if (!opt.is_none()) { ret 1; }
+    ret 0;
+}
+
+test "option: some with bool type" {
+    val opt_true: Option[bool] = some[bool](true);
+    val opt_false: Option[bool] = some[bool](false);
+    if (!opt_true.is_some()) { ret 1; }
+    if (!opt_false.is_some()) { ret 1; }
+    if (opt_true.unwrap() != true) { ret 1; }
+    if (opt_false.unwrap() != false) { ret 1; }
+    ret 0;
 }

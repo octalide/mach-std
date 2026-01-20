@@ -4,6 +4,8 @@ use std.types.size;
 use std.types.string;
 
 use int: std.types.int;
+use mem: std.memory;
+use time: std.time;
 
 use pfs: std.system.platform.filesystem;
 use errno: std.system.platform.errno;
@@ -20,6 +22,15 @@ $if ($mach.build.target.os.id == $mach.os.linux.id) {
 $or {
     $error("std.filesystem: unsupported target");
 }
+
+# temp directory path
+pub val TEMP_DIR: str = "/tmp";
+
+# max attempts for temp file creation
+val TEMP_MAX_ATTEMPTS: usize = 100;
+
+# static counter for unique temp file names
+var temp_counter: u64 = 0;
 
 # Stat: platform file metadata structure.
 # ---
@@ -191,4 +202,364 @@ pub fun (this: *File) seek(offset: i64, whence: i32) Result[i64, str] {
     }
 
     ret ok[i64, str](raw);
+}
+
+# unlink: remove a file at the given path.
+# ---
+# path: file path to remove
+# ret: Ok(true) on success or Err(str) with errno message on failure.
+pub fun unlink(path: str) Result[bool, str] {
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = pfs.unlinkat(c.AT_FDCWD, path, 0);
+        if (raw < 0) {
+            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[bool, str](true);
+    }
+
+    ret err[bool, str](errno.message(raw));
+}
+
+# TempFile: a temporary file that stores its path for cleanup.
+# ---
+# file: underlying File handle
+# path_buf: stored path for cleanup
+# path_len: length of stored path
+pub rec TempFile {
+    file:     File;
+    path_buf: [256]u8;
+    path_len: usize;
+}
+
+# temp_create: create a temporary file with the given prefix.
+# ---
+# prefix: prefix for the temp file name (e.g., "test" -> "/tmp/test_<timestamp>_<counter>")
+# ret: Ok(TempFile) on success or Err(str) on failure.
+pub fun temp_create(prefix: str) Result[TempFile, str] {
+    var attempt: usize = 0;
+
+    for (attempt < TEMP_MAX_ATTEMPTS) {
+        # get current time for uniqueness
+        val t: time.Time = time.now();
+        val ns: i64 = t.unix_nano();
+
+        # increment counter
+        temp_counter = temp_counter + 1;
+
+        # build path: /tmp/{prefix}_{ns}_{counter}
+        var tf: TempFile;
+        tf.path_len = 0;
+
+        # copy "/tmp/"
+        val dir_len: usize = TEMP_DIR.len();
+        mem.raw_copy(?tf.path_buf[0], TEMP_DIR, dir_len);
+        tf.path_len = dir_len;
+
+        # add "/"
+        tf.path_buf[tf.path_len] = 47; # '/'
+        tf.path_len = tf.path_len + 1;
+
+        # copy prefix
+        if (prefix != nil) {
+            val prefix_len: usize = prefix.len();
+            mem.raw_copy(?tf.path_buf[tf.path_len], prefix, prefix_len);
+            tf.path_len = tf.path_len + prefix_len;
+        }
+
+        # add "_"
+        tf.path_buf[tf.path_len] = 95; # '_'
+        tf.path_len = tf.path_len + 1;
+
+        # add timestamp as decimal
+        tf.path_len = write_u64_to_buf(?tf.path_buf[0], tf.path_len, 256, ns::u64);
+
+        # add "_"
+        tf.path_buf[tf.path_len] = 95; # '_'
+        tf.path_len = tf.path_len + 1;
+
+        # add counter as decimal
+        tf.path_len = write_u64_to_buf(?tf.path_buf[0], tf.path_len, 256, temp_counter);
+
+        # null terminate
+        tf.path_buf[tf.path_len] = 0;
+
+        # try to create with O_CREAT | O_EXCL | O_RDWR
+        val flags: i32 = c.O_CREAT | c.O_EXCL | c.O_RDWR;
+        val mode: i32 = 384; # 0600
+
+        val raw: i64 = pfs.openat(c.AT_FDCWD, ?tf.path_buf[0], flags, mode);
+        if (raw >= 0) {
+            tf.file.fd = int.trunc_i64_to_i32(raw);
+            ret ok[TempFile, str](tf);
+        }
+
+        # if EEXIST, retry with new name
+        if (raw == c.EEXIST) {
+            attempt = attempt + 1;
+            cnt;
+        }
+
+        # other error, fail
+        ret err[TempFile, str](errno.message(raw));
+    }
+
+    ret err[TempFile, str]("temp file: max attempts exceeded");
+}
+
+# helper: write u64 as decimal to buffer, return new offset
+fun write_u64_to_buf(buf: *u8, offset: usize, cap: usize, n: u64) usize {
+    var digits: [20]u8;
+    var idx: usize = 20;
+    var x: u64 = n;
+
+    if (x == 0) {
+        idx = idx - 1;
+        digits[idx] = 48; # '0'
+    } or {
+        for (x > 0) {
+            idx = idx - 1;
+            digits[idx] = int.trunc_u64_to_u8(x % 10) + 48;
+            x = x / 10;
+        }
+    }
+
+    val len: usize = 20 - idx;
+    if (offset + len >= cap) {
+        ret offset; # overflow, don't write
+    }
+
+    mem.raw_copy((buf::usize + offset)::*u8, ?digits[idx], len);
+    ret offset + len;
+}
+
+# path: returns the path of the temp file as a string.
+# ---
+# ret: null-terminated path string
+pub fun (this: *TempFile) path() str {
+    ret ?this.path_buf[0];
+}
+
+# as_file: returns a pointer to the underlying File.
+# ---
+# ret: pointer to File
+pub fun (this: *TempFile) as_file() *File {
+    ret ?this.file;
+}
+
+# close: close the temp file (does not remove it).
+# ---
+# ret: Ok(true) on success or Err(str) on failure.
+pub fun (this: *TempFile) tf_close() Result[bool, str] {
+    ret (?this.file).close();
+}
+
+# remove: remove the temp file from disk (should close first).
+# ---
+# ret: Ok(true) on success or Err(str) on failure.
+pub fun (this: *TempFile) remove() Result[bool, str] {
+    ret unlink(?this.path_buf[0]);
+}
+
+# close_and_remove: close the file and remove it from disk.
+# ---
+# ret: Ok(true) on success or Err(str) on failure (returns first error).
+pub fun (this: *TempFile) close_and_remove() Result[bool, str] {
+    val close_res: Result[bool, str] = this.tf_close();
+    val remove_res: Result[bool, str] = this.remove();
+
+    if (close_res.is_err()) {
+        ret close_res;
+    }
+    ret remove_res;
+}
+
+# --- tests ---
+
+test "filesystem: temp_create creates file" {
+    val r: Result[TempFile, str] = temp_create("test");
+    if (r.is_err()) { ret 1; }
+    var tf: TempFile = r.unwrap_ok();
+
+    # file should have valid fd
+    if (tf.file.fd < 0) { ret 2; }
+
+    # path should not be empty
+    if (tf.path_len == 0) { ret 3; }
+
+    # clean up
+    val cr: Result[bool, str] = tf.close_and_remove();
+    if (cr.is_err()) { ret 4; }
+    ret 0;
+}
+
+test "filesystem: temp_create path is valid" {
+    val r: Result[TempFile, str] = temp_create("myprefix");
+    if (r.is_err()) { ret 1; }
+    var tf: TempFile = r.unwrap_ok();
+
+    val p: str = tf.path();
+    if (p == nil) { ret 2; }
+
+    # path should start with /tmp/
+    if (!p.starts_with("/tmp/")) { ret 3; }
+
+    # path should contain prefix
+    if (!p.contains("myprefix")) { ret 4; }
+
+    tf.close_and_remove();
+    ret 0;
+}
+
+test "filesystem: temp file write and read" {
+    val r: Result[TempFile, str] = temp_create("rw");
+    if (r.is_err()) { ret 1; }
+    var tf: TempFile = r.unwrap_ok();
+
+    # write some data
+    val data: str = "hello temp file";
+    val wr: Result[usize, str] = tf.file.write(data, data.len());
+    if (wr.is_err()) { ret 2; }
+    if (wr.unwrap_ok() != data.len()) { ret 3; }
+
+    # seek back to start
+    val sr: Result[i64, str] = tf.file.seek(0, c.SEEK_SET);
+    if (sr.is_err()) { ret 4; }
+
+    # read back
+    var buf: [64]u8;
+    val rr: Result[usize, str] = tf.file.read(?buf[0], 64);
+    if (rr.is_err()) { ret 5; }
+    if (rr.unwrap_ok() != data.len()) { ret 6; }
+
+    # verify content
+    val read_str: str = ?buf[0];
+    if (!read_str.starts_with("hello temp file")) { ret 7; }
+
+    tf.close_and_remove();
+    ret 0;
+}
+
+test "filesystem: temp file close then remove" {
+    val r: Result[TempFile, str] = temp_create("closeremove");
+    if (r.is_err()) { ret 1; }
+    var tf: TempFile = r.unwrap_ok();
+
+    val cr: Result[bool, str] = tf.close();
+    if (cr.is_err()) { ret 2; }
+
+    val rr: Result[bool, str] = tf.remove();
+    if (rr.is_err()) { ret 3; }
+
+    ret 0;
+}
+
+test "filesystem: open non-existent file returns error" {
+    val r: Result[File, str] = open("/tmp/this_file_should_not_exist_12345");
+    if (r.is_ok()) { ret 1; }
+    ret 0;
+}
+
+test "filesystem: create write close open read" {
+    # create a temp file
+    val cr: Result[TempFile, str] = temp_create("fullcycle");
+    if (cr.is_err()) { ret 1; }
+    var tf: TempFile = cr.unwrap_ok();
+
+    # write data
+    val data: str = "test data 12345";
+    val wr: Result[usize, str] = tf.file.write(data, data.len());
+    if (wr.is_err()) { ret 2; }
+
+    # close
+    val clr: Result[bool, str] = tf.close();
+    if (clr.is_err()) { ret 3; }
+
+    # open again for reading
+    val open_res: Result[File, str] = open(tf.path());
+    if (open_res.is_err()) { ret 4; }
+    var f: File = open_res.unwrap_ok();
+
+    # read
+    var buf: [64]u8;
+    val rr: Result[usize, str] = f.read(?buf[0], 64);
+    if (rr.is_err()) { ret 5; }
+    if (rr.unwrap_ok() != data.len()) { ret 6; }
+
+    # close and cleanup
+    f.close();
+    tf.remove();
+    ret 0;
+}
+
+test "filesystem: stat returns valid metadata" {
+    val cr: Result[TempFile, str] = temp_create("stat");
+    if (cr.is_err()) { ret 1; }
+    var tf: TempFile = cr.unwrap_ok();
+
+    # write some data
+    val data: str = "some content";
+    tf.file.write(data, data.len());
+
+    # get stat
+    val sr: Result[Stat, str] = tf.file.stat();
+    if (sr.is_err()) { ret 2; }
+    val st: Stat = sr.unwrap_ok();
+
+    # size should match what we wrote
+    if (st.st_size != data.len()::i64) { ret 3; }
+
+    tf.close_and_remove();
+    ret 0;
+}
+
+test "filesystem: seek repositions file offset" {
+    val cr: Result[TempFile, str] = temp_create("seek");
+    if (cr.is_err()) { ret 1; }
+    var tf: TempFile = cr.unwrap_ok();
+
+    # write data
+    val data: str = "0123456789";
+    tf.file.write(data, data.len());
+
+    # seek to position 5
+    val sr: Result[i64, str] = tf.file.seek(5, c.SEEK_SET);
+    if (sr.is_err()) { ret 2; }
+    if (sr.unwrap_ok() != 5) { ret 3; }
+
+    # read from position 5
+    var buf: [10]u8;
+    val rr: Result[usize, str] = tf.file.read(?buf[0], 10);
+    if (rr.is_err()) { ret 4; }
+    if (rr.unwrap_ok() != 5) { ret 5; } # should read "56789"
+
+    if (buf[0] != 53) { ret 6; } # '5'
+    if (buf[4] != 57) { ret 7; } # '9'
+
+    tf.close_and_remove();
+    ret 0;
+}
+
+test "filesystem: unlink removes file" {
+    val cr: Result[TempFile, str] = temp_create("unlink");
+    if (cr.is_err()) { ret 1; }
+    var tf: TempFile = cr.unwrap_ok();
+    val p: str = tf.path();
+
+    tf.close();
+
+    # unlink the file
+    val ur: Result[bool, str] = unlink(p);
+    if (ur.is_err()) { ret 2; }
+
+    # try to open - should fail
+    val open_res: Result[File, str] = open(p);
+    if (open_res.is_ok()) { ret 3; }
+
+    ret 0;
 }

@@ -3,14 +3,14 @@ use std.types.size;
 use std.types.result;
 use std.types.string;
 
-use std.allocator;
+use allocator: std.allocator;
 use mem: std.memory;
 
 # Mutable string builder that maintains a NUL-terminated buffer
 # ---
 # Keeps an extra byte for the trailing NUL; `cap` includes the NUL.
 pub rec Builder {
-    alloc: Allocator;
+    alloc: allocator.Allocator;
     buf: *u8;
     len: usize;
     cap: usize; # includes space for nul terminator
@@ -20,7 +20,7 @@ pub rec Builder {
 # ---
 # alloc: Allocator to use for allocations
 # ret: A new empty Builder
-pub fun init(alloc: Allocator) Builder {
+pub fun init(alloc: allocator.Allocator) Builder {
     var b: Builder;
     b.alloc = alloc;
     b.buf = nil;
@@ -40,7 +40,7 @@ pub fun (this: *Builder) deinit() bool {
         ret true;
     }
 
-    val ok_free: bool = this.alloc.free[u8](this.buf, this.cap);
+    val ok_free: bool = (?this.alloc).free[u8](this.buf, this.cap);
     if (ok_free) {
         this.buf = nil;
         this.len = 0;
@@ -107,7 +107,7 @@ pub fun (this: *Builder) reserve(additional: usize) Result[usize, str] {
         }
     }
 
-    val r: Result[*u8, AllocError] = this.alloc.resize[u8](this.buf, this.cap, new_cap);
+    val r: Result[*u8, allocator.AllocError] = (?this.alloc).resize[u8](this.buf, this.cap, new_cap);
     if (r.is_err()) { ret err[usize, str](r.unwrap_err()); }
 
     this.buf = r.unwrap_ok();
@@ -167,4 +167,243 @@ pub fun (this: *Builder) c_str() Result[str, str] {
 
     this.buf[this.len] = 0;
     ret ok[str, str](this.buf::&u8);
+}
+
+# --- tests ---
+
+test "builder: init creates empty builder" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    val b: Builder = init(a);
+    if (b.length() != 0) { ret 1; }
+    if (b.capacity() != 0) { ret 1; }
+    ret 0;
+}
+
+test "builder: append_byte adds single byte" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    val r: Result[usize, str] = b.append_byte(65);
+    if (r.is_err()) { ret 1; }
+    if (b.length() != 1) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: append_byte multiple bytes" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    b.append_byte(72);
+    b.append_byte(105);
+
+    if (b.length() != 2) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: append_str adds string" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    val r: Result[usize, str] = b.append_str("hello");
+    if (r.is_err()) { ret 1; }
+    if (b.length() != 5) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: append_str empty string is noop" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    b.append_str("test");
+    val len_before: usize = b.length();
+
+    b.append_str("");
+
+    if (b.length() != len_before) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: append_bytes adds raw bytes" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    var data: [3]u8 = [3]u8{65, 66, 67};
+    val r: Result[usize, str] = b.append_bytes(?data[0], 3);
+    if (r.is_err()) { ret 1; }
+    if (b.length() != 3) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: append_bytes with zero count is noop" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    b.append_str("test");
+    val len_before: usize = b.length();
+
+    var data: [3]u8 = [3]u8{1, 2, 3};
+    b.append_bytes(?data[0], 0);
+
+    if (b.length() != len_before) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: c_str returns null-terminated string" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    b.append_str("hello");
+
+    val r: Result[str, str] = b.c_str();
+    if (r.is_err()) { ret 1; }
+    val s: str = r.unwrap_ok();
+    if (!s.equals("hello")) { ret 1; }
+    if (s.len() != 5) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: c_str on empty builder returns empty string" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    val r: Result[str, str] = b.c_str();
+    if (r.is_err()) { ret 1; }
+    val s: str = r.unwrap_ok();
+    if (s.len() != 0) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: reserve increases capacity" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    val r: Result[usize, str] = b.reserve(100);
+    if (r.is_err()) { ret 1; }
+    if (b.capacity() < 100) { ret 1; }
+    if (b.length() != 0) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: reserve when sufficient is noop" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    b.reserve(50);
+    val cap1: usize = b.capacity();
+
+    b.reserve(10);
+    val cap2: usize = b.capacity();
+
+    if (cap2 != cap1) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: clear resets length but keeps capacity" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    b.append_str("hello world");
+    val cap_before: usize = b.capacity();
+
+    b.clear();
+
+    if (b.length() != 0) { ret 1; }
+    if (b.capacity() != cap_before) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: clear then append reuses buffer" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    b.append_str("first");
+    b.clear();
+    b.append_str("second");
+
+    val r: Result[str, str] = b.c_str();
+    if (r.is_err()) { ret 1; }
+    if (!r.unwrap_ok().equals("second")) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: deinit on empty builder succeeds" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: multiple appends build string" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    b.append_str("hello");
+    b.append_byte(32);
+    b.append_str("world");
+
+    val r: Result[str, str] = b.c_str();
+    if (r.is_err()) { ret 1; }
+    val s: str = r.unwrap_ok();
+    if (!s.equals("hello world")) { ret 1; }
+    if (s.len() != 11) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "builder: capacity grows on append" {
+    var a: allocator.Allocator = allocator.page_allocator();
+    var b: Builder = init(a);
+
+    # append enough to trigger multiple capacity growths
+    var i: i64 = 0;
+    for (i < 50) {
+        b.append_str("test");
+        i = i + 1;
+    }
+
+    if (b.length() != 200) { ret 1; }
+    if (b.capacity() < 200) { ret 1; }
+
+    val ok: bool = b.deinit();
+    if (!ok) { ret 1; }
+    ret 0;
 }

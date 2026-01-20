@@ -1,5 +1,6 @@
 use std.types.bool;
 use std.types.size;
+use std.collections.view;
 
 # Slice[T] represents a mutable slice of elements of type T.
 pub rec Slice[T] {
@@ -34,4 +35,72 @@ pub fun (this: Slice[T]) as_view() View[T] {
     v.data = this.data;
     v.size = this.size;
     ret v;
+}
+
+# --- tests ---
+
+test "slice: slice_make creates slice from pointer and size" {
+    var arr: [4]i64 = [4]i64{10, 20, 30, 40};
+    val s: Slice[i64] = slice_make[i64](?arr[0], 4);
+    if (s.size != 4) { ret 1; }
+    if (s.data == nil) { ret 1; }
+    ret 0;
+}
+
+test "slice: is_empty returns true for zero size" {
+    var arr: [4]i64 = [4]i64{1, 2, 3, 4};
+    val s: Slice[i64] = slice_make[i64](?arr[0], 0);
+    if (!s.is_empty()) { ret 1; }
+    ret 0;
+}
+
+test "slice: is_empty returns false for non-zero size" {
+    var arr: [4]i64 = [4]i64{1, 2, 3, 4};
+    val s: Slice[i64] = slice_make[i64](?arr[0], 4);
+    if (s.is_empty()) { ret 1; }
+    ret 0;
+}
+
+test "slice: data is accessible via slice" {
+    var arr: [3]i64 = [3]i64{100, 200, 300};
+    val s: Slice[i64] = slice_make[i64](?arr[0], 3);
+    if (s.data[0] != 100) { ret 1; }
+    if (s.data[1] != 200) { ret 1; }
+    if (s.data[2] != 300) { ret 1; }
+    ret 0;
+}
+
+test "slice: data is mutable via slice" {
+    var arr: [3]i64 = [3]i64{1, 2, 3};
+    val s: Slice[i64] = slice_make[i64](?arr[0], 3);
+    s.data[1] = 999;
+    if (arr[1] != 999) { ret 1; }
+    ret 0;
+}
+
+test "slice: as_view converts to view" {
+    var arr: [3]i64 = [3]i64{5, 6, 7};
+    val s: Slice[i64] = slice_make[i64](?arr[0], 3);
+    val v: View[i64] = s.as_view();
+    if (v.size != 3) { ret 1; }
+    if (v.data == nil) { ret 1; }
+    ret 0;
+}
+
+test "slice: as_view preserves data reference" {
+    var arr: [2]i64 = [2]i64{42, 43};
+    val s: Slice[i64] = slice_make[i64](?arr[0], 2);
+    val v: View[i64] = s.as_view();
+    if (v.data[0] != 42) { ret 1; }
+    if (v.data[1] != 43) { ret 1; }
+    ret 0;
+}
+
+test "slice: slice of u8 bytes" {
+    var buf: [5]u8 = [5]u8{0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
+    val s: Slice[u8] = slice_make[u8](?buf[0], 5);
+    if (s.size != 5) { ret 1; }
+    if (s.data[0] != 0xAA) { ret 1; }
+    if (s.data[4] != 0xEE) { ret 1; }
+    ret 0;
 }
