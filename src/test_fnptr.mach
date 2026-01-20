@@ -1,0 +1,11 @@
+use std.types.size;
+use std.types.bool;
+use impl: std.system.platform.linux.memory;
+
+test "impl alloc and dealloc" {
+    val p: ptr = impl.allocate(64);
+    if (p == nil) { ret 1; }
+    val ok: bool = impl.deallocate(p, 64);
+    if (!ok) { ret 2; }
+    ret 0;
+}

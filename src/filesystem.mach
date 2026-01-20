@@ -355,7 +355,7 @@ pub fun (this: *TempFile) as_file() *File {
 # close: close the temp file (does not remove it).
 # ---
 # ret: Ok(true) on success or Err(str) on failure.
-pub fun (this: *TempFile) tf_close() Result[bool, str] {
+pub fun (this: *TempFile) close() Result[bool, str] {
     ret (?this.file).close();
 }
 
@@ -370,7 +370,7 @@ pub fun (this: *TempFile) remove() Result[bool, str] {
 # ---
 # ret: Ok(true) on success or Err(str) on failure (returns first error).
 pub fun (this: *TempFile) close_and_remove() Result[bool, str] {
-    val close_res: Result[bool, str] = this.tf_close();
+    val close_res: Result[bool, str] = this.close();
     val remove_res: Result[bool, str] = this.remove();
 
     if (close_res.is_err()) {
