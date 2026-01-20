@@ -62,7 +62,7 @@ pub fun (this: str) compare(other: str) i64 {
         i = i + 1;
     }
 
-    ret 0;
+    ret 1;
 }
 
 # Check if the string starts with the given prefix
@@ -186,192 +186,192 @@ pub fun (this: str) contains(sub: str) bool {
 
 test "string: len of empty string" {
     val s: str = "";
-    if (s.len() != 0) { ret 1; }
-    ret 0;
+    if (s.len() != 0) { ret 0; }
+    ret 1;
 }
 
 test "string: len of non-empty string" {
     val s: str = "hello";
-    if (s.len() != 5) { ret 1; }
-    ret 0;
+    if (s.len() != 5) { ret 0; }
+    ret 1;
 }
 
 test "string: len of single char" {
     val s: str = "x";
-    if (s.len() != 1) { ret 1; }
-    ret 0;
+    if (s.len() != 1) { ret 0; }
+    ret 1;
 }
 
 test "string: empty returns true for empty string" {
     val s: str = "";
-    if (!s.empty()) { ret 1; }
-    ret 0;
+    if (!s.empty()) { ret 0; }
+    ret 1;
 }
 
 test "string: empty returns false for non-empty string" {
     val s: str = "hello";
-    if (s.empty()) { ret 1; }
-    ret 0;
+    if (s.empty()) { ret 0; }
+    ret 1;
 }
 
 test "string: equals same strings" {
     val a: str = "hello";
     val b: str = "hello";
-    if (!a.equals(b)) { ret 1; }
-    ret 0;
+    if (!a.equals(b)) { ret 0; }
+    ret 1;
 }
 
 test "string: equals different strings" {
     val a: str = "hello";
     val b: str = "world";
-    if (a.equals(b)) { ret 1; }
-    ret 0;
+    if (a.equals(b)) { ret 0; }
+    ret 1;
 }
 
 test "string: equals different lengths" {
     val a: str = "hello";
     val b: str = "hello world";
-    if (a.equals(b)) { ret 1; }
-    ret 0;
+    if (a.equals(b)) { ret 0; }
+    ret 1;
 }
 
 test "string: equals empty strings" {
     val a: str = "";
     val b: str = "";
-    if (!a.equals(b)) { ret 1; }
-    ret 0;
+    if (!a.equals(b)) { ret 0; }
+    ret 1;
 }
 
 test "string: compare equal strings" {
     val a: str = "abc";
     val b: str = "abc";
-    if (a.compare(b) != 0) { ret 1; }
-    ret 0;
+    if (a.compare(b) != 0) { ret 0; }
+    ret 1;
 }
 
 test "string: compare less than" {
     val a: str = "abc";
     val b: str = "abd";
-    if (a.compare(b) >= 0) { ret 1; }
-    ret 0;
+    if (a.compare(b) >= 0) { ret 0; }
+    ret 1;
 }
 
 test "string: compare greater than" {
     val a: str = "abd";
     val b: str = "abc";
-    if (a.compare(b) <= 0) { ret 1; }
-    ret 0;
+    if (a.compare(b) <= 0) { ret 0; }
+    ret 1;
 }
 
 test "string: compare prefix is less" {
     val a: str = "abc";
     val b: str = "abcd";
-    if (a.compare(b) >= 0) { ret 1; }
-    ret 0;
+    if (a.compare(b) >= 0) { ret 0; }
+    ret 1;
 }
 
 test "string: starts_with matching prefix" {
     val s: str = "hello world";
-    if (!s.starts_with("hello")) { ret 1; }
-    ret 0;
+    if (!s.starts_with("hello")) { ret 0; }
+    ret 1;
 }
 
 test "string: starts_with non-matching prefix" {
     val s: str = "hello world";
-    if (s.starts_with("world")) { ret 1; }
-    ret 0;
+    if (s.starts_with("world")) { ret 0; }
+    ret 1;
 }
 
 test "string: starts_with empty prefix" {
     val s: str = "hello";
-    if (!s.starts_with("")) { ret 1; }
-    ret 0;
+    if (!s.starts_with("")) { ret 0; }
+    ret 1;
 }
 
 test "string: starts_with full string" {
     val s: str = "hello";
-    if (!s.starts_with("hello")) { ret 1; }
-    ret 0;
+    if (!s.starts_with("hello")) { ret 0; }
+    ret 1;
 }
 
 test "string: ends_with matching suffix" {
     val s: str = "hello world";
-    if (!s.ends_with("world")) { ret 1; }
-    ret 0;
+    if (!s.ends_with("world")) { ret 0; }
+    ret 1;
 }
 
 test "string: ends_with non-matching suffix" {
     val s: str = "hello world";
-    if (s.ends_with("hello")) { ret 1; }
-    ret 0;
+    if (s.ends_with("hello")) { ret 0; }
+    ret 1;
 }
 
 test "string: ends_with empty suffix" {
     val s: str = "hello";
-    if (!s.ends_with("")) { ret 1; }
-    ret 0;
+    if (!s.ends_with("")) { ret 0; }
+    ret 1;
 }
 
 test "string: ends_with full string" {
     val s: str = "hello";
-    if (!s.ends_with("hello")) { ret 1; }
-    ret 0;
+    if (!s.ends_with("hello")) { ret 0; }
+    ret 1;
 }
 
 test "string: index_of finds substring at start" {
     val s: str = "hello world";
     val r: Result[usize, str] = s.index_of("hello");
-    if (r.is_err()) { ret 1; }
-    if (r.unwrap_ok() != 0) { ret 1; }
-    ret 0;
+    if (r.is_err()) { ret 0; }
+    if (r.unwrap_ok() != 0) { ret 0; }
+    ret 1;
 }
 
 test "string: index_of finds substring in middle" {
     val s: str = "hello world";
     val r: Result[usize, str] = s.index_of("wor");
-    if (r.is_err()) { ret 1; }
-    if (r.unwrap_ok() != 6) { ret 1; }
-    ret 0;
+    if (r.is_err()) { ret 0; }
+    if (r.unwrap_ok() != 6) { ret 0; }
+    ret 1;
 }
 
 test "string: index_of not found" {
     val s: str = "hello world";
     val r: Result[usize, str] = s.index_of("xyz");
-    if (r.is_ok()) { ret 1; }
-    ret 0;
+    if (r.is_ok()) { ret 0; }
+    ret 1;
 }
 
 test "string: last_index_of finds last occurrence" {
     val s: str = "abcabc";
     val r: Result[usize, str] = s.last_index_of("abc");
-    if (r.is_err()) { ret 1; }
-    if (r.unwrap_ok() != 3) { ret 1; }
-    ret 0;
+    if (r.is_err()) { ret 0; }
+    if (r.unwrap_ok() != 3) { ret 0; }
+    ret 1;
 }
 
 test "string: last_index_of single occurrence" {
     val s: str = "hello world";
     val r: Result[usize, str] = s.last_index_of("world");
-    if (r.is_err()) { ret 1; }
-    if (r.unwrap_ok() != 6) { ret 1; }
-    ret 0;
+    if (r.is_err()) { ret 0; }
+    if (r.unwrap_ok() != 6) { ret 0; }
+    ret 1;
 }
 
 test "string: contains found" {
     val s: str = "hello world";
-    if (!s.contains("wor")) { ret 1; }
-    ret 0;
+    if (!s.contains("wor")) { ret 0; }
+    ret 1;
 }
 
 test "string: contains not found" {
     val s: str = "hello world";
-    if (s.contains("xyz")) { ret 1; }
-    ret 0;
+    if (s.contains("xyz")) { ret 0; }
+    ret 1;
 }
 
 test "string: contains empty substring" {
     val s: str = "hello";
     # empty substring should not be found (per current implementation)
-    if (s.contains("")) { ret 1; }
-    ret 0;
+    if (s.contains("")) { ret 0; }
+    ret 1;
 }

@@ -174,9 +174,9 @@ pub fun (this: *Builder) c_str() Result[str, str] {
 test "builder: init creates empty builder" {
     var a: allocator.Allocator = allocator.page_allocator();
     val b: Builder = init(a);
-    if (b.length() != 0) { ret 1; }
-    if (b.capacity() != 0) { ret 1; }
-    ret 0;
+    if (b.length() != 0) { ret 0; }
+    if (b.capacity() != 0) { ret 0; }
+    ret 1;
 }
 
 test "builder: append_byte adds single byte" {
@@ -184,12 +184,12 @@ test "builder: append_byte adds single byte" {
     var b: Builder = init(a);
 
     val r: Result[usize, str] = b.append_byte(65);
-    if (r.is_err()) { ret 1; }
-    if (b.length() != 1) { ret 1; }
+    if (r.is_err()) { ret 0; }
+    if (b.length() != 1) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: append_byte multiple bytes" {
@@ -199,11 +199,11 @@ test "builder: append_byte multiple bytes" {
     b.append_byte(72);
     b.append_byte(105);
 
-    if (b.length() != 2) { ret 1; }
+    if (b.length() != 2) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: append_str adds string" {
@@ -211,12 +211,12 @@ test "builder: append_str adds string" {
     var b: Builder = init(a);
 
     val r: Result[usize, str] = b.append_str("hello");
-    if (r.is_err()) { ret 1; }
-    if (b.length() != 5) { ret 1; }
+    if (r.is_err()) { ret 0; }
+    if (b.length() != 5) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: append_str empty string is noop" {
@@ -228,11 +228,11 @@ test "builder: append_str empty string is noop" {
 
     b.append_str("");
 
-    if (b.length() != len_before) { ret 1; }
+    if (b.length() != len_before) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: append_bytes adds raw bytes" {
@@ -241,12 +241,12 @@ test "builder: append_bytes adds raw bytes" {
 
     var data: [3]u8 = [3]u8{65, 66, 67};
     val r: Result[usize, str] = b.append_bytes(?data[0], 3);
-    if (r.is_err()) { ret 1; }
-    if (b.length() != 3) { ret 1; }
+    if (r.is_err()) { ret 0; }
+    if (b.length() != 3) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: append_bytes with zero count is noop" {
@@ -259,11 +259,11 @@ test "builder: append_bytes with zero count is noop" {
     var data: [3]u8 = [3]u8{1, 2, 3};
     b.append_bytes(?data[0], 0);
 
-    if (b.length() != len_before) { ret 1; }
+    if (b.length() != len_before) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: c_str returns null-terminated string" {
@@ -273,14 +273,14 @@ test "builder: c_str returns null-terminated string" {
     b.append_str("hello");
 
     val r: Result[str, str] = b.c_str();
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     val s: str = r.unwrap_ok();
-    if (!s.equals("hello")) { ret 1; }
-    if (s.len() != 5) { ret 1; }
+    if (!s.equals("hello")) { ret 0; }
+    if (s.len() != 5) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: c_str on empty builder returns empty string" {
@@ -288,13 +288,13 @@ test "builder: c_str on empty builder returns empty string" {
     var b: Builder = init(a);
 
     val r: Result[str, str] = b.c_str();
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     val s: str = r.unwrap_ok();
-    if (s.len() != 0) { ret 1; }
+    if (s.len() != 0) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: reserve increases capacity" {
@@ -302,13 +302,13 @@ test "builder: reserve increases capacity" {
     var b: Builder = init(a);
 
     val r: Result[usize, str] = b.reserve(100);
-    if (r.is_err()) { ret 1; }
-    if (b.capacity() < 100) { ret 1; }
-    if (b.length() != 0) { ret 1; }
+    if (r.is_err()) { ret 0; }
+    if (b.capacity() < 100) { ret 0; }
+    if (b.length() != 0) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: reserve when sufficient is noop" {
@@ -321,11 +321,11 @@ test "builder: reserve when sufficient is noop" {
     b.reserve(10);
     val cap2: usize = b.capacity();
 
-    if (cap2 != cap1) { ret 1; }
+    if (cap2 != cap1) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: clear resets length but keeps capacity" {
@@ -337,12 +337,12 @@ test "builder: clear resets length but keeps capacity" {
 
     b.clear();
 
-    if (b.length() != 0) { ret 1; }
-    if (b.capacity() != cap_before) { ret 1; }
+    if (b.length() != 0) { ret 0; }
+    if (b.capacity() != cap_before) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: clear then append reuses buffer" {
@@ -354,20 +354,20 @@ test "builder: clear then append reuses buffer" {
     b.append_str("second");
 
     val r: Result[str, str] = b.c_str();
-    if (r.is_err()) { ret 1; }
-    if (!r.unwrap_ok().equals("second")) { ret 1; }
+    if (r.is_err()) { ret 0; }
+    if (!r.unwrap_ok().equals("second")) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: deinit on empty builder succeeds" {
     var a: allocator.Allocator = allocator.page_allocator();
     var b: Builder = init(a);
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: multiple appends build string" {
@@ -379,14 +379,14 @@ test "builder: multiple appends build string" {
     b.append_str("world");
 
     val r: Result[str, str] = b.c_str();
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     val s: str = r.unwrap_ok();
-    if (!s.equals("hello world")) { ret 1; }
-    if (s.len() != 11) { ret 1; }
+    if (!s.equals("hello world")) { ret 0; }
+    if (s.len() != 11) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "builder: capacity grows on append" {
@@ -400,10 +400,10 @@ test "builder: capacity grows on append" {
         i = i + 1;
     }
 
-    if (b.length() != 200) { ret 1; }
-    if (b.capacity() < 200) { ret 1; }
+    if (b.length() != 200) { ret 0; }
+    if (b.capacity() < 200) { ret 0; }
 
     val ok: bool = b.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }

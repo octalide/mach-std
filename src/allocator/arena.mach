@@ -185,83 +185,83 @@ pub fun (this: *Arena) allocator() a.Allocator {
 test "arena: init with zero capacity succeeds" {
     var backing: a.Allocator = a.page_allocator();
     val r: Result[Arena, a.AllocError] = init(backing, 0);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var ar: Arena = r.unwrap_ok();
     val ok: bool = ar.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "arena: init with capacity allocates backing storage" {
     var backing: a.Allocator = a.page_allocator();
     val r: Result[Arena, a.AllocError] = init(backing, 1024);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var ar: Arena = r.unwrap_ok();
     val ok: bool = ar.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "arena: allocator returns functional allocator" {
     var backing: a.Allocator = a.page_allocator();
     val r: Result[Arena, a.AllocError] = init(backing, 4096);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var ar: Arena = r.unwrap_ok();
 
     var alloc: a.Allocator = ar.allocator();
     val alloc_r: Result[*i64, a.AllocError] = alloc.alloc[i64](4);
-    if (alloc_r.is_err()) { ret 1; }
+    if (alloc_r.is_err()) { ret 0; }
     val p: *i64 = alloc_r.unwrap_ok();
-    if (p == nil) { ret 1; }
+    if (p == nil) { ret 0; }
 
     p[0] = 100;
     p[1] = 200;
-    if (p[0] != 100) { ret 1; }
-    if (p[1] != 200) { ret 1; }
+    if (p[0] != 100) { ret 0; }
+    if (p[1] != 200) { ret 0; }
 
     val ok: bool = ar.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "arena: multiple allocations bump offset" {
     var backing: a.Allocator = a.page_allocator();
     val r: Result[Arena, a.AllocError] = init(backing, 4096);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var ar: Arena = r.unwrap_ok();
     var alloc: a.Allocator = ar.allocator();
 
     val r1: Result[*i64, a.AllocError] = alloc.alloc[i64](2);
-    if (r1.is_err()) { ret 1; }
+    if (r1.is_err()) { ret 0; }
     val p1: *i64 = r1.unwrap_ok();
 
     val r2: Result[*i64, a.AllocError] = alloc.alloc[i64](2);
-    if (r2.is_err()) { ret 1; }
+    if (r2.is_err()) { ret 0; }
     val p2: *i64 = r2.unwrap_ok();
 
     # p2 should be after p1 in memory
-    if (p2::usize <= p1::usize) { ret 1; }
+    if (p2::usize <= p1::usize) { ret 0; }
 
     p1[0] = 111;
     p2[0] = 222;
-    if (p1[0] != 111) { ret 1; }
-    if (p2[0] != 222) { ret 1; }
+    if (p1[0] != 111) { ret 0; }
+    if (p2[0] != 222) { ret 0; }
 
     val ok: bool = ar.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "arena: reset clears allocations" {
     var backing: a.Allocator = a.page_allocator();
     val r: Result[Arena, a.AllocError] = init(backing, 4096);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var ar: Arena = r.unwrap_ok();
     var alloc: a.Allocator = ar.allocator();
 
     # allocate some memory
     val r1: Result[*i64, a.AllocError] = alloc.alloc[i64](100);
-    if (r1.is_err()) { ret 1; }
+    if (r1.is_err()) { ret 0; }
     val p1: *i64 = r1.unwrap_ok();
 
     # reset
@@ -269,111 +269,111 @@ test "arena: reset clears allocations" {
 
     # allocate again - should get same (or similar) address
     val r2: Result[*i64, a.AllocError] = alloc.alloc[i64](100);
-    if (r2.is_err()) { ret 1; }
+    if (r2.is_err()) { ret 0; }
     val p2: *i64 = r2.unwrap_ok();
 
     # after reset, new allocation should start from beginning
     # so p2 should be at or near the same address as p1
-    if (p2 != p1) { ret 1; }
+    if (p2 != p1) { ret 0; }
 
     val ok: bool = ar.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "arena: free is noop for non-last allocation" {
     var backing: a.Allocator = a.page_allocator();
     val r: Result[Arena, a.AllocError] = init(backing, 4096);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var ar: Arena = r.unwrap_ok();
     var alloc: a.Allocator = ar.allocator();
 
     val r1: Result[*i64, a.AllocError] = alloc.alloc[i64](2);
-    if (r1.is_err()) { ret 1; }
+    if (r1.is_err()) { ret 0; }
     val p1: *i64 = r1.unwrap_ok();
 
     val r2: Result[*i64, a.AllocError] = alloc.alloc[i64](2);
-    if (r2.is_err()) { ret 1; }
+    if (r2.is_err()) { ret 0; }
     val p2: *i64 = r2.unwrap_ok();
 
     # free p1 (not the last allocation) - should be noop
     val ok_free: bool = alloc.free[i64](p1, 2);
-    if (!ok_free) { ret 1; }
+    if (!ok_free) { ret 0; }
 
     # p2 should still be accessible
     p2[0] = 999;
-    if (p2[0] != 999) { ret 1; }
+    if (p2[0] != 999) { ret 0; }
 
     val ok: bool = ar.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "arena: free last allocation rolls back" {
     var backing: a.Allocator = a.page_allocator();
     val r: Result[Arena, a.AllocError] = init(backing, 4096);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var ar: Arena = r.unwrap_ok();
     var alloc: a.Allocator = ar.allocator();
 
     val r1: Result[*i64, a.AllocError] = alloc.alloc[i64](2);
-    if (r1.is_err()) { ret 1; }
+    if (r1.is_err()) { ret 0; }
     val p1: *i64 = r1.unwrap_ok();
 
     val r2: Result[*i64, a.AllocError] = alloc.alloc[i64](2);
-    if (r2.is_err()) { ret 1; }
+    if (r2.is_err()) { ret 0; }
     val p2: *i64 = r2.unwrap_ok();
 
     # free p2 (last allocation) - should roll back
     val ok_free: bool = alloc.free[i64](p2, 2);
-    if (!ok_free) { ret 1; }
+    if (!ok_free) { ret 0; }
 
     # next allocation should reuse p2's space
     val r3: Result[*i64, a.AllocError] = alloc.alloc[i64](2);
-    if (r3.is_err()) { ret 1; }
+    if (r3.is_err()) { ret 0; }
     val p3: *i64 = r3.unwrap_ok();
 
-    if (p3 != p2) { ret 1; }
+    if (p3 != p2) { ret 0; }
 
     val ok: bool = ar.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "arena: resize last allocation in-place" {
     var backing: a.Allocator = a.page_allocator();
     val r: Result[Arena, a.AllocError] = init(backing, 4096);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var ar: Arena = r.unwrap_ok();
     var alloc: a.Allocator = ar.allocator();
 
     val r1: Result[*i64, a.AllocError] = alloc.alloc[i64](2);
-    if (r1.is_err()) { ret 1; }
+    if (r1.is_err()) { ret 0; }
     val p1: *i64 = r1.unwrap_ok();
     p1[0] = 111;
     p1[1] = 222;
 
     # resize in-place (should succeed for last allocation)
     val r2: Result[*i64, a.AllocError] = alloc.resize[i64](p1, 2, 4);
-    if (r2.is_err()) { ret 1; }
+    if (r2.is_err()) { ret 0; }
     val p2: *i64 = r2.unwrap_ok();
 
     # should be same pointer for in-place resize
-    if (p2 != p1) { ret 1; }
+    if (p2 != p1) { ret 0; }
 
     # original data preserved
-    if (p2[0] != 111) { ret 1; }
-    if (p2[1] != 222) { ret 1; }
+    if (p2[0] != 111) { ret 0; }
+    if (p2[1] != 222) { ret 0; }
 
     # can use new space
     p2[2] = 333;
     p2[3] = 444;
-    if (p2[2] != 333) { ret 1; }
-    if (p2[3] != 444) { ret 1; }
+    if (p2[2] != 333) { ret 0; }
+    if (p2[3] != 444) { ret 0; }
 
     val ok: bool = ar.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "arena: deinit on nil arena succeeds" {
@@ -382,31 +382,31 @@ test "arena: deinit on nil arena succeeds" {
     ar.cap = 0;
     ar.off = 0;
     val ok: bool = ar.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "arena: allocation respects alignment" {
     var backing: a.Allocator = a.page_allocator();
     val r: Result[Arena, a.AllocError] = init(backing, 4096);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var ar: Arena = r.unwrap_ok();
     var alloc: a.Allocator = ar.allocator();
 
     # allocate 1 byte
     val r1: Result[ptr, a.AllocError] = alloc.alloc_bytes(1, 1);
-    if (r1.is_err()) { ret 1; }
+    if (r1.is_err()) { ret 0; }
 
     # allocate 8 bytes with 8-byte alignment
     val r2: Result[ptr, a.AllocError] = alloc.alloc_bytes(8, 8);
-    if (r2.is_err()) { ret 1; }
+    if (r2.is_err()) { ret 0; }
     val p2: ptr = r2.unwrap_ok();
 
     # check alignment
     val addr: usize = p2::usize;
-    if ((addr % 8) != 0) { ret 1; }
+    if ((addr % 8) != 0) { ret 0; }
 
     val ok: bool = ar.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }

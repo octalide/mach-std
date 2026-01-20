@@ -383,7 +383,7 @@ pub fun (this: *TempFile) close_and_remove() Result[bool, str] {
 
 test "filesystem: temp_create creates file" {
     val r: Result[TempFile, str] = temp_create("test");
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var tf: TempFile = r.unwrap_ok();
 
     # file should have valid fd
@@ -395,12 +395,12 @@ test "filesystem: temp_create creates file" {
     # clean up
     val cr: Result[bool, str] = tf.close_and_remove();
     if (cr.is_err()) { ret 4; }
-    ret 0;
+    ret 1;
 }
 
 test "filesystem: temp_create path is valid" {
     val r: Result[TempFile, str] = temp_create("myprefix");
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var tf: TempFile = r.unwrap_ok();
 
     val p: str = tf.path();
@@ -413,12 +413,12 @@ test "filesystem: temp_create path is valid" {
     if (!p.contains("myprefix")) { ret 4; }
 
     tf.close_and_remove();
-    ret 0;
+    ret 1;
 }
 
 test "filesystem: temp file write and read" {
     val r: Result[TempFile, str] = temp_create("rw");
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var tf: TempFile = r.unwrap_ok();
 
     # write some data
@@ -442,12 +442,12 @@ test "filesystem: temp file write and read" {
     if (!read_str.starts_with("hello temp file")) { ret 7; }
 
     tf.close_and_remove();
-    ret 0;
+    ret 1;
 }
 
 test "filesystem: temp file close then remove" {
     val r: Result[TempFile, str] = temp_create("closeremove");
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     var tf: TempFile = r.unwrap_ok();
 
     val cr: Result[bool, str] = tf.close();
@@ -456,19 +456,19 @@ test "filesystem: temp file close then remove" {
     val rr: Result[bool, str] = tf.remove();
     if (rr.is_err()) { ret 3; }
 
-    ret 0;
+    ret 1;
 }
 
 test "filesystem: open non-existent file returns error" {
     val r: Result[File, str] = open("/tmp/this_file_should_not_exist_12345");
-    if (r.is_ok()) { ret 1; }
-    ret 0;
+    if (r.is_ok()) { ret 0; }
+    ret 1;
 }
 
 test "filesystem: create write close open read" {
     # create a temp file
     val cr: Result[TempFile, str] = temp_create("fullcycle");
-    if (cr.is_err()) { ret 1; }
+    if (cr.is_err()) { ret 0; }
     var tf: TempFile = cr.unwrap_ok();
 
     # write data
@@ -494,12 +494,12 @@ test "filesystem: create write close open read" {
     # close and cleanup
     f.close();
     tf.remove();
-    ret 0;
+    ret 1;
 }
 
 test "filesystem: stat returns valid metadata" {
     val cr: Result[TempFile, str] = temp_create("stat");
-    if (cr.is_err()) { ret 1; }
+    if (cr.is_err()) { ret 0; }
     var tf: TempFile = cr.unwrap_ok();
 
     # write some data
@@ -515,12 +515,12 @@ test "filesystem: stat returns valid metadata" {
     if (st.st_size != data.len()::i64) { ret 3; }
 
     tf.close_and_remove();
-    ret 0;
+    ret 1;
 }
 
 test "filesystem: seek repositions file offset" {
     val cr: Result[TempFile, str] = temp_create("seek");
-    if (cr.is_err()) { ret 1; }
+    if (cr.is_err()) { ret 0; }
     var tf: TempFile = cr.unwrap_ok();
 
     # write data
@@ -542,12 +542,12 @@ test "filesystem: seek repositions file offset" {
     if (buf[4] != 57) { ret 7; } # '9'
 
     tf.close_and_remove();
-    ret 0;
+    ret 1;
 }
 
 test "filesystem: unlink removes file" {
     val cr: Result[TempFile, str] = temp_create("unlink");
-    if (cr.is_err()) { ret 1; }
+    if (cr.is_err()) { ret 0; }
     var tf: TempFile = cr.unwrap_ok();
     val p: str = tf.path();
 
@@ -561,5 +561,5 @@ test "filesystem: unlink removes file" {
     val open_res: Result[File, str] = open(p);
     if (open_res.is_ok()) { ret 3; }
 
-    ret 0;
+    ret 1;
 }

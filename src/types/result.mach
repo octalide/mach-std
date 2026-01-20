@@ -64,87 +64,87 @@ pub fun err[T, E](value: E) Result[T, E] {
 
 test "result: ok creates value with is_ok true" {
     val r: Result[i64, i32] = ok[i64, i32](42);
-    if (!r.is_ok()) { ret 1; }
-    ret 0;
+    if (!r.is_ok()) { ret 0; }
+    ret 1;
 }
 
 test "result: ok creates value with is_err false" {
     val r: Result[i64, i32] = ok[i64, i32](42);
-    if (r.is_err()) { ret 1; }
-    ret 0;
+    if (r.is_err()) { ret 0; }
+    ret 1;
 }
 
 test "result: err creates value with is_err true" {
     val r: Result[i64, i32] = err[i64, i32](-1);
-    if (!r.is_err()) { ret 1; }
-    ret 0;
+    if (!r.is_err()) { ret 0; }
+    ret 1;
 }
 
 test "result: err creates value with is_ok false" {
     val r: Result[i64, i32] = err[i64, i32](-1);
-    if (r.is_ok()) { ret 1; }
-    ret 0;
+    if (r.is_ok()) { ret 0; }
+    ret 1;
 }
 
 test "result: unwrap_ok returns contained ok value" {
     val r: Result[i64, i32] = ok[i64, i32](123);
     val v: i64 = r.unwrap_ok();
-    if (v != 123) { ret 1; }
-    ret 0;
+    if (v != 123) { ret 0; }
+    ret 1;
 }
 
 test "result: unwrap_err returns contained err value" {
     val r: Result[i64, i32] = err[i64, i32](-99);
     val e: i32 = r.unwrap_err();
-    if (e != -99) { ret 1; }
-    ret 0;
+    if (e != -99) { ret 0; }
+    ret 1;
 }
 
 test "result: ok with zero value" {
     val r: Result[i64, i32] = ok[i64, i32](0);
-    if (!r.is_ok()) { ret 1; }
-    if (r.unwrap_ok() != 0) { ret 1; }
-    ret 0;
+    if (!r.is_ok()) { ret 0; }
+    if (r.unwrap_ok() != 0) { ret 0; }
+    ret 1;
 }
 
 test "result: ok with negative value" {
     val r: Result[i64, i32] = ok[i64, i32](-999);
-    if (!r.is_ok()) { ret 1; }
-    if (r.unwrap_ok() != -999) { ret 1; }
-    ret 0;
+    if (!r.is_ok()) { ret 0; }
+    if (r.unwrap_ok() != -999) { ret 0; }
+    ret 1;
 }
 
 test "result: ok with pointer type" {
     var x: i64 = 42;
     val r: Result[*i64, i32] = ok[*i64, i32](?x);
-    if (!r.is_ok()) { ret 1; }
+    if (!r.is_ok()) { ret 0; }
     val p: *i64 = r.unwrap_ok();
-    if (@p != 42) { ret 1; }
-    ret 0;
+    if (@p != 42) { ret 0; }
+    ret 1;
 }
 
 test "result: err with pointer type" {
     val r: Result[*i64, i32] = err[*i64, i32](-1);
-    if (!r.is_err()) { ret 1; }
-    ret 0;
+    if (!r.is_err()) { ret 0; }
+    ret 1;
 }
 
 test "result: ok with bool type" {
     val r_true: Result[bool, i32] = ok[bool, i32](true);
     val r_false: Result[bool, i32] = ok[bool, i32](false);
-    if (!r_true.is_ok()) { ret 1; }
-    if (!r_false.is_ok()) { ret 1; }
-    if (r_true.unwrap_ok() != true) { ret 1; }
-    if (r_false.unwrap_ok() != false) { ret 1; }
-    ret 0;
+    if (!r_true.is_ok()) { ret 0; }
+    if (!r_false.is_ok()) { ret 0; }
+    if (r_true.unwrap_ok() != true) { ret 0; }
+    if (r_false.unwrap_ok() != false) { ret 0; }
+    ret 1;
 }
 
 test "result: different ok and err types" {
     val r_ok: Result[u64, i32] = ok[u64, i32](100);
     val r_err: Result[u64, i32] = err[u64, i32](-1);
-    if (!r_ok.is_ok()) { ret 1; }
-    if (!r_err.is_err()) { ret 1; }
-    if (r_ok.unwrap_ok() != 100) { ret 1; }
-    if (r_err.unwrap_err() != -1) { ret 1; }
-    ret 0;
+    if (!r_ok.is_ok()) { ret 0; }
+    if (!r_err.is_err()) { ret 0; }
+    if (r_ok.unwrap_ok() != 100) { ret 0; }
+    if (r_err.unwrap_err() != -1) { ret 0; }
+    ret 1;
 }

@@ -175,10 +175,10 @@ pub fun (this: Vector[T]) get_ref(index: usize) Result[&T, str] {
 test "vector: init creates empty vector" {
     var a: allocator.Allocator = allocator.page_allocator();
     val v: Vector[i64] = init[i64](a);
-    if (!v.is_empty()) { ret 1; }
-    if (v.length() != 0) { ret 1; }
-    if (v.capacity() != 0) { ret 1; }
-    ret 0;
+    if (!v.is_empty()) { ret 0; }
+    if (v.length() != 0) { ret 0; }
+    if (v.capacity() != 0) { ret 0; }
+    ret 1;
 }
 
 test "vector: push adds element" {
@@ -186,13 +186,13 @@ test "vector: push adds element" {
     var v: Vector[i64] = init[i64](a);
 
     val r: Result[usize, str] = v.push(42);
-    if (r.is_err()) { ret 1; }
-    if (v.length() != 1) { ret 1; }
-    if (v.is_empty()) { ret 1; }
+    if (r.is_err()) { ret 0; }
+    if (v.length() != 1) { ret 0; }
+    if (v.is_empty()) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: push multiple elements" {
@@ -201,17 +201,17 @@ test "vector: push multiple elements" {
 
     var r: Result[usize, str];
     r = v.push(10);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     r = v.push(20);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     r = v.push(30);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
 
-    if (v.length() != 3) { ret 1; }
+    if (v.length() != 3) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: pop returns last element" {
@@ -223,13 +223,13 @@ test "vector: pop returns last element" {
     v.push(300);
 
     val r: Result[i64, str] = v.pop();
-    if (r.is_err()) { ret 1; }
-    if (r.unwrap_ok() != 300) { ret 1; }
-    if (v.length() != 2) { ret 1; }
+    if (r.is_err()) { ret 0; }
+    if (r.unwrap_ok() != 300) { ret 0; }
+    if (v.length() != 2) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: pop from empty returns error" {
@@ -237,11 +237,11 @@ test "vector: pop from empty returns error" {
     var v: Vector[i64] = init[i64](a);
 
     val r: Result[i64, str] = v.pop();
-    if (r.is_ok()) { ret 1; }
+    if (r.is_ok()) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: get returns pointer to element" {
@@ -253,13 +253,13 @@ test "vector: get returns pointer to element" {
     v.push(333);
 
     val r: Result[*i64, str] = v.get(1);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     val p: *i64 = r.unwrap_ok();
-    if (@p != 222) { ret 1; }
+    if (@p != 222) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: get out of bounds returns error" {
@@ -269,11 +269,11 @@ test "vector: get out of bounds returns error" {
     v.push(42);
 
     val r: Result[*i64, str] = v.get(5);
-    if (r.is_ok()) { ret 1; }
+    if (r.is_ok()) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: get allows mutation" {
@@ -283,17 +283,17 @@ test "vector: get allows mutation" {
     v.push(100);
 
     val r: Result[*i64, str] = v.get(0);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     val p: *i64 = r.unwrap_ok();
     @p = 999;
 
     val r2: Result[*i64, str] = v.get(0);
-    if (r2.is_err()) { ret 1; }
-    if (@r2.unwrap_ok() != 999) { ret 1; }
+    if (r2.is_err()) { ret 0; }
+    if (@r2.unwrap_ok() != 999) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: get_ref returns immutable reference" {
@@ -304,13 +304,13 @@ test "vector: get_ref returns immutable reference" {
     v.push(666);
 
     val r: Result[&i64, str] = v.get_ref(1);
-    if (r.is_err()) { ret 1; }
+    if (r.is_err()) { ret 0; }
     val ref: &i64 = r.unwrap_ok();
-    if (@ref != 666) { ret 1; }
+    if (@ref != 666) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: get_ref out of bounds returns error" {
@@ -320,11 +320,11 @@ test "vector: get_ref out of bounds returns error" {
     v.push(42);
 
     val r: Result[&i64, str] = v.get_ref(10);
-    if (r.is_ok()) { ret 1; }
+    if (r.is_ok()) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: reserve increases capacity" {
@@ -332,13 +332,13 @@ test "vector: reserve increases capacity" {
     var v: Vector[i64] = init[i64](a);
 
     val r: Result[usize, str] = v.reserve(100);
-    if (r.is_err()) { ret 1; }
-    if (v.capacity() < 100) { ret 1; }
-    if (v.length() != 0) { ret 1; }
+    if (r.is_err()) { ret 0; }
+    if (v.capacity() < 100) { ret 0; }
+    if (v.length() != 0) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: reserve when already sufficient is noop" {
@@ -351,11 +351,11 @@ test "vector: reserve when already sufficient is noop" {
     v.reserve(10);
     val cap2: usize = v.capacity();
 
-    if (cap2 != cap1) { ret 1; }
+    if (cap2 != cap1) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: clear resets length but keeps capacity" {
@@ -369,21 +369,21 @@ test "vector: clear resets length but keeps capacity" {
 
     v.clear();
 
-    if (v.length() != 0) { ret 1; }
-    if (!v.is_empty()) { ret 1; }
-    if (v.capacity() != cap_before) { ret 1; }
+    if (v.length() != 0) { ret 0; }
+    if (!v.is_empty()) { ret 0; }
+    if (v.capacity() != cap_before) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: deinit on empty vector succeeds" {
     var a: allocator.Allocator = allocator.page_allocator();
     var v: Vector[i64] = init[i64](a);
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: push triggers capacity growth" {
@@ -394,25 +394,25 @@ test "vector: push triggers capacity growth" {
     var i: i64 = 0;
     for (i < 100) {
         val r: Result[usize, str] = v.push(i);
-        if (r.is_err()) { ret 1; }
+        if (r.is_err()) { ret 0; }
         i = i + 1;
     }
 
-    if (v.length() != 100) { ret 1; }
-    if (v.capacity() < 100) { ret 1; }
+    if (v.length() != 100) { ret 0; }
+    if (v.capacity() < 100) { ret 0; }
 
     # verify all values
     var j: usize = 0;
     for (j < 100) {
         val r: Result[&i64, str] = v.get_ref(j);
-        if (r.is_err()) { ret 1; }
-        if (@r.unwrap_ok() != j::i64) { ret 1; }
+        if (r.is_err()) { ret 0; }
+        if (@r.unwrap_ok() != j::i64) { ret 0; }
         j = j + 1;
     }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }
 
 test "vector: push and pop sequence" {
@@ -426,26 +426,26 @@ test "vector: push and pop sequence" {
     var r: Result[i64, str];
 
     r = v.pop();
-    if (r.unwrap_ok() != 3) { ret 1; }
+    if (r.unwrap_ok() != 3) { ret 0; }
 
     v.push(4);
     v.push(5);
 
     r = v.pop();
-    if (r.unwrap_ok() != 5) { ret 1; }
+    if (r.unwrap_ok() != 5) { ret 0; }
 
     r = v.pop();
-    if (r.unwrap_ok() != 4) { ret 1; }
+    if (r.unwrap_ok() != 4) { ret 0; }
 
     r = v.pop();
-    if (r.unwrap_ok() != 2) { ret 1; }
+    if (r.unwrap_ok() != 2) { ret 0; }
 
     r = v.pop();
-    if (r.unwrap_ok() != 1) { ret 1; }
+    if (r.unwrap_ok() != 1) { ret 0; }
 
-    if (!v.is_empty()) { ret 1; }
+    if (!v.is_empty()) { ret 0; }
 
     val ok: bool = v.deinit();
-    if (!ok) { ret 1; }
-    ret 0;
+    if (!ok) { ret 0; }
+    ret 1;
 }

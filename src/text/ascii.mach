@@ -130,125 +130,125 @@ pub fun digit_val(c: char) i32 {
 # --- tests ---
 
 test "ascii: is_space" {
-    if (!is_space(' ')) { ret 1; }
-    if (!is_space('\t')) { ret 1; }
-    if (!is_space('\n')) { ret 1; }
-    if (is_space('a')) { ret 1; }
-    if (is_space('0')) { ret 1; }
-    ret 0;
+    if (!is_space(' ')) { ret 0; }
+    if (!is_space('\t')) { ret 0; }
+    if (!is_space('\n')) { ret 0; }
+    if (is_space('a')) { ret 0; }
+    if (is_space('0')) { ret 0; }
+    ret 1;
 }
 
 test "ascii: is_digit" {
-    if (!is_digit('0')) { ret 1; }
-    if (!is_digit('5')) { ret 1; }
-    if (!is_digit('9')) { ret 1; }
-    if (is_digit('a')) { ret 1; }
-    if (is_digit('/')) { ret 1; }
-    ret 0;
+    if (!is_digit('0')) { ret 0; }
+    if (!is_digit('5')) { ret 0; }
+    if (!is_digit('9')) { ret 0; }
+    if (is_digit('a')) { ret 0; }
+    if (is_digit('/')) { ret 0; }
+    ret 1;
 }
 
 test "ascii: is_alpha" {
-    if (!is_alpha('a')) { ret 1; }
-    if (!is_alpha('z')) { ret 1; }
-    if (!is_alpha('A')) { ret 1; }
-    if (!is_alpha('Z')) { ret 1; }
-    if (is_alpha('0')) { ret 1; }
-    if (is_alpha('_')) { ret 1; }
-    ret 0;
+    if (!is_alpha('a')) { ret 0; }
+    if (!is_alpha('z')) { ret 0; }
+    if (!is_alpha('A')) { ret 0; }
+    if (!is_alpha('Z')) { ret 0; }
+    if (is_alpha('0')) { ret 0; }
+    if (is_alpha('_')) { ret 0; }
+    ret 1;
 }
 
 test "ascii: is_alnum" {
-    if (!is_alnum('a')) { ret 1; }
-    if (!is_alnum('Z')) { ret 1; }
-    if (!is_alnum('0')) { ret 1; }
-    if (!is_alnum('9')) { ret 1; }
-    if (is_alnum('_')) { ret 1; }
-    if (is_alnum(' ')) { ret 1; }
-    ret 0;
+    if (!is_alnum('a')) { ret 0; }
+    if (!is_alnum('Z')) { ret 0; }
+    if (!is_alnum('0')) { ret 0; }
+    if (!is_alnum('9')) { ret 0; }
+    if (is_alnum('_')) { ret 0; }
+    if (is_alnum(' ')) { ret 0; }
+    ret 1;
 }
 
 test "ascii: is_lower" {
-    if (!is_lower('a')) { ret 1; }
-    if (!is_lower('z')) { ret 1; }
-    if (is_lower('A')) { ret 1; }
-    if (is_lower('0')) { ret 1; }
-    ret 0;
+    if (!is_lower('a')) { ret 0; }
+    if (!is_lower('z')) { ret 0; }
+    if (is_lower('A')) { ret 0; }
+    if (is_lower('0')) { ret 0; }
+    ret 1;
 }
 
 test "ascii: is_upper" {
-    if (!is_upper('A')) { ret 1; }
-    if (!is_upper('Z')) { ret 1; }
-    if (is_upper('a')) { ret 1; }
-    if (is_upper('0')) { ret 1; }
-    ret 0;
+    if (!is_upper('A')) { ret 0; }
+    if (!is_upper('Z')) { ret 0; }
+    if (is_upper('a')) { ret 0; }
+    if (is_upper('0')) { ret 0; }
+    ret 1;
 }
 
 test "ascii: is_hex_digit" {
-    if (!is_hex_digit('0')) { ret 1; }
-    if (!is_hex_digit('9')) { ret 1; }
-    if (!is_hex_digit('a')) { ret 1; }
-    if (!is_hex_digit('f')) { ret 1; }
-    if (!is_hex_digit('A')) { ret 1; }
-    if (!is_hex_digit('F')) { ret 1; }
-    if (is_hex_digit('g')) { ret 1; }
-    if (is_hex_digit('G')) { ret 1; }
-    ret 0;
+    if (!is_hex_digit('0')) { ret 0; }
+    if (!is_hex_digit('9')) { ret 0; }
+    if (!is_hex_digit('a')) { ret 0; }
+    if (!is_hex_digit('f')) { ret 0; }
+    if (!is_hex_digit('A')) { ret 0; }
+    if (!is_hex_digit('F')) { ret 0; }
+    if (is_hex_digit('g')) { ret 0; }
+    if (is_hex_digit('G')) { ret 0; }
+    ret 1;
 }
 
 test "ascii: is_punct" {
-    if (!is_punct('!')) { ret 1; }
-    if (!is_punct('.')) { ret 1; }
-    if (!is_punct('@')) { ret 1; }
-    if (!is_punct('[')) { ret 1; }
-    if (!is_punct('{')) { ret 1; }
-    if (is_punct('a')) { ret 1; }
-    if (is_punct('0')) { ret 1; }
-    if (is_punct(' ')) { ret 1; }
-    ret 0;
+    if (!is_punct('!')) { ret 0; }
+    if (!is_punct('.')) { ret 0; }
+    if (!is_punct('@')) { ret 0; }
+    if (!is_punct('[')) { ret 0; }
+    if (!is_punct('{')) { ret 0; }
+    if (is_punct('a')) { ret 0; }
+    if (is_punct('0')) { ret 0; }
+    if (is_punct(' ')) { ret 0; }
+    ret 1;
 }
 
 test "ascii: is_print" {
-    if (!is_print(' ')) { ret 1; }
-    if (!is_print('a')) { ret 1; }
-    if (!is_print('~')) { ret 1; }
-    if (is_print('\t')) { ret 1; }
-    if (is_print('\n')) { ret 1; }
-    ret 0;
+    if (!is_print(' ')) { ret 0; }
+    if (!is_print('a')) { ret 0; }
+    if (!is_print('~')) { ret 0; }
+    if (is_print('\t')) { ret 0; }
+    if (is_print('\n')) { ret 0; }
+    ret 1;
 }
 
 test "ascii: is_ctrl" {
-    if (!is_ctrl('\0')) { ret 1; }
-    if (!is_ctrl('\t')) { ret 1; }
-    if (!is_ctrl('\n')) { ret 1; }
-    if (is_ctrl(' ')) { ret 1; }
-    if (is_ctrl('a')) { ret 1; }
-    ret 0;
+    if (!is_ctrl('\0')) { ret 0; }
+    if (!is_ctrl('\t')) { ret 0; }
+    if (!is_ctrl('\n')) { ret 0; }
+    if (is_ctrl(' ')) { ret 0; }
+    if (is_ctrl('a')) { ret 0; }
+    ret 1;
 }
 
 test "ascii: to_lower" {
-    if (to_lower('A') != 'a') { ret 1; }
-    if (to_lower('Z') != 'z') { ret 1; }
-    if (to_lower('a') != 'a') { ret 1; }
-    if (to_lower('0') != '0') { ret 1; }
-    ret 0;
+    if (to_lower('A') != 'a') { ret 0; }
+    if (to_lower('Z') != 'z') { ret 0; }
+    if (to_lower('a') != 'a') { ret 0; }
+    if (to_lower('0') != '0') { ret 0; }
+    ret 1;
 }
 
 test "ascii: to_upper" {
-    if (to_upper('a') != 'A') { ret 1; }
-    if (to_upper('z') != 'Z') { ret 1; }
-    if (to_upper('A') != 'A') { ret 1; }
-    if (to_upper('0') != '0') { ret 1; }
-    ret 0;
+    if (to_upper('a') != 'A') { ret 0; }
+    if (to_upper('z') != 'Z') { ret 0; }
+    if (to_upper('A') != 'A') { ret 0; }
+    if (to_upper('0') != '0') { ret 0; }
+    ret 1;
 }
 
 test "ascii: digit_val" {
-    if (digit_val('0') != 0) { ret 1; }
-    if (digit_val('9') != 9) { ret 1; }
-    if (digit_val('a') != 10) { ret 1; }
-    if (digit_val('f') != 15) { ret 1; }
-    if (digit_val('A') != 10) { ret 1; }
-    if (digit_val('F') != 15) { ret 1; }
-    if (digit_val('z') != 35) { ret 1; }
-    if (digit_val('!') != -1) { ret 1; }
-    ret 0;
+    if (digit_val('0') != 0) { ret 0; }
+    if (digit_val('9') != 9) { ret 0; }
+    if (digit_val('a') != 10) { ret 0; }
+    if (digit_val('f') != 15) { ret 0; }
+    if (digit_val('A') != 10) { ret 0; }
+    if (digit_val('F') != 15) { ret 0; }
+    if (digit_val('z') != 35) { ret 0; }
+    if (digit_val('!') != -1) { ret 0; }
+    ret 1;
 }
