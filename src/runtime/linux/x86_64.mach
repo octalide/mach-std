@@ -20,7 +20,7 @@
 
 $_start.symbol = "_start";
 pub fun _start() {
-    masm {
+    asm {
         x86_64 {
             mov rax, rsp      # rax = initial stack pointer
             mov rdi, [rax]    # argc -> rdi (1st argument)

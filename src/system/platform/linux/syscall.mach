@@ -15,7 +15,7 @@ $if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
 # ret: syscall result (negative on error)
 pub fun syscall0(n: usize) i64 {
 	var out: i64;
-	masm {
+	asm {
 		syscall out, n
 	}
 	ret out;
@@ -28,7 +28,7 @@ pub fun syscall0(n: usize) i64 {
 # ret: syscall result (negative on error)
 pub fun syscall1(n: usize, a0: usize) i64 {
 	var out: i64;
-	masm {
+	asm {
 		syscall out, n, a0
 	}
 	ret out;
@@ -42,7 +42,7 @@ pub fun syscall1(n: usize, a0: usize) i64 {
 # ret: syscall result (negative on error)
 pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
 	var out: i64;
-	masm {
+	asm {
 		syscall out, n, a0, a1
 	}
 	ret out;
@@ -57,7 +57,7 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
 # ret: syscall result (negative on error)
 pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
 	var out: i64;
-	masm {
+	asm {
 		syscall out, n, a0, a1, a2
 	}
 	ret out;
@@ -73,7 +73,7 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
 # ret: syscall result (negative on error)
 pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
 	var out: i64;
-	masm {
+	asm {
 		syscall out, n, a0, a1, a2, a3
 	}
 	ret out;
@@ -90,7 +90,7 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
 # ret: syscall result (negative on error)
 pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
 	var out: i64;
-	masm {
+	asm {
 		syscall out, n, a0, a1, a2, a3, a4
 	}
 	ret out;
@@ -108,7 +108,7 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
 # ret: syscall result (negative on error)
 pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
 	var out: i64;
-	masm {
+	asm {
 		syscall out, n, a0, a1, a2, a3, a4, a5
 	}
 	ret out;
