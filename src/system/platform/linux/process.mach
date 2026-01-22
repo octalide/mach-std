@@ -1,3 +1,4 @@
+use std.types.bool;
 use std.types.size;
 use c: std.system.platform.linux.constants;
 use syscall: std.system.platform.linux.syscall;

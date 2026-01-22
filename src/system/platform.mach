@@ -1,3 +1,5 @@
+use std.types.bool;
+
 # std.system.platform is a low-level target interface intended for use by
 # std.runtime and other core facilities.
 #
