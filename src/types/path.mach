@@ -126,3 +126,120 @@ pub fun join(a: *Allocator, left: Path, right: Path) Result[Path, AllocError] {
 
     ret ok[Path, AllocError](buf::&u8);
 }
+
+# Get the parent directory of a `Path`.
+# ---
+# a: Allocator to use for the resulting `Path`.
+# p: Path to get parent of.
+# ret: Ok with parent `Path` on success, or Err `AllocError` on allocation failure.
+#      Returns "." if no parent exists (relative path with no separator).
+#      Returns the root if path is at root level.
+pub fun parent(a: *Allocator, p: Path) Result[Path, AllocError] {
+    if (a == nil) {
+        ret err[Path, AllocError]("allocator is nil");
+    }
+
+    if (is_empty(p)) {
+        ret clone(a, ".");
+    }
+
+    val len: usize = p.len();
+    val sep: u8 = separator();
+
+    # skip trailing separators
+    var end: usize = len;
+    for (end > 0 && p[end - 1] == sep) {
+        end = end - 1;
+    }
+
+    if (end == 0) {
+        # path was all separators (root)
+        val r: Result[*u8, AllocError] = a.alloc[u8](2);
+        if (r.is_err()) {
+            ret err[Path, AllocError](r.unwrap_err());
+        }
+        val buf: *u8 = r.unwrap_ok();
+        buf[0] = sep;
+        buf[1] = 0;
+        ret ok[Path, AllocError](buf::&u8);
+    }
+
+    # find last separator before the trailing component
+    var i: usize = end;
+    for (i > 0) {
+        i = i - 1;
+        if (p[i] == sep) {
+            brk;
+        }
+    }
+
+    if (i == 0 && p[0] != sep) {
+        # no separator found, return "."
+        ret clone(a, ".");
+    }
+
+    if (i == 0 && p[0] == sep) {
+        # separator at start only, parent is root
+        val r: Result[*u8, AllocError] = a.alloc[u8](2);
+        if (r.is_err()) {
+            ret err[Path, AllocError](r.unwrap_err());
+        }
+        val buf: *u8 = r.unwrap_ok();
+        buf[0] = sep;
+        buf[1] = 0;
+        ret ok[Path, AllocError](buf::&u8);
+    }
+
+    # skip consecutive separators
+    var parent_end: usize = i;
+    for (parent_end > 0 && p[parent_end - 1] == sep) {
+        parent_end = parent_end - 1;
+    }
+
+    if (parent_end == 0) {
+        # parent is root
+        val r: Result[*u8, AllocError] = a.alloc[u8](2);
+        if (r.is_err()) {
+            ret err[Path, AllocError](r.unwrap_err());
+        }
+        val buf: *u8 = r.unwrap_ok();
+        buf[0] = sep;
+        buf[1] = 0;
+        ret ok[Path, AllocError](buf::&u8);
+    }
+
+    # allocate and copy parent portion
+    val r: Result[*u8, AllocError] = a.alloc[u8](parent_end + 1);
+    if (r.is_err()) {
+        ret err[Path, AllocError](r.unwrap_err());
+    }
+    val buf: *u8 = r.unwrap_ok();
+    mem.raw_copy(buf::ptr, p::ptr, parent_end);
+    buf[parent_end] = 0;
+
+    ret ok[Path, AllocError](buf::&u8);
+}
+
+# Check if a `Path` is a root path.
+# ---
+# p: Path to check.
+# ret: true if `p` represents a root path.
+pub fun is_root(p: Path) bool {
+    if (is_empty(p)) {
+        ret false;
+    }
+
+    val sep: u8 = separator();
+    val len: usize = p.len();
+
+    # check if path is just the separator (or multiple separators)
+    var i: usize = 0;
+    for (i < len) {
+        if (p[i] != sep) {
+            ret false;
+        }
+        i = i + 1;
+    }
+
+    ret true;
+}
