@@ -10,6 +10,11 @@ $or {
     $error("std.system.platform: unsupported target");
 }
 
+# wait options
+pub val WNOHANG:    i32 = impl.WNOHANG;
+pub val WUNTRACED:  i32 = impl.WUNTRACED;
+pub val WCONTINUED: i32 = impl.WCONTINUED;
+
 # terminate: exit the process with the given exit `code`.
 # ---
 # Delegates to the platform-specific implementation.
@@ -22,4 +27,106 @@ pub fun terminate(code: i64) {
 # Delegates to the platform-specific implementation.
 pub fun abort() {
     impl.abort();
+}
+
+# fork: create a new child process.
+# ---
+# ret: in parent: child PID (>0), in child: 0, on error: negative errno
+pub fun fork() i64 {
+    ret impl.fork();
+}
+
+# vfork: create child process that shares memory with parent.
+# ---
+# the parent is suspended until child calls execve or _exit.
+# ret: in parent: child PID (>0), in child: 0, on error: negative errno
+pub fun vfork() i64 {
+    ret impl.vfork();
+}
+
+# execve: replace the current process image with a new program.
+# ---
+# pathname: path to the executable (null-terminated)
+# argv: null-terminated array of argument strings
+# envp: null-terminated array of environment strings
+# ret: does not return on success; on error: negative errno
+pub fun execve(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
+    ret impl.execve(pathname, argv, envp);
+}
+
+# wait4: wait for a child process to change state.
+# ---
+# pid: process ID to wait for (-1 = any child, 0 = any in same process group)
+# wstatus: pointer to status (can be nil)
+# options: wait options (WNOHANG, WUNTRACED, etc.)
+# rusage: pointer to rusage struct (can be nil)
+# ret: PID of child that changed state, 0 if WNOHANG and no child ready, negative errno on error
+pub fun wait4(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
+    ret impl.wait4(pid, wstatus, options, rusage);
+}
+
+# waitpid: wait for a specific child process.
+# ---
+# pid: process ID to wait for (-1 = any child)
+# wstatus: pointer to status (can be nil)
+# options: wait options
+# ret: PID of child or negative errno on error
+pub fun waitpid(pid: i64, wstatus: *i32, options: i32) i64 {
+    ret impl.waitpid(pid, wstatus, options);
+}
+
+# WIFEXITED: check if child exited normally.
+# ---
+# status: status from wait
+# ret: true if child exited normally
+pub fun wifexited(status: i32) bool {
+    ret impl.wifexited(status);
+}
+
+# WEXITSTATUS: get exit status from wait status.
+# ---
+# status: status from wait
+# ret: exit code (0-255)
+pub fun wexitstatus(status: i32) i32 {
+    ret impl.wexitstatus(status);
+}
+
+# WIFSIGNALED: check if child was terminated by a signal.
+# ---
+# status: status from wait
+# ret: true if child was terminated by a signal
+pub fun wifsignaled(status: i32) bool {
+    ret impl.wifsignaled(status);
+}
+
+# WTERMSIG: get signal number that terminated the child.
+# ---
+# status: status from wait
+# ret: signal number
+pub fun wtermsig(status: i32) i32 {
+    ret impl.wtermsig(status);
+}
+
+# WIFSTOPPED: check if child is currently stopped.
+# ---
+# status: status from wait
+# ret: true if child is stopped
+pub fun wifstopped(status: i32) bool {
+    ret impl.wifstopped(status);
+}
+
+# WSTOPSIG: get signal number that stopped the child.
+# ---
+# status: status from wait
+# ret: signal number
+pub fun wstopsig(status: i32) i32 {
+    ret impl.wstopsig(status);
+}
+
+# WIFCONTINUED: check if child was resumed by SIGCONT.
+# ---
+# status: status from wait
+# ret: true if child was continued
+pub fun wifcontinued(status: i32) bool {
+    ret impl.wifcontinued(status);
 }
