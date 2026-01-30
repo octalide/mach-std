@@ -173,7 +173,7 @@ pub fun (this: *File) write(buf: &u8, len: usize) Result[usize, str] {
 # stat: get file metadata.
 # ---
 # ret: Ok(Stat) on success or Err(str) with errno message on failure.
-pub fun (this: *File) stat() Result[Stat, str] {
+pub fun (this: &File) stat() Result[Stat, str] {
     if (this == nil) {
         ret err[Stat, str]("io error");
     }
@@ -191,7 +191,7 @@ pub fun (this: *File) stat() Result[Stat, str] {
 # offset: offset to seek to
 # whence: seek mode (e.g., SEEK_SET, SEEK_CUR, SEEK_END)
 # ret: Ok(new_offset) on success or Err(str) with errno message on failure.
-pub fun (this: *File) seek(offset: i64, whence: i32) Result[i64, str] {
+pub fun (this: &File) seek(offset: i64, whence: i32) Result[i64, str] {
     if (this == nil) {
         ret err[i64, str]("io error");
     }
@@ -341,11 +341,11 @@ fun write_u64_to_buf(buf: *u8, offset: usize, cap: usize, n: u64) usize {
 # path: returns the path of the temp file as a string.
 # ---
 # ret: null-terminated path string
-pub fun (this: *TempFile) path() str {
+pub fun (this: &TempFile) path() str {
     ret ?this.path_buf[0];
 }
 
-# as_file: returns a pointer to the underlying File.
+# as_file: return a pointer to the underlying file.
 # ---
 # ret: pointer to File
 pub fun (this: *TempFile) as_file() *File {

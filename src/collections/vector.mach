@@ -152,7 +152,7 @@ pub fun (this: *Vector[T]) pop() Result[T, str] {
 # ---
 # index: Element index
 # ret: Ok(pointer) or Err("index out of bounds")
-pub fun (this: *Vector[T]) get(index: usize) Result[*T, str] {
+pub fun (this: &Vector[T]) get(index: usize) Result[*T, str] {
     if (index >= this.len) {
         ret err[*T, str]("index out of bounds");
     }

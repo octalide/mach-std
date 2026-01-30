@@ -118,7 +118,7 @@ pub fun (this: *Map[K, V]) clear() {
 # ---
 # key: Key to search for
 # ret: (index, found) tuple - if found is true, key exists at index
-fun (this: *Map[K, V]) find_slot(key: &K) rec { idx: usize; found: bool; } {
+fun (this: &Map[K, V]) find_slot(key: &K) rec { idx: usize; found: bool; } {
     var result: rec { idx: usize; found: bool; };
     result.found = false;
     result.idx = 0;
@@ -300,7 +300,7 @@ pub fun (this: *Map[K, V]) insert(key: K, value: V) Result[bool, str] {
 # ---
 # key: Key to look up
 # ret: Ok(pointer to value) or Err("key not found")
-pub fun (this: *Map[K, V]) get(key: &K) Result[*V, str] {
+pub fun (this: &Map[K, V]) get(key: &K) Result[*V, str] {
     if (this.cap == 0) {
         ret err[*V, str]("key not found");
     }
@@ -318,7 +318,7 @@ pub fun (this: *Map[K, V]) get(key: &K) Result[*V, str] {
 # ---
 # key: Key to check for
 # ret: true if the key exists in the map
-pub fun (this: *Map[K, V]) contains(key: &K) bool {
+pub fun (this: &Map[K, V]) contains(key: &K) bool {
     if (this.cap == 0) {
         ret false;
     }
