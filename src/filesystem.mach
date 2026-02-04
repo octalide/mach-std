@@ -6,6 +6,8 @@ use std.types.string;
 use int: std.types.int;
 use mem: std.memory;
 use time: std.time;
+use allocator: std.allocator;
+use path: std.types.path;
 
 use pfs: std.system.platform.filesystem;
 use errno: std.system.platform.errno;
@@ -224,6 +226,138 @@ pub fun unlink(path: str) Result[bool, str] {
     }
 
     ret err[bool, str](errno.message(raw));
+}
+
+# stat_path: get file metadata for a path.
+# ---
+# path: path to stat
+# ret: Ok(stat) on success or Err(str) with errno message on failure.
+pub fun stat_path(path: str) Result[Stat, str] {
+    if (path == nil) {
+        ret err[Stat, str]("path is nil");
+    }
+
+    var st: Stat;
+    val raw: i64 = pfs.newfstatat(c.AT_FDCWD, path, ?st, 0);
+    if (raw < 0) {
+        ret err[Stat, str](errno.message(raw));
+    }
+
+    ret ok[Stat, str](st);
+}
+
+# is_dir: check if a path exists and is a directory.
+# ---
+# path: path to check
+# ret: true if directory, false otherwise
+pub fun is_dir(path: str) bool {
+    val st_res: Result[Stat, str] = stat_path(path);
+    if (st_res.is_err()) {
+        ret false;
+    }
+
+    val st: Stat = st_res.unwrap_ok();
+    ret (st.st_mode & c.S_IFMT) == c.S_IFDIR;
+}
+
+# is_file: check if a path exists and is a regular file.
+# ---
+# path: path to check
+# ret: true if regular file, false otherwise
+pub fun is_file(path: str) bool {
+    val st_res: Result[Stat, str] = stat_path(path);
+    if (st_res.is_err()) {
+        ret false;
+    }
+
+    val st: Stat = st_res.unwrap_ok();
+    ret (st.st_mode & c.S_IFMT) == c.S_IFREG;
+}
+
+# create_dir: create a new directory.
+# ---
+# path: path to create
+# mode: directory permissions
+# ret: Ok(true) on success or Err(str) on failure.
+pub fun create_dir(path: str, mode: i32) Result[bool, str] {
+    if (path == nil) {
+        ret err[bool, str]("path is nil");
+    }
+
+    var retries: usize = 0;
+    var raw: i64 = 0;
+    for {
+        raw = pfs.mkdirat(c.AT_FDCWD, path, mode);
+        if (raw < 0) {
+            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
+                retries = retries + 1;
+                cnt;
+            }
+            brk;
+        }
+        ret ok[bool, str](true);
+    }
+
+    ret err[bool, str](errno.message(raw));
+}
+
+# create_dir_all: create a directory and all parents (mkdir -p).
+# ---
+# path: path to create
+# mode: directory permissions
+# ret: Ok(true) on success or Err(str) on failure.
+pub fun create_dir_all(path_str: str, mode: i32) Result[bool, str] {
+    if (path_str == nil) {
+        ret err[bool, str]("path is nil");
+    }
+
+    if (path.is_empty(path_str)) {
+        ret err[bool, str]("path is empty");
+    }
+
+    if (path.is_root(path_str)) {
+        ret ok[bool, str](true);
+    }
+
+    if (is_dir(path_str)) {
+        ret ok[bool, str](true);
+    }
+
+    if (is_file(path_str)) {
+        ret err[bool, str]("path exists and is not a directory");
+    }
+
+    val create_res: Result[bool, str] = create_dir(path_str, mode);
+    if (create_res.is_ok()) {
+        ret create_res;
+    }
+
+    var a: allocator.Allocator = allocator.default();
+    val parent_res: Result[path.Path, allocator.AllocError] = path.parent(?a, path_str);
+    if (parent_res.is_err()) {
+        ret err[bool, str](parent_res.unwrap_err());
+    }
+
+    val parent_path: path.Path = parent_res.unwrap_ok();
+    val parent_create_res: Result[bool, str] = create_dir_all(parent_path, mode);
+
+    val parent_len: usize = parent_path.len();
+    a.free[u8](parent_path::ptr::*u8, parent_len + 1);
+
+    if (parent_create_res.is_err()) {
+        ret parent_create_res;
+    }
+
+    val final_res: Result[bool, str] = create_dir(path_str, mode);
+    if (final_res.is_ok()) {
+        ret final_res;
+    }
+
+    if (is_dir(path_str)) {
+        ret ok[bool, str](true);
+    }
+
+    ret final_res;
 }
 
 # TempFile: a temporary file that stores its path for cleanup.
