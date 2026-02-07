@@ -5,6 +5,7 @@ use std.types.size;
 use std.types.string;
 
 use pmem: std.system.platform.memory;
+use heap: std.allocator.heap;
 
 # std.allocator: zig-style allocator interface.
 # ---
@@ -193,11 +194,24 @@ pub fun page_allocator() Allocator {
     ret a;
 }
 
-# default: the default allocator for this platform (currently page_allocator).
+# heap_allocator: allocator backed by brk-based bump allocator (fine-grained).
 # ---
-# ret: default allocator for the platform (page_allocator).
+# uses brk for small allocations, mmap for >128KB. free is no-op for brk-backed.
+# ret: Allocator backed by brk heap.
+pub fun heap_allocator() Allocator {
+    var a: Allocator;
+    a.ctx = nil;
+    a.alloc_fn  = heap.heap_alloc_cb;
+    a.resize_fn = heap.heap_resize_cb;
+    a.free_fn   = heap.heap_free_cb;
+    ret a;
+}
+
+# default: the default allocator for this platform (heap_allocator).
+# ---
+# ret: default allocator for the platform (heap_allocator).
 pub fun default() Allocator {
-    ret page_allocator();
+    ret heap_allocator();
 }
 
 # --- tests ---

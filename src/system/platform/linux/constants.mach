@@ -15,6 +15,7 @@ pub val SYS_CLOSE:         usize = 3;
 pub val SYS_FSTAT:         usize = 5;
 pub val SYS_LSEEK:         usize = 8;
 pub val SYS_MMAP:          usize = 9;
+pub val SYS_BRK:           usize = 12;
 pub val SYS_MUNMAP:        usize = 11;
 pub val SYS_MREMAP:        usize = 25;
 pub val SYS_EXIT:          usize = 60;

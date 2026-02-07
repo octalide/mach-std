@@ -1,0 +1,291 @@
+use std.types.bool;
+use std.types.size;
+
+use c: std.system.platform.linux.constants;
+use sc: std.system.platform.linux.syscall;
+use mem: std.memory;
+use pmem: std.system.platform.memory;
+
+# std.allocator.heap: brk-based bump allocator.
+# ---
+# uses the brk syscall to extend the program break for small allocations,
+# falling back to mmap (via platform memory) for allocations >128KB.
+# free is a no-op for brk-backed allocations; mmap-backed ones are munmapped.
+
+# large allocation threshold: 128KB
+val LARGE_THRESHOLD: usize = 131072;
+
+# minimum brk extension: 4096 bytes (one page)
+val MIN_BRK_EXTEND: usize = 4096;
+
+# heap state
+var heap_base:    usize = 0;
+var heap_current: usize = 0;
+var heap_end:     usize = 0;
+
+# last allocation tracking for in-place resize
+var last_alloc_ptr:  usize = 0;
+var last_alloc_size: usize = 0;
+
+fun align_up(v: usize, align: usize) usize {
+	if (align <= 1) { ret v; }
+
+	val r: usize = v % align;
+	if (r == 0) { ret v; }
+	ret v + (align - r);
+}
+
+fun min_usize(a: usize, b: usize) usize {
+	if (a < b) { ret a; }
+	ret b;
+}
+
+# Call brk syscall. Returns new program break on success, or current break on failure.
+fun sys_brk(addr: usize) usize {
+	val res: i64 = sc.syscall1(c.SYS_BRK, addr);
+	ret res::usize;
+}
+
+# Initialize heap state by querying current program break.
+fun heap_init() {
+	if (heap_base != 0) { ret; }
+
+	val cur: usize = sys_brk(0);
+	# align base to 16 bytes
+	val aligned: usize = align_up(cur, 16);
+	if (aligned != cur) {
+		val res: usize = sys_brk(aligned);
+		if (res < aligned) {
+			# failed to align, use what we got
+			heap_base    = cur;
+			heap_current = cur;
+			heap_end     = cur;
+			ret;
+		}
+	}
+	heap_base    = aligned;
+	heap_current = aligned;
+	heap_end     = aligned;
+}
+
+# Extend the heap by at least `needed` bytes.
+fun heap_extend(needed: usize) bool {
+	# extend by at least MIN_BRK_EXTEND
+	var extend: usize = needed;
+	if (extend < MIN_BRK_EXTEND) {
+		extend = MIN_BRK_EXTEND;
+	}
+
+	val new_end: usize = heap_end + extend;
+	val res: usize = sys_brk(new_end);
+	if (res < new_end) {
+		ret false;
+	}
+
+	heap_end = res;
+	ret true;
+}
+
+# Allocate from the brk heap with 16-byte alignment.
+pub fun allocate(size: usize) ptr {
+	if (size == 0) { ret nil; }
+
+	heap_init();
+
+	# large allocations go through mmap
+	if (size >= LARGE_THRESHOLD) {
+		ret pmem.allocate(size);
+	}
+
+	val aligned_start: usize = align_up(heap_current, 16);
+	val needed_end: usize = aligned_start + size;
+
+	# extend heap if needed
+	if (needed_end > heap_end) {
+		val need: usize = needed_end - heap_end;
+		val ok: bool = heap_extend(need);
+		if (!ok) { ret nil; }
+	}
+
+	heap_current = needed_end;
+
+	# track last allocation for resize optimization
+	last_alloc_ptr  = aligned_start;
+	last_alloc_size = size;
+
+	ret aligned_start::ptr;
+}
+
+# Free a heap allocation.
+# ---
+# brk-backed allocations: no-op (memory reclaimed when process exits).
+# mmap-backed allocations (>= LARGE_THRESHOLD): munmapped.
+pub fun deallocate(p: ptr, size: usize) bool {
+	if (p == nil || size == 0) { ret true; }
+
+	# large allocations were mmap-backed
+	if (size >= LARGE_THRESHOLD) {
+		ret pmem.deallocate(p, size);
+	}
+
+	# brk-backed: no-op
+	ret true;
+}
+
+# Resize a heap allocation.
+# ---
+# if p is the last brk allocation and heap has room, just bump.
+# otherwise alloc+copy.
+# mmap-backed allocations use platform reallocate.
+pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
+	if (p == nil) { ret allocate(new_size); }
+
+	if (new_size == 0) {
+		deallocate(p, old_size);
+		ret nil;
+	}
+
+	# large -> large: use platform reallocate
+	if (old_size >= LARGE_THRESHOLD && new_size >= LARGE_THRESHOLD) {
+		ret pmem.reallocate(p, old_size, new_size);
+	}
+
+	# large -> small: alloc new small, copy, free old large
+	if (old_size >= LARGE_THRESHOLD) {
+		val q: ptr = allocate(new_size);
+		if (q == nil) { ret nil; }
+		mem.raw_copy(q, p, min_usize(old_size, new_size));
+		pmem.deallocate(p, old_size);
+		ret q;
+	}
+
+	# small -> large: alloc new large, copy, (old is brk no-op free)
+	if (new_size >= LARGE_THRESHOLD) {
+		val q: ptr = pmem.allocate(new_size);
+		if (q == nil) { ret nil; }
+		mem.raw_copy(q, p, min_usize(old_size, new_size));
+		ret q;
+	}
+
+	# small -> small: try in-place if last allocation
+	val p_addr: usize = p::usize;
+	if (p_addr == last_alloc_ptr && old_size == last_alloc_size) {
+		val new_end: usize = p_addr + new_size;
+		if (new_end <= heap_end) {
+			heap_current    = new_end;
+			last_alloc_size = new_size;
+			ret p;
+		}
+		# try extending
+		val need: usize = new_end - heap_end;
+		val ok: bool = heap_extend(need);
+		if (ok) {
+			heap_current    = new_end;
+			last_alloc_size = new_size;
+			ret p;
+		}
+	}
+
+	# fallback: alloc+copy
+	val q: ptr = allocate(new_size);
+	if (q == nil) { ret nil; }
+	mem.raw_copy(q, p, min_usize(old_size, new_size));
+	ret q;
+}
+
+# Allocator-compatible callback wrappers.
+
+pub fun heap_alloc_cb(ctx: ptr, size: usize, align: usize) ptr {
+	ret allocate(size);
+}
+
+pub fun heap_resize_cb(ctx: ptr, p: ptr, old_size: usize, new_size: usize, align: usize) ptr {
+	ret reallocate(p, old_size, new_size);
+}
+
+pub fun heap_free_cb(ctx: ptr, p: ptr, size: usize, align: usize) bool {
+	ret deallocate(p, size);
+}
+
+# --- tests ---
+
+test "heap: allocate returns non-nil for small size" {
+	val p: ptr = allocate(64);
+	if (p == nil) { ret 0; }
+	deallocate(p, 64);
+	ret 1;
+}
+
+test "heap: allocate returns nil for zero size" {
+	val p: ptr = allocate(0);
+	if (p != nil) { ret 0; }
+	ret 1;
+}
+
+test "heap: allocate returns 16-byte aligned pointer" {
+	val p: ptr = allocate(100);
+	if (p == nil) { ret 0; }
+	val addr: usize = p::usize;
+	if ((addr % 16) != 0) { ret 0; }
+	deallocate(p, 100);
+	ret 1;
+}
+
+test "heap: multiple allocations return distinct pointers" {
+	val p1: ptr = allocate(64);
+	val p2: ptr = allocate(64);
+	if (p1 == nil) { ret 0; }
+	if (p2 == nil) { ret 0; }
+	if (p1 == p2) { ret 0; }
+	deallocate(p1, 64);
+	deallocate(p2, 64);
+	ret 1;
+}
+
+test "heap: allocate and write/read works" {
+	val p: ptr = allocate(32);
+	if (p == nil) { ret 0; }
+	val ip: *i64 = p::*i64;
+	ip[0] = 42;
+	ip[1] = 99;
+	if (ip[0] != 42) { ret 0; }
+	if (ip[1] != 99) { ret 0; }
+	deallocate(p, 32);
+	ret 1;
+}
+
+test "heap: free with nil succeeds" {
+	val ok: bool = deallocate(nil, 64);
+	if (!ok) { ret 0; }
+	ret 1;
+}
+
+test "heap: resize from nil allocates new" {
+	val p: ptr = reallocate(nil, 0, 128);
+	if (p == nil) { ret 0; }
+	deallocate(p, 128);
+	ret 1;
+}
+
+test "heap: resize to zero frees" {
+	val p: ptr = allocate(64);
+	if (p == nil) { ret 0; }
+	val q: ptr = reallocate(p, 64, 0);
+	if (q != nil) { ret 0; }
+	ret 1;
+}
+
+test "heap: resize preserves data" {
+	val p: ptr = allocate(16);
+	if (p == nil) { ret 0; }
+	val ip: *i64 = p::*i64;
+	ip[0] = 111;
+	ip[1] = 222;
+	val q: ptr = reallocate(p, 16, 32);
+	if (q == nil) { ret 0; }
+	val iq: *i64 = q::*i64;
+	if (iq[0] != 111) { ret 0; }
+	if (iq[1] != 222) { ret 0; }
+	deallocate(q, 32);
+	ret 1;
+}

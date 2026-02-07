@@ -11,6 +11,7 @@ use std.collections.vector;
 
 use std.allocator;
 use std.allocator.arena;
+use std.allocator.heap;
 use std.memory;
 use std.stream;
 use std.filesystem;
