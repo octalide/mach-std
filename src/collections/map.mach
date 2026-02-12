@@ -61,7 +61,7 @@ pub fun init[K, V](alloc: allocator.Allocator, hash_fn: fun(ptr) u64, eq_fn: fun
 # Free all backing storage and reset the map
 # ---
 # ret: true if memory was freed successfully
-pub fun map_dnit(this: *Map[K, V]) bool {
+pub fun map_dnit[K, V](this: *Map[K, V]) bool {
     if (this == nil) { ret true; }
     if (this.cap == 0) {
         this.keys = nil;
@@ -88,27 +88,27 @@ pub fun map_dnit(this: *Map[K, V]) bool {
 # Check if the map is empty
 # ---
 # ret: true if the map has no entries
-pub fun map_is_empty(this: Map[K, V]) bool {
+pub fun map_is_empty[K, V](this: Map[K, V]) bool {
     ret this.len == 0;
 }
 
 # Return the number of entries in the map
 # ---
 # ret: Number of key-value pairs
-pub fun map_length(this: Map[K, V]) usize {
+pub fun map_length[K, V](this: Map[K, V]) usize {
     ret this.len;
 }
 
 # Return the current capacity
 # ---
 # ret: Capacity in slots
-pub fun map_capacity(this: Map[K, V]) usize {
+pub fun map_capacity[K, V](this: Map[K, V]) usize {
     ret this.cap;
 }
 
 # Clear all entries but keep allocated capacity
 # ---
-pub fun map_clear(this: *Map[K, V]) {
+pub fun map_clear[K, V](this: *Map[K, V]) {
     if (this == nil || this.cap == 0) { ret; }
     mem.raw_fill(this.states::ptr, SLOT_EMPTY, this.cap);
     this.len = 0;
@@ -118,7 +118,7 @@ pub fun map_clear(this: *Map[K, V]) {
 # ---
 # key: Key to search for
 # ret: (index, found) tuple - if found is true, key exists at index
-fun map_find_slot(this: &Map[K, V], key: &K) rec { idx: usize; found: bool; } {
+fun map_find_slot[K, V](this: &Map[K, V], key: &K) rec { idx: usize; found: bool; } {
     var result: rec { idx: usize; found: bool; };
     result.found = false;
     result.idx = 0;
@@ -180,32 +180,32 @@ fun map_find_slot(this: &Map[K, V], key: &K) rec { idx: usize; found: bool; } {
 # ---
 # new_cap: New capacity (must be > current capacity)
 # ret: Ok(new capacity) or Err(error message)
-fun map_grow(this: *Map[K, V], new_cap: usize) Result[usize, str] {
+fun map_grow[K, V](this: *Map[K, V], new_cap: usize) Result[usize, str] {
     if (new_cap <= this.cap) {
         ret ok[usize, str](this.cap);
     }
 
     # allocate new arrays
     val keys_r: Result[*K, allocator.AllocError] = allocator.allocator_alloc[K](this.alloc, new_cap);
-    if (result_is_err(keys_r)) {
-        ret err[usize, str](result_unwrap_err(keys_r));
+    if (result_is_err[*K, allocator.AllocError](keys_r)) {
+        ret err[usize, str](result_unwrap_err[*K, allocator.AllocError](keys_r));
     }
-    val new_keys: *K = result_unwrap_ok(keys_r);
+    val new_keys: *K = result_unwrap_ok[*K, allocator.AllocError](keys_r);
 
     val values_r: Result[*V, allocator.AllocError] = allocator.allocator_alloc[V](this.alloc, new_cap);
-    if (result_is_err(values_r)) {
+    if (result_is_err[*V, allocator.AllocError](values_r)) {
         allocator.allocator_free[K](this.alloc, new_keys, new_cap);
-        ret err[usize, str](result_unwrap_err(values_r));
+        ret err[usize, str](result_unwrap_err[*V, allocator.AllocError](values_r));
     }
-    val new_values: *V = result_unwrap_ok(values_r);
+    val new_values: *V = result_unwrap_ok[*V, allocator.AllocError](values_r);
 
     val states_r: Result[*u8, allocator.AllocError] = allocator.allocator_zalloc[u8](this.alloc, new_cap);
-    if (result_is_err(states_r)) {
+    if (result_is_err[*u8, allocator.AllocError](states_r)) {
         allocator.allocator_free[K](this.alloc, new_keys, new_cap);
         allocator.allocator_free[V](this.alloc, new_values, new_cap);
-        ret err[usize, str](result_unwrap_err(states_r));
+        ret err[usize, str](result_unwrap_err[*u8, allocator.AllocError](states_r));
     }
-    val new_states: *u8 = result_unwrap_ok(states_r);
+    val new_states: *u8 = result_unwrap_ok[*u8, allocator.AllocError](states_r);
 
     # save old arrays
     val old_keys: *K = this.keys;
@@ -254,15 +254,15 @@ fun map_grow(this: *Map[K, V], new_cap: usize) Result[usize, str] {
 # Ensure the map has capacity for at least one more entry
 # ---
 # ret: Ok(capacity) or Err(error message)
-fun map_ensure_capacity(this: *Map[K, V]) Result[usize, str] {
+fun map_ensure_capacity[K, V](this: *Map[K, V]) Result[usize, str] {
     if (this.cap == 0) {
-        ret map_grow(this, DEFAULT_CAPACITY);
+        ret map_grow[K, V](this, DEFAULT_CAPACITY);
     }
 
     # check load factor
     val threshold: usize = (this.cap * LOAD_FACTOR_PERCENT) / 100;
     if (this.len >= threshold) {
-        ret map_grow(this, this.cap * 2);
+        ret map_grow[K, V](this, this.cap * 2);
     }
 
     ret ok[usize, str](this.cap);
@@ -273,13 +273,13 @@ fun map_ensure_capacity(this: *Map[K, V]) Result[usize, str] {
 # key: Key to insert
 # value: Value to associate with the key
 # ret: Ok(true) if inserted new, Ok(false) if updated existing, Err on allocation failure
-pub fun map_insert(this: *Map[K, V], key: K, value: V) Result[bool, str] {
-    val cap_r: Result[usize, str] = map_ensure_capacity(this);
-    if (result_is_err(cap_r)) {
-        ret err[bool, str](result_unwrap_err(cap_r));
+pub fun map_insert[K, V](this: *Map[K, V], key: K, value: V) Result[bool, str] {
+    val cap_r: Result[usize, str] = map_ensure_capacity[K, V](this);
+    if (result_is_err[usize, str](cap_r)) {
+        ret err[bool, str](result_unwrap_err[usize, str](cap_r));
     }
 
-    val slot: rec { idx: usize; found: bool; } = map_find_slot(this, ?key);
+    val slot: rec { idx: usize; found: bool; } = map_find_slot[K, V](this, ?key);
 
     if (slot.found) {
         # update existing
@@ -300,12 +300,12 @@ pub fun map_insert(this: *Map[K, V], key: K, value: V) Result[bool, str] {
 # ---
 # key: Key to look up
 # ret: Ok(pointer to value) or Err("key not found")
-pub fun map_get(this: &Map[K, V], key: &K) Result[*V, str] {
+pub fun map_get[K, V](this: &Map[K, V], key: &K) Result[*V, str] {
     if (this.cap == 0) {
         ret err[*V, str]("key not found");
     }
 
-    val slot: rec { idx: usize; found: bool; } = map_find_slot(this, key);
+    val slot: rec { idx: usize; found: bool; } = map_find_slot[K, V](this, key);
 
     if (!slot.found) {
         ret err[*V, str]("key not found");
@@ -318,12 +318,12 @@ pub fun map_get(this: &Map[K, V], key: &K) Result[*V, str] {
 # ---
 # key: Key to check for
 # ret: true if the key exists in the map
-pub fun map_contains(this: &Map[K, V], key: &K) bool {
+pub fun map_contains[K, V](this: &Map[K, V], key: &K) bool {
     if (this.cap == 0) {
         ret false;
     }
 
-    val slot: rec { idx: usize; found: bool; } = map_find_slot(this, key);
+    val slot: rec { idx: usize; found: bool; } = map_find_slot[K, V](this, key);
     ret slot.found;
 }
 
@@ -331,12 +331,12 @@ pub fun map_contains(this: &Map[K, V], key: &K) bool {
 # ---
 # key: Key to remove
 # ret: Ok(true) if removed, Ok(false) if key not found
-pub fun map_remove(this: *Map[K, V], key: &K) Result[bool, str] {
+pub fun map_remove[K, V](this: *Map[K, V], key: &K) Result[bool, str] {
     if (this.cap == 0) {
         ret ok[bool, str](false);
     }
 
-    val slot: rec { idx: usize; found: bool; } = map_find_slot(this, key);
+    val slot: rec { idx: usize; found: bool; } = map_find_slot[K, V](this, key);
 
     if (!slot.found) {
         ret ok[bool, str](false);
@@ -460,9 +460,9 @@ pub fun eq_u64(pa: ptr, pb: ptr) bool {
 test "map: init creates empty map" {
     var a: allocator.Allocator = allocator.page_allocator();
     val m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
-    if (!map_is_empty(m)) { ret 0; }
-    if (map_length(m) != 0) { ret 0; }
-    if (map_capacity(m) != 0) { ret 0; }
+    if (!map_is_empty[i64, i64](m)) { ret 0; }
+    if (map_length[i64, i64](m) != 0) { ret 0; }
+    if (map_capacity[i64, i64](m) != 0) { ret 0; }
     ret 1;
 }
 
@@ -470,19 +470,19 @@ test "map: insert and get" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
 
-    val r: Result[bool, str] = map_insert(?m, 42, 100);
-    if (result_is_err(r)) { ret 0; }
-    if (!result_unwrap_ok(r)) { ret 0; } # should be new insert
+    val r: Result[bool, str] = map_insert[i64, i64](?m, 42, 100);
+    if (result_is_err[bool, str](r)) { ret 0; }
+    if (!result_unwrap_ok[bool, str](r)) { ret 0; } # should be new insert
 
-    if (map_length(m) != 1) { ret 0; }
-    if (map_is_empty(m)) { ret 0; }
+    if (map_length[i64, i64](m) != 1) { ret 0; }
+    if (map_is_empty[i64, i64](m)) { ret 0; }
 
     val key: i64 = 42;
-    val gr: Result[*i64, str] = map_get(?m, ?key);
-    if (result_is_err(gr)) { ret 0; }
-    if (@result_unwrap_ok(gr) != 100) { ret 0; }
+    val gr: Result[*i64, str] = map_get[i64, i64](?m, ?key);
+    if (result_is_err[*i64, str](gr)) { ret 0; }
+    if (@result_unwrap_ok[*i64, str](gr) != 100) { ret 0; }
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -491,19 +491,19 @@ test "map: insert updates existing" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
 
-    map_insert(?m, 10, 100);
-    val r: Result[bool, str] = map_insert(?m, 10, 200);
-    if (result_is_err(r)) { ret 0; }
-    if (result_unwrap_ok(r)) { ret 0; } # should be update, not new
+    map_insert[i64, i64](?m, 10, 100);
+    val r: Result[bool, str] = map_insert[i64, i64](?m, 10, 200);
+    if (result_is_err[bool, str](r)) { ret 0; }
+    if (result_unwrap_ok[bool, str](r)) { ret 0; } # should be update, not new
 
-    if (map_length(m) != 1) { ret 0; }
+    if (map_length[i64, i64](m) != 1) { ret 0; }
 
     val key: i64 = 10;
-    val gr: Result[*i64, str] = map_get(?m, ?key);
-    if (result_is_err(gr)) { ret 0; }
-    if (@result_unwrap_ok(gr) != 200) { ret 0; }
+    val gr: Result[*i64, str] = map_get[i64, i64](?m, ?key);
+    if (result_is_err[*i64, str](gr)) { ret 0; }
+    if (@result_unwrap_ok[*i64, str](gr) != 200) { ret 0; }
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -512,8 +512,8 @@ test "map: contains" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
 
-    map_insert(?m, 5, 50);
-    map_insert(?m, 10, 100);
+    map_insert[i64, i64](?m, 5, 50);
+    map_insert[i64, i64](?m, 10, 100);
 
     val k1: i64 = 5;
     val k2: i64 = 10;
@@ -523,7 +523,7 @@ test "map: contains" {
     if (!str_contains(m, ?k2)) { ret 0; }
     if (str_contains(m, ?k3)) { ret 0; }
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -532,18 +532,18 @@ test "map: remove" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
 
-    map_insert(?m, 1, 10);
-    map_insert(?m, 2, 20);
-    map_insert(?m, 3, 30);
+    map_insert[i64, i64](?m, 1, 10);
+    map_insert[i64, i64](?m, 2, 20);
+    map_insert[i64, i64](?m, 3, 30);
 
-    if (map_length(m) != 3) { ret 0; }
+    if (map_length[i64, i64](m) != 3) { ret 0; }
 
     val k2: i64 = 2;
-    val rr: Result[bool, str] = map_remove(?m, ?k2);
-    if (result_is_err(rr)) { ret 0; }
-    if (!result_unwrap_ok(rr)) { ret 0; }
+    val rr: Result[bool, str] = map_remove[i64, i64](?m, ?k2);
+    if (result_is_err[bool, str](rr)) { ret 0; }
+    if (!result_unwrap_ok[bool, str](rr)) { ret 0; }
 
-    if (map_length(m) != 2) { ret 0; }
+    if (map_length[i64, i64](m) != 2) { ret 0; }
     if (str_contains(m, ?k2)) { ret 0; }
 
     # other keys should still be there
@@ -552,7 +552,7 @@ test "map: remove" {
     if (!str_contains(m, ?k1)) { ret 0; }
     if (!str_contains(m, ?k3)) { ret 0; }
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -561,14 +561,14 @@ test "map: remove non-existent" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
 
-    map_insert(?m, 1, 10);
+    map_insert[i64, i64](?m, 1, 10);
 
     val k: i64 = 999;
-    val rr: Result[bool, str] = map_remove(?m, ?k);
-    if (result_is_err(rr)) { ret 0; }
-    if (result_unwrap_ok(rr)) { ret 0; } # should return false
+    val rr: Result[bool, str] = map_remove[i64, i64](?m, ?k);
+    if (result_is_err[bool, str](rr)) { ret 0; }
+    if (result_unwrap_ok[bool, str](rr)) { ret 0; } # should return false
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -577,13 +577,13 @@ test "map: get non-existent returns error" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
 
-    map_insert(?m, 1, 10);
+    map_insert[i64, i64](?m, 1, 10);
 
     val k: i64 = 999;
-    val gr: Result[*i64, str] = map_get(?m, ?k);
-    if (result_is_ok(gr)) { ret 0; }
+    val gr: Result[*i64, str] = map_get[i64, i64](?m, ?k);
+    if (result_is_ok[*i64, str](gr)) { ret 0; }
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -592,18 +592,18 @@ test "map: clear" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
 
-    map_insert(?m, 1, 10);
-    map_insert(?m, 2, 20);
-    map_insert(?m, 3, 30);
+    map_insert[i64, i64](?m, 1, 10);
+    map_insert[i64, i64](?m, 2, 20);
+    map_insert[i64, i64](?m, 3, 30);
 
-    val cap_before: usize = map_capacity(m);
-    map_clear(?m);
+    val cap_before: usize = map_capacity[i64, i64](m);
+    map_clear[i64, i64](?m);
 
-    if (map_length(m) != 0) { ret 0; }
-    if (!map_is_empty(m)) { ret 0; }
-    if (map_capacity(m) != cap_before) { ret 0; }
+    if (map_length[i64, i64](m) != 0) { ret 0; }
+    if (!map_is_empty[i64, i64](m)) { ret 0; }
+    if (map_capacity[i64, i64](m) != cap_before) { ret 0; }
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -615,24 +615,24 @@ test "map: many insertions trigger growth" {
     # insert many entries
     var i: i64 = 0;
     for (i < 100) {
-        val r: Result[bool, str] = map_insert(?m, i, i * 10);
-        if (result_is_err(r)) { ret 0; }
+        val r: Result[bool, str] = map_insert[i64, i64](?m, i, i * 10);
+        if (result_is_err[bool, str](r)) { ret 0; }
         i = i + 1;
     }
 
-    if (map_length(m) != 100) { ret 0; }
-    if (map_capacity(m) < 100) { ret 0; }
+    if (map_length[i64, i64](m) != 100) { ret 0; }
+    if (map_capacity[i64, i64](m) < 100) { ret 0; }
 
     # verify all entries
     var j: i64 = 0;
     for (j < 100) {
-        val gr: Result[*i64, str] = map_get(?m, ?j);
-        if (result_is_err(gr)) { ret 0; }
-        if (@result_unwrap_ok(gr) != j * 10) { ret 0; }
+        val gr: Result[*i64, str] = map_get[i64, i64](?m, ?j);
+        if (result_is_err[*i64, str](gr)) { ret 0; }
+        if (@result_unwrap_ok[*i64, str](gr) != j * 10) { ret 0; }
         j = j + 1;
     }
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -641,16 +641,16 @@ test "map: insert after remove reuses tombstone" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
 
-    map_insert(?m, 1, 10);
-    map_insert(?m, 2, 20);
+    map_insert[i64, i64](?m, 1, 10);
+    map_insert[i64, i64](?m, 2, 20);
 
     val k: i64 = 1;
-    map_remove(?m, ?k);
+    map_remove[i64, i64](?m, ?k);
 
     # insert new key
-    map_insert(?m, 3, 30);
+    map_insert[i64, i64](?m, 3, 30);
 
-    if (map_length(m) != 2) { ret 0; }
+    if (map_length[i64, i64](m) != 2) { ret 0; }
 
     val k2: i64 = 2;
     val k3: i64 = 3;
@@ -658,7 +658,7 @@ test "map: insert after remove reuses tombstone" {
     if (!str_contains(m, ?k3)) { ret 0; }
     if (str_contains(m, ?k)) { ret 0; }
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -666,7 +666,7 @@ test "map: insert after remove reuses tombstone" {
 test "map: dnit on empty map" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -675,27 +675,27 @@ test "map: string keys" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[str, i64] = init[str, i64](a, hash_str, eq_str);
 
-    map_insert(?m, "hello", 1);
-    map_insert(?m, "world", 2);
-    map_insert(?m, "foo", 3);
+    map_insert[str, i64](?m, "hello", 1);
+    map_insert[str, i64](?m, "world", 2);
+    map_insert[str, i64](?m, "foo", 3);
 
-    if (map_length(m) != 3) { ret 0; }
+    if (map_length[str, i64](m) != 3) { ret 0; }
 
     val k1: str = "hello";
     val k2: str = "world";
     val k3: str = "bar";
 
-    val r1: Result[*i64, str] = map_get(?m, ?k1);
-    if (result_is_err(r1)) { ret 0; }
-    if (@result_unwrap_ok(r1) != 1) { ret 0; }
+    val r1: Result[*i64, str] = map_get[str, i64](?m, ?k1);
+    if (result_is_err[*i64, str](r1)) { ret 0; }
+    if (@result_unwrap_ok[*i64, str](r1) != 1) { ret 0; }
 
-    val r2: Result[*i64, str] = map_get(?m, ?k2);
-    if (result_is_err(r2)) { ret 0; }
-    if (@result_unwrap_ok(r2) != 2) { ret 0; }
+    val r2: Result[*i64, str] = map_get[str, i64](?m, ?k2);
+    if (result_is_err[*i64, str](r2)) { ret 0; }
+    if (@result_unwrap_ok[*i64, str](r2) != 2) { ret 0; }
 
     if (str_contains(m, ?k3)) { ret 0; }
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[str, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -704,20 +704,20 @@ test "map: get allows mutation" {
     var a: allocator.Allocator = allocator.page_allocator();
     var m: Map[i64, i64] = init[i64, i64](a, hash_i64, eq_i64);
 
-    map_insert(?m, 42, 100);
+    map_insert[i64, i64](?m, 42, 100);
 
     val k: i64 = 42;
-    val r: Result[*i64, str] = map_get(?m, ?k);
-    if (result_is_err(r)) { ret 0; }
+    val r: Result[*i64, str] = map_get[i64, i64](?m, ?k);
+    if (result_is_err[*i64, str](r)) { ret 0; }
 
-    val p: *i64 = result_unwrap_ok(r);
+    val p: *i64 = result_unwrap_ok[*i64, str](r);
     @p = 999;
 
-    val r2: Result[*i64, str] = map_get(?m, ?k);
-    if (result_is_err(r2)) { ret 0; }
-    if (@result_unwrap_ok(r2) != 999) { ret 0; }
+    val r2: Result[*i64, str] = map_get[i64, i64](?m, ?k);
+    if (result_is_err[*i64, str](r2)) { ret 0; }
+    if (@result_unwrap_ok[*i64, str](r2) != 999) { ret 0; }
 
-    val ok: bool = map_dnit(?m);
+    val ok: bool = map_dnit[i64, i64](?m);
     if (!ok) { ret 0; }
     ret 1;
 }

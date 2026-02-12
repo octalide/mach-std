@@ -108,9 +108,9 @@ pub fun builder_reserve(this: *Builder, additional: usize) Result[usize, str] {
     }
 
     val r: Result[*u8, allocator.AllocError] = (allocator.allocator_resize[u8](?this.alloc), this.buf, this.cap, new_cap);
-    if (result_is_err(r)) { ret err[usize, str](result_unwrap_err(r)); }
+    if (result_is_err[*u8, allocator.AllocError](r)) { ret err[usize, str](result_unwrap_err[*u8, allocator.AllocError](r)); }
 
-    this.buf = result_unwrap_ok(r);
+    this.buf = result_unwrap_ok[*u8, allocator.AllocError](r);
     this.cap = new_cap;
     this.buf[this.len] = 0;
 
@@ -123,7 +123,7 @@ pub fun builder_reserve(this: *Builder, additional: usize) Result[usize, str] {
 # ret: Ok(new length) or Err(error message)
 pub fun builder_append_byte(this: *Builder, b: u8) Result[usize, str] {
     val r: Result[usize, str] = builder_reserve(this, 1);
-    if (result_is_err(r)) { ret err[usize, str](result_unwrap_err(r)); }
+    if (result_is_err[usize, str](r)) { ret err[usize, str](result_unwrap_err[usize, str](r)); }
 
     this.buf[this.len] = b;
     this.len = this.len + 1;
@@ -140,7 +140,7 @@ pub fun builder_append_bytes(this: *Builder, p: &u8, n: usize) Result[usize, str
     if (n == 0) { ret ok[usize, str](this.len); }
 
     val r: Result[usize, str] = builder_reserve(this, n);
-    if (result_is_err(r)) { ret err[usize, str](result_unwrap_err(r)); }
+    if (result_is_err[usize, str](r)) { ret err[usize, str](result_unwrap_err[usize, str](r)); }
 
     mem.raw_copy((this.buf::usize + this.len)::ptr, p::ptr, n);
     this.len = this.len + n;
@@ -184,7 +184,7 @@ test "builder: append_byte adds single byte" {
     var b: Builder = init(a);
 
     val r: Result[usize, str] = builder_append_byte(?b, 65);
-    if (result_is_err(r)) { ret 0; }
+    if (result_is_err[usize, str](r)) { ret 0; }
     if (builder_length(b) != 1) { ret 0; }
 
     val ok: bool = builder_deinit(?b);
@@ -211,7 +211,7 @@ test "builder: append_str adds string" {
     var b: Builder = init(a);
 
     val r: Result[usize, str] = builder_append_str(?b, "hello");
-    if (result_is_err(r)) { ret 0; }
+    if (result_is_err[usize, str](r)) { ret 0; }
     if (builder_length(b) != 5) { ret 0; }
 
     val ok: bool = builder_deinit(?b);
@@ -241,7 +241,7 @@ test "builder: append_bytes adds raw bytes" {
 
     var data: [3]u8 = [3]u8{65, 66, 67};
     val r: Result[usize, str] = builder_append_bytes(?b, ?data[0], 3);
-    if (result_is_err(r)) { ret 0; }
+    if (result_is_err[usize, str](r)) { ret 0; }
     if (builder_length(b) != 3) { ret 0; }
 
     val ok: bool = builder_deinit(?b);
@@ -273,8 +273,8 @@ test "builder: c_str returns null-terminated string" {
     builder_append_str(?b, "hello");
 
     val r: Result[str, str] = builder_c_str(?b);
-    if (result_is_err(r)) { ret 0; }
-    val s: str = result_unwrap_ok(r);
+    if (result_is_err[str, str](r)) { ret 0; }
+    val s: str = result_unwrap_ok[str, str](r);
     if (!str_equals(s, "hello")) { ret 0; }
     if (str_len(s) != 5) { ret 0; }
 
@@ -288,8 +288,8 @@ test "builder: c_str on empty builder returns empty string" {
     var b: Builder = init(a);
 
     val r: Result[str, str] = builder_c_str(?b);
-    if (result_is_err(r)) { ret 0; }
-    val s: str = result_unwrap_ok(r);
+    if (result_is_err[str, str](r)) { ret 0; }
+    val s: str = result_unwrap_ok[str, str](r);
     if (str_len(s) != 0) { ret 0; }
 
     val ok: bool = builder_deinit(?b);
@@ -302,7 +302,7 @@ test "builder: reserve increases capacity" {
     var b: Builder = init(a);
 
     val r: Result[usize, str] = builder_reserve(?b, 100);
-    if (result_is_err(r)) { ret 0; }
+    if (result_is_err[usize, str](r)) { ret 0; }
     if (builder_capacity(b) < 100) { ret 0; }
     if (builder_length(b) != 0) { ret 0; }
 
@@ -354,8 +354,8 @@ test "builder: clear then append reuses buffer" {
     builder_append_str(?b, "second");
 
     val r: Result[str, str] = builder_c_str(?b);
-    if (result_is_err(r)) { ret 0; }
-    if (!result_unwrap_ok(str_equals(r), "second")) { ret 0; }
+    if (result_is_err[str, str](r)) { ret 0; }
+    if (!str_equals(result_unwrap_ok[str, str](r), "second")) { ret 0; }
 
     val ok: bool = builder_deinit(?b);
     if (!ok) { ret 0; }
@@ -379,8 +379,8 @@ test "builder: multiple appends build string" {
     builder_append_str(?b, "world");
 
     val r: Result[str, str] = builder_c_str(?b);
-    if (result_is_err(r)) { ret 0; }
-    val s: str = result_unwrap_ok(r);
+    if (result_is_err[str, str](r)) { ret 0; }
+    val s: str = result_unwrap_ok[str, str](r);
     if (!str_equals(s, "hello world")) { ret 0; }
     if (str_len(s) != 11) { ret 0; }
 

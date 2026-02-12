@@ -27,12 +27,12 @@ pub fun println(s: str) Result[usize, str] {
     var w: stream.Writer = stdio.stdout();
 
     val r1: Result[usize, str] = f.write_str(?w, s);
-    if (result_is_err(r1)) { ret r1; }
+    if (result_is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = f.write_newline(?w);
-    if (result_is_err(r2)) { ret r2; }
+    if (result_is_err[usize, str](r2)) { ret r2; }
 
-    ret ok[usize, str](result_unwrap_ok(r1) + result_unwrap_ok(r2));
+    ret ok[usize, str](result_unwrap_ok[usize, str](r1) + result_unwrap_ok[usize, str](r2));
 }
 
 # eprint: write `s` to stderr.
@@ -52,12 +52,12 @@ pub fun eprintln(s: str) Result[usize, str] {
     var w: stream.Writer = stdio.stderr();
 
     val r1: Result[usize, str] = f.write_str(?w, s);
-    if (result_is_err(r1)) { ret r1; }
+    if (result_is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = f.write_newline(?w);
-    if (result_is_err(r2)) { ret r2; }
+    if (result_is_err[usize, str](r2)) { ret r2; }
 
-    ret ok[usize, str](result_unwrap_ok(r1) + result_unwrap_ok(r2));
+    ret ok[usize, str](result_unwrap_ok[usize, str](r1) + result_unwrap_ok[usize, str](r2));
 }
 
 # u64: write unsigned 64-bit integer n to stdout.
@@ -119,12 +119,12 @@ pub fun printlnf(format: str, ...) Result[usize, str] {
     va_start(?ap);
     val r1: Result[usize, str] = f.vformat(?w, format, ?ap);
     va_end(?ap);
-    if (result_is_err(r1)) { ret r1; }
+    if (result_is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = f.write_newline(?w);
-    if (result_is_err(r2)) { ret r2; }
+    if (result_is_err[usize, str](r2)) { ret r2; }
 
-    ret ok[usize, str](result_unwrap_ok(r1) + result_unwrap_ok(r2));
+    ret ok[usize, str](result_unwrap_ok[usize, str](r1) + result_unwrap_ok[usize, str](r2));
 }
 
 # eprintlnf: formatted output to stderr followed by a newline.
@@ -138,10 +138,10 @@ pub fun eprintlnf(format: str, ...) Result[usize, str] {
     va_start(?ap);
     val r1: Result[usize, str] = f.vformat(?w, format, ?ap);
     va_end(?ap);
-    if (result_is_err(r1)) { ret r1; }
+    if (result_is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = f.write_newline(?w);
-    if (result_is_err(r2)) { ret r2; }
+    if (result_is_err[usize, str](r2)) { ret r2; }
 
-    ret ok[usize, str](result_unwrap_ok(r1) + result_unwrap_ok(r2));
+    ret ok[usize, str](result_unwrap_ok[usize, str](r1) + result_unwrap_ok[usize, str](r2));
 }
