@@ -109,7 +109,7 @@ pub fun write_all(w: *Writer, buf: &u8, len: usize) Result[usize, str] {
     var total: usize = 0;
     for (total < len) {
         val p: &u8 = (buf::usize + total)::&u8;
-        val r: Result[usize, str] = writer_write(?w, p, len - total);
+        val r: Result[usize, str] = writer_write(w, p, len - total);
         if (result_is_err[usize, str](r)) { ret r; }
 
         val wrote: usize = result_unwrap_ok[usize, str](r);
@@ -132,7 +132,7 @@ pub fun read_exact(r: *Reader, buf: *u8, len: usize) Result[usize, str] {
     var total: usize = 0;
     for (total < len) {
         val p: *u8 = (buf::usize + total)::*u8;
-        val res: Result[usize, str] = reader_read(?r, p, len - total);
+        val res: Result[usize, str] = reader_read(r, p, len - total);
         if (result_is_err[usize, str](res)) { ret res; }
 
         val got: usize = result_unwrap_ok[usize, str](res);
