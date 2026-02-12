@@ -87,7 +87,7 @@ pub fun unix(sec: i64, nsec: i64) Time {
 # t: start time
 # ret: Duration since t (equivalent to now().sub(t))
 pub fun since(t: Time) Duration {
-    ret now().sub(t);
+    ret time_sub(now(), t);
 }
 
 # until: returns the duration until t.

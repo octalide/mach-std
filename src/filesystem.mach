@@ -342,7 +342,7 @@ pub fun create_dir_all(path_str: str, mode: i32) Result[bool, str] {
     val parent_create_res: Result[bool, str] = create_dir_all(parent_path, mode);
 
     val parent_len: usize = str_len(parent_path);
-    allocator_free[u8](a, parent_path::ptr::*u8, parent_len + 1);
+    allocator.allocator_free[u8](?a, parent_path::ptr::*u8, parent_len + 1);
 
     if (result_is_err[bool, str](parent_create_res)) {
         ret parent_create_res;
@@ -381,7 +381,7 @@ pub fun temp_create(prefix: str) Result[TempFile, str] {
     for (attempt < TEMP_MAX_ATTEMPTS) {
         # get current time for uniqueness
         val t: time.Time = time.now();
-        val ns: i64 = t.unix_nano();
+        val ns: i64 = time.time_unix_nano(t);
 
         # increment counter
         temp_counter = temp_counter + 1;
@@ -504,7 +504,7 @@ pub fun temp_file_remove(this: *TempFile) Result[bool, str] {
 # ---
 # ret: Ok(true) on success or Err(str) on failure (returns first error).
 pub fun temp_file_close_and_remove(this: *TempFile) Result[bool, str] {
-    val close_res: Result[bool, str] = file_close(this);
+    val close_res: Result[bool, str] = file_close(?this.file);
     val remove_res: Result[bool, str] = temp_file_remove(this);
 
     if (result_is_err[bool, str](close_res)) {
