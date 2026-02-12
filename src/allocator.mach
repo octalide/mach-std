@@ -83,7 +83,7 @@ pub fun allocator_free_bytes(this: *Allocator, p: ptr, size: usize, align: usize
 # ---
 # count: number of elements to allocate
 # ret: Ok(*T) pointer (nil for count == 0) or Err(AllocError) on OOM or overflow.
-pub fun allocator_alloc(this: *Allocator)[T](count: usize) Result[*T, AllocError] {
+pub fun allocator_alloc[T](this: *Allocator, count: usize) Result[*T, AllocError] {
     if (count == 0) {
         ret ok[*T, AllocError](nil::*T);
     }
@@ -107,7 +107,7 @@ pub fun allocator_alloc(this: *Allocator)[T](count: usize) Result[*T, AllocError
 # ---
 # count: number of elements to allocate
 # ret: Ok(*T) pointer (nil for count == 0) or Err(AllocError) on OOM or overflow.
-pub fun allocator_zalloc(this: *Allocator)[T](count: usize) Result[*T, AllocError] {
+pub fun allocator_zalloc[T](this: *Allocator, count: usize) Result[*T, AllocError] {
     val r: Result[*T, AllocError] = allocator_alloc[T](this, count);
     if (result_is_err[*T, AllocError](r)) {
         ret r;
@@ -132,7 +132,7 @@ pub fun allocator_zalloc(this: *Allocator)[T](count: usize) Result[*T, AllocErro
 # p: pointer returned by alloc/zalloc (may be nil)
 # count: number of elements to free
 # ret: true on success; no-op for nil pointer or count == 0.
-pub fun allocator_free(this: *Allocator)[T](p: *T, count: usize) bool {
+pub fun allocator_free[T](this: *Allocator, p: *T, count: usize) bool {
     if (p == nil || count == 0) {
         ret true;
     }
@@ -146,7 +146,7 @@ pub fun allocator_free(this: *Allocator)[T](p: *T, count: usize) bool {
 # old_count: previous number of elements
 # new_count: desired number of elements (0 frees)
 # ret: Ok(*T) with new pointer or Err(AllocError) on error.
-pub fun allocator_resize(this: *Allocator)[T](p: *T, old_count: usize, new_count: usize) Result[*T, AllocError] {
+pub fun allocator_resize[T](this: *Allocator, p: *T, old_count: usize, new_count: usize) Result[*T, AllocError] {
     if (new_count == 0) {
         val ok_free: bool = allocator_free[T](this, p, old_count);
         ret ok[*T, AllocError](nil::*T);
