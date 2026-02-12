@@ -94,13 +94,13 @@ pub fun write_i64(w: *stream.Writer, n: i64) Result[usize, str] {
     }
 
     val r1: Result[usize, str] = write_byte(w, 45); # '-'
-    if (result_is_err(r1)) { ret r1; }
+    if (result_is_err[usize, str](r1)) { ret r1; }
 
     val pos: i64 = 0 - n;
     val r2: Result[usize, str] = write_u64(w, pos::u64);
-    if (result_is_err(r2)) { ret r2; }
+    if (result_is_err[usize, str](r2)) { ret r2; }
 
-    ret ok[usize, str](result_unwrap_ok(r1) + result_unwrap_ok(r2));
+    ret ok[usize, str](result_unwrap_ok[usize, str](r1) + result_unwrap_ok[usize, str](r2));
 }
 
 # write_hex_u64: write a 64-bit value in hexadecimal.
@@ -148,12 +148,12 @@ pub fun write_hex_u64(w: *stream.Writer, n: u64, upper: bool) Result[usize, str]
 # ret: Ok(number of bytes written) on success or Err(str) on error.
 pub fun write_ptr(w: *stream.Writer, p: ptr) Result[usize, str] {
     val r1: Result[usize, str] = write_str(w, "0x");
-    if (result_is_err(r1)) { ret r1; }
+    if (result_is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = write_hex_u64(w, p::usize::u64, false);
-    if (result_is_err(r2)) { ret r2; }
+    if (result_is_err[usize, str](r2)) { ret r2; }
 
-    ret ok[usize, str](result_unwrap_ok(r1) + result_unwrap_ok(r2));
+    ret ok[usize, str](result_unwrap_ok[usize, str](r1) + result_unwrap_ok[usize, str](r2));
 }
 
 # ERR_BAD_FORMAT: returned when a format string is invalid.
@@ -179,8 +179,8 @@ pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize,
         val b: u8 = format[i];
         if (b != 37) { # '%'
             val r: Result[usize, str] = write_byte(w, b);
-            if (result_is_err(r)) { ret r; }
-            total = total + result_unwrap_ok(r);
+            if (result_is_err[usize, str](r)) { ret r; }
+            total = total + result_unwrap_ok[usize, str](r);
             i = i + 1;
             cnt;
         }
@@ -194,8 +194,8 @@ pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize,
 
         if (c == 37) { # '%%'
             val r: Result[usize, str] = write_byte(w, 37);
-            if (result_is_err(r)) { ret r; }
-            total = total + result_unwrap_ok(r);
+            if (result_is_err[usize, str](r)) { ret r; }
+            total = total + result_unwrap_ok[usize, str](r);
             i = i + 1;
             cnt;
         }
@@ -203,8 +203,8 @@ pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize,
         if (c == 115) { # %s
             val arg: str = va_arg[str](ap);
             val r: Result[usize, str] = write_str(w, arg);
-            if (result_is_err(r)) { ret r; }
-            total = total + result_unwrap_ok(r);
+            if (result_is_err[usize, str](r)) { ret r; }
+            total = total + result_unwrap_ok[usize, str](r);
             i = i + 1;
             cnt;
         }
@@ -212,8 +212,8 @@ pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize,
         if (c == 100) { # %d
             val arg: i64 = va_arg[i64](ap);
             val r: Result[usize, str] = write_i64(w, arg);
-            if (result_is_err(r)) { ret r; }
-            total = total + result_unwrap_ok(r);
+            if (result_is_err[usize, str](r)) { ret r; }
+            total = total + result_unwrap_ok[usize, str](r);
             i = i + 1;
             cnt;
         }
@@ -221,8 +221,8 @@ pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize,
         if (c == 117) { # %u
             val arg: u64 = va_arg[u64](ap);
             val r: Result[usize, str] = write_u64(w, arg);
-            if (result_is_err(r)) { ret r; }
-            total = total + result_unwrap_ok(r);
+            if (result_is_err[usize, str](r)) { ret r; }
+            total = total + result_unwrap_ok[usize, str](r);
             i = i + 1;
             cnt;
         }
@@ -230,8 +230,8 @@ pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize,
         if (c == 120) { # %x
             val arg: u64 = va_arg[u64](ap);
             val r: Result[usize, str] = write_hex_u64(w, arg, false);
-            if (result_is_err(r)) { ret r; }
-            total = total + result_unwrap_ok(r);
+            if (result_is_err[usize, str](r)) { ret r; }
+            total = total + result_unwrap_ok[usize, str](r);
             i = i + 1;
             cnt;
         }
@@ -239,8 +239,8 @@ pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize,
         if (c == 88) { # %X
             val arg: u64 = va_arg[u64](ap);
             val r: Result[usize, str] = write_hex_u64(w, arg, true);
-            if (result_is_err(r)) { ret r; }
-            total = total + result_unwrap_ok(r);
+            if (result_is_err[usize, str](r)) { ret r; }
+            total = total + result_unwrap_ok[usize, str](r);
             i = i + 1;
             cnt;
         }
@@ -248,8 +248,8 @@ pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize,
         if (c == 99) { # %c
             val arg: u8 = va_arg[u8](ap);
             val r: Result[usize, str] = write_byte(w, arg);
-            if (result_is_err(r)) { ret r; }
-            total = total + result_unwrap_ok(r);
+            if (result_is_err[usize, str](r)) { ret r; }
+            total = total + result_unwrap_ok[usize, str](r);
             i = i + 1;
             cnt;
         }
@@ -257,8 +257,8 @@ pub fun vformat(w: *stream.Writer, format: str, ap: *va_list, ...) Result[usize,
         if (c == 112) { # %p
             val arg: ptr = va_arg[ptr](ap);
             val r: Result[usize, str] = write_ptr(w, arg);
-            if (result_is_err(r)) { ret r; }
-            total = total + result_unwrap_ok(r);
+            if (result_is_err[usize, str](r)) { ret r; }
+            total = total + result_unwrap_ok[usize, str](r);
             i = i + 1;
             cnt;
         }

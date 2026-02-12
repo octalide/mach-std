@@ -36,10 +36,10 @@ pub fun semver_parse(input: str) Result[Semver, str] {
     
     # parse major
     var major_result: Option[u64] = parse_number(input, ?pos);
-    if (option_is_none(major_result)) {
+    if (option_is_none[u64](major_result)) {
         ret err[Semver, str]("invalid major version");
     }
-    v.major = option_unwrap(major_result);
+    v.major = option_unwrap[u64](major_result);
     
     if (pos >= str_len(input) || input[pos] != '.') {
         ret err[Semver, str]("expected '.' after major");
@@ -48,10 +48,10 @@ pub fun semver_parse(input: str) Result[Semver, str] {
     
     # parse minor
     var minor_result: Option[u64] = parse_number(input, ?pos);
-    if (option_is_none(minor_result)) {
+    if (option_is_none[u64](minor_result)) {
         ret err[Semver, str]("invalid minor version");
     }
-    v.minor = option_unwrap(minor_result);
+    v.minor = option_unwrap[u64](minor_result);
     
     if (pos >= str_len(input) || input[pos] != '.') {
         ret err[Semver, str]("expected '.' after minor");
@@ -60,10 +60,10 @@ pub fun semver_parse(input: str) Result[Semver, str] {
     
     # parse patch
     var patch_result: Option[u64] = parse_number(input, ?pos);
-    if (option_is_none(patch_result)) {
+    if (option_is_none[u64](patch_result)) {
         ret err[Semver, str]("invalid patch version");
     }
-    v.patch = option_unwrap(patch_result);
+    v.patch = option_unwrap[u64](patch_result);
     
     # parse optional prerelease (starts with '-')
     if (pos < str_len(input) && input[pos] == '-') {

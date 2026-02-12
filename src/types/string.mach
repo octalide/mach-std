@@ -179,7 +179,7 @@ pub fun str_last_index_of(this: str, sub: str) Result[usize, str] {
 # ret: true if the string contains the substring, false otherwise
 pub fun str_contains(this: str, sub: str) bool {
     val index_res: Result[usize, str] = str_index_of(this, sub);
-    ret result_is_ok(index_res);
+    ret result_is_ok[usize, str](index_res);
 }
 
 # --- tests ---
@@ -321,39 +321,39 @@ test "string: ends_with full string" {
 test "string: index_of finds substring at start" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_index_of(s, "hello");
-    if (result_is_err(r)) { ret 0; }
-    if (result_unwrap_ok(r) != 0) { ret 0; }
+    if (result_is_err[usize, str](r)) { ret 0; }
+    if (result_unwrap_ok[usize, str](r) != 0) { ret 0; }
     ret 1;
 }
 
 test "string: index_of finds substring in middle" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_index_of(s, "wor");
-    if (result_is_err(r)) { ret 0; }
-    if (result_unwrap_ok(r) != 6) { ret 0; }
+    if (result_is_err[usize, str](r)) { ret 0; }
+    if (result_unwrap_ok[usize, str](r) != 6) { ret 0; }
     ret 1;
 }
 
 test "string: index_of not found" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_index_of(s, "xyz");
-    if (result_is_ok(r)) { ret 0; }
+    if (result_is_ok[usize, str](r)) { ret 0; }
     ret 1;
 }
 
 test "string: last_index_of finds last occurrence" {
     val s: str = "abcabc";
     val r: Result[usize, str] = str_last_index_of(s, "abc");
-    if (result_is_err(r)) { ret 0; }
-    if (result_unwrap_ok(r) != 3) { ret 0; }
+    if (result_is_err[usize, str](r)) { ret 0; }
+    if (result_unwrap_ok[usize, str](r) != 3) { ret 0; }
     ret 1;
 }
 
 test "string: last_index_of single occurrence" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_last_index_of(s, "world");
-    if (result_is_err(r)) { ret 0; }
-    if (result_unwrap_ok(r) != 6) { ret 0; }
+    if (result_is_err[usize, str](r)) { ret 0; }
+    if (result_unwrap_ok[usize, str](r) != 6) { ret 0; }
     ret 1;
 }
 
