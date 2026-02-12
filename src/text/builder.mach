@@ -32,7 +32,7 @@ pub fun init(alloc: allocator.Allocator) Builder {
 # Free the builder's buffer and reset fields
 # ---
 # ret: true if memory was freed successfully, false otherwise
-pub fun builder_deinit(this: *Builder) bool {
+pub fun builder_dnit(this: *Builder) bool {
     if (this == nil) { ret true; }
     if (this.cap == 0) {
         this.buf = nil;
@@ -187,7 +187,7 @@ test "builder: append_byte adds single byte" {
     if (result_is_err[usize, str](r)) { ret 0; }
     if (builder_length(b) != 1) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -201,7 +201,7 @@ test "builder: append_byte multiple bytes" {
 
     if (builder_length(b) != 2) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -214,7 +214,7 @@ test "builder: append_str adds string" {
     if (result_is_err[usize, str](r)) { ret 0; }
     if (builder_length(b) != 5) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -230,7 +230,7 @@ test "builder: append_str empty string is noop" {
 
     if (builder_length(b) != len_before) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -244,7 +244,7 @@ test "builder: append_bytes adds raw bytes" {
     if (result_is_err[usize, str](r)) { ret 0; }
     if (builder_length(b) != 3) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -261,7 +261,7 @@ test "builder: append_bytes with zero count is noop" {
 
     if (builder_length(b) != len_before) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -278,7 +278,7 @@ test "builder: c_str returns null-terminated string" {
     if (!str_equals(s, "hello")) { ret 0; }
     if (str_len(s) != 5) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -292,7 +292,7 @@ test "builder: c_str on empty builder returns empty string" {
     val s: str = result_unwrap_ok[str, str](r);
     if (str_len(s) != 0) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -306,7 +306,7 @@ test "builder: reserve increases capacity" {
     if (builder_capacity(b) < 100) { ret 0; }
     if (builder_length(b) != 0) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -323,7 +323,7 @@ test "builder: reserve when sufficient is noop" {
 
     if (cap2 != cap1) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -340,7 +340,7 @@ test "builder: clear resets length but keeps capacity" {
     if (builder_length(b) != 0) { ret 0; }
     if (builder_capacity(b) != cap_before) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -357,15 +357,15 @@ test "builder: clear then append reuses buffer" {
     if (result_is_err[str, str](r)) { ret 0; }
     if (!str_equals(result_unwrap_ok[str, str](r), "second")) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
 
-test "builder: deinit on empty builder succeeds" {
+test "builder: dnit on empty builder succeeds" {
     var a: allocator.Allocator = allocator.page_allocator();
     var b: Builder = init(a);
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -384,7 +384,7 @@ test "builder: multiple appends build string" {
     if (!str_equals(s, "hello world")) { ret 0; }
     if (str_len(s) != 11) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -403,7 +403,7 @@ test "builder: capacity grows on append" {
     if (builder_length(b) != 200) { ret 0; }
     if (builder_capacity(b) < 200) { ret 0; }
 
-    val ok: bool = builder_deinit(?b);
+    val ok: bool = builder_dnit(?b);
     if (!ok) { ret 0; }
     ret 1;
 }
