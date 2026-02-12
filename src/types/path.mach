@@ -57,13 +57,13 @@ pub fun clone(a: *Allocator, p: Path) Result[Path, AllocError] {
         ret ok[Path, AllocError](nil);
     }
 
-    val n: usize = p.len();
-    val r: Result[*u8, AllocError] = a.alloc[u8](n + 1);
-    if (r.is_err()) {
-        ret err[Path, AllocError](r.unwrap_err());
+    val n: usize = str_len(p);
+    val r: Result[*u8, AllocError] = allocator_alloc[u8](a, n + 1);
+    if (result_is_err(r)) {
+        ret err[Path, AllocError](result_unwrap_err(r));
     }
 
-    val buf: *u8 = r.unwrap_ok();
+    val buf: *u8 = result_unwrap_ok(r);
     mem.raw_copy(buf::ptr, p::ptr, n);
     buf[n] = 0;
     ret ok[Path, AllocError](buf::&u8);
@@ -90,8 +90,8 @@ pub fun join(a: *Allocator, left: Path, right: Path) Result[Path, AllocError] {
 
     val sep: u8 = separator();
 
-    val left_len: usize = left.len();
-    val right_len: usize = right.len();
+    val left_len: usize = str_len(left);
+    val right_len: usize = str_len(right);
 
     val left_has_sep: bool = left[left_len - 1] == sep;
     val right_has_sep: bool = right[0] == sep;
@@ -107,12 +107,12 @@ pub fun join(a: *Allocator, left: Path, right: Path) Result[Path, AllocError] {
     }
 
     val out_len: usize = left_len + right_len + extra;
-    val r: Result[*u8, AllocError] = a.alloc[u8](out_len + 1);
-    if (r.is_err()) {
-        ret err[Path, AllocError](r.unwrap_err());
+    val r: Result[*u8, AllocError] = allocator_alloc[u8](a, out_len + 1);
+    if (result_is_err(r)) {
+        ret err[Path, AllocError](result_unwrap_err(r));
     }
 
-    val buf: *u8 = r.unwrap_ok();
+    val buf: *u8 = result_unwrap_ok(r);
     mem.raw_copy(buf::ptr, left::ptr, left_len);
 
     var off: usize = left_len;
@@ -143,7 +143,7 @@ pub fun parent(a: *Allocator, p: Path) Result[Path, AllocError] {
         ret clone(a, ".");
     }
 
-    val len: usize = p.len();
+    val len: usize = str_len(p);
     val sep: u8 = separator();
 
     # skip trailing separators
@@ -154,11 +154,11 @@ pub fun parent(a: *Allocator, p: Path) Result[Path, AllocError] {
 
     if (end == 0) {
         # path was all separators (root)
-        val r: Result[*u8, AllocError] = a.alloc[u8](2);
-        if (r.is_err()) {
-            ret err[Path, AllocError](r.unwrap_err());
+        val r: Result[*u8, AllocError] = allocator_alloc[u8](a, 2);
+        if (result_is_err(r)) {
+            ret err[Path, AllocError](result_unwrap_err(r));
         }
-        val buf: *u8 = r.unwrap_ok();
+        val buf: *u8 = result_unwrap_ok(r);
         buf[0] = sep;
         buf[1] = 0;
         ret ok[Path, AllocError](buf::&u8);
@@ -180,11 +180,11 @@ pub fun parent(a: *Allocator, p: Path) Result[Path, AllocError] {
 
     if (i == 0 && p[0] == sep) {
         # separator at start only, parent is root
-        val r: Result[*u8, AllocError] = a.alloc[u8](2);
-        if (r.is_err()) {
-            ret err[Path, AllocError](r.unwrap_err());
+        val r: Result[*u8, AllocError] = allocator_alloc[u8](a, 2);
+        if (result_is_err(r)) {
+            ret err[Path, AllocError](result_unwrap_err(r));
         }
-        val buf: *u8 = r.unwrap_ok();
+        val buf: *u8 = result_unwrap_ok(r);
         buf[0] = sep;
         buf[1] = 0;
         ret ok[Path, AllocError](buf::&u8);
@@ -198,22 +198,22 @@ pub fun parent(a: *Allocator, p: Path) Result[Path, AllocError] {
 
     if (parent_end == 0) {
         # parent is root
-        val r: Result[*u8, AllocError] = a.alloc[u8](2);
-        if (r.is_err()) {
-            ret err[Path, AllocError](r.unwrap_err());
+        val r: Result[*u8, AllocError] = allocator_alloc[u8](a, 2);
+        if (result_is_err(r)) {
+            ret err[Path, AllocError](result_unwrap_err(r));
         }
-        val buf: *u8 = r.unwrap_ok();
+        val buf: *u8 = result_unwrap_ok(r);
         buf[0] = sep;
         buf[1] = 0;
         ret ok[Path, AllocError](buf::&u8);
     }
 
     # allocate and copy parent portion
-    val r: Result[*u8, AllocError] = a.alloc[u8](parent_end + 1);
-    if (r.is_err()) {
-        ret err[Path, AllocError](r.unwrap_err());
+    val r: Result[*u8, AllocError] = allocator_alloc[u8](a, parent_end + 1);
+    if (result_is_err(r)) {
+        ret err[Path, AllocError](result_unwrap_err(r));
     }
-    val buf: *u8 = r.unwrap_ok();
+    val buf: *u8 = result_unwrap_ok(r);
     mem.raw_copy(buf::ptr, p::ptr, parent_end);
     buf[parent_end] = 0;
 
@@ -230,7 +230,7 @@ pub fun is_root(p: Path) bool {
     }
 
     val sep: u8 = separator();
-    val len: usize = p.len();
+    val len: usize = str_len(p);
 
     # check if path is just the separator (or multiple separators)
     var i: usize = 0;

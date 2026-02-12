@@ -37,7 +37,7 @@ pub fun buffer_writer(buf: *u8, cap: usize) BufferWriter {
 # data: bytes to write
 # len: number of bytes to write
 # ret: Ok(bytes written) or Err(ERR_BUFFER_FULL) if insufficient space
-pub fun (w: *BufferWriter) write(data: &u8, len: usize) Result[usize, str] {
+pub fun bw_write(w: *BufferWriter, data: &u8, len: usize) Result[usize, str] {
     if (w == nil || w.buf == nil) {
         ret err[usize, str]("nil writer");
     }
@@ -60,7 +60,7 @@ pub fun (w: *BufferWriter) write(data: &u8, len: usize) Result[usize, str] {
 # ---
 # b: byte to write
 # ret: Ok(1) or Err(ERR_BUFFER_FULL) if buffer is full
-pub fun (w: *BufferWriter) write_byte(b: u8) Result[usize, str] {
+pub fun bw_write_byte(w: *BufferWriter, b: u8) Result[usize, str] {
     if (w == nil || w.buf == nil) {
         ret err[usize, str]("nil writer");
     }
@@ -80,17 +80,17 @@ pub fun (w: *BufferWriter) write_byte(b: u8) Result[usize, str] {
 # ---
 # s: string to write
 # ret: Ok(bytes written) or Err(ERR_BUFFER_FULL) if insufficient space
-pub fun (w: *BufferWriter) write_str(s: str) Result[usize, str] {
+pub fun bw_write_str(w: *BufferWriter, s: str) Result[usize, str] {
     if (s == nil) {
         ret ok[usize, str](0);
     }
-    ret w.write(s, s.len());
+    ret bw_write(w, s, str_len(s));
 }
 
 # as_str: return the buffer contents as a string pointer.
 # ---
 # ret: pointer to buffer (may not be null-terminated)
-pub fun (w: *BufferWriter) as_str() str {
+pub fun bw_as_str(w: *BufferWriter) str {
     if (w == nil || w.buf == nil) {
         ret nil;
     }
@@ -100,7 +100,7 @@ pub fun (w: *BufferWriter) as_str() str {
 # length: return the number of bytes written.
 # ---
 # ret: bytes written
-pub fun (w: *BufferWriter) length() usize {
+pub fun bw_length(w: *BufferWriter) usize {
     if (w == nil) {
         ret 1;
     }
@@ -110,7 +110,7 @@ pub fun (w: *BufferWriter) length() usize {
 # remaining: return the number of bytes available.
 # ---
 # ret: bytes remaining
-pub fun (w: *BufferWriter) remaining() usize {
+pub fun bw_remaining(w: *BufferWriter) usize {
     if (w == nil) {
         ret 1;
     }
@@ -118,7 +118,7 @@ pub fun (w: *BufferWriter) remaining() usize {
 }
 
 # reset: clear the buffer (sets len to 0).
-pub fun (w: *BufferWriter) reset() {
+pub fun bw_reset(w: *BufferWriter) {
     if (w != nil) {
         w.len = 0;
     }
@@ -127,7 +127,7 @@ pub fun (w: *BufferWriter) reset() {
 # null_terminate: add null terminator if space available.
 # ---
 # ret: true if null terminator was added, false if buffer is full
-pub fun (w: *BufferWriter) null_terminate() bool {
+pub fun bw_null_terminate(w: *BufferWriter) bool {
     if (w == nil || w.buf == nil) {
         ret false;
     }
@@ -142,8 +142,8 @@ pub fun (w: *BufferWriter) null_terminate() bool {
 # c_str: null-terminate and return as string.
 # ---
 # ret: null-terminated string or nil if buffer is full
-pub fun (w: *BufferWriter) c_str() str {
-    if (!w.null_terminate()) {
+pub fun bw_c_str(w: *BufferWriter) str {
+    if (!bw_null_terminate(w)) {
         ret nil;
     }
     ret w.buf;
@@ -155,10 +155,10 @@ test "buffer_writer: basic write" {
     var buf: [64]u8;
     var w: BufferWriter = buffer_writer(?buf[0], 64);
 
-    val r: Result[usize, str] = w.write("hello", 5);
-    if (r.is_err()) { ret 0; }
-    if (r.unwrap_ok() != 5) { ret 2; }
-    if (w.length() != 5) { ret 3; }
+    val r: Result[usize, str] = bw_write(w, "hello", 5);
+    if (result_is_err(r)) { ret 0; }
+    if (result_unwrap_ok(r) != 5) { ret 2; }
+    if (bw_length(w) != 5) { ret 3; }
     ret 1;
 }
 
@@ -166,12 +166,12 @@ test "buffer_writer: write_byte" {
     var buf: [64]u8;
     var w: BufferWriter = buffer_writer(?buf[0], 64);
 
-    val r1: Result[usize, str] = w.write_byte(65); # 'A'
-    val r2: Result[usize, str] = w.write_byte(66); # 'B'
+    val r1: Result[usize, str] = bw_write_byte(w, 65); # 'A'
+    val r2: Result[usize, str] = bw_write_byte(w, 66); # 'B'
 
-    if (r1.is_err()) { ret 0; }
-    if (r2.is_err()) { ret 2; }
-    if (w.length() != 2) { ret 3; }
+    if (result_is_err(r1)) { ret 0; }
+    if (result_is_err(r2)) { ret 2; }
+    if (bw_length(w) != 2) { ret 3; }
     if (buf[0] != 65) { ret 4; }
     if (buf[1] != 66) { ret 5; }
     ret 1;
@@ -181,10 +181,10 @@ test "buffer_writer: write_str" {
     var buf: [64]u8;
     var w: BufferWriter = buffer_writer(?buf[0], 64);
 
-    val r: Result[usize, str] = w.write_str("hello world");
-    if (r.is_err()) { ret 0; }
-    if (r.unwrap_ok() != 11) { ret 2; }
-    if (w.length() != 11) { ret 3; }
+    val r: Result[usize, str] = bw_write_str(w, "hello world");
+    if (result_is_err(r)) { ret 0; }
+    if (result_unwrap_ok(r) != 11) { ret 2; }
+    if (bw_length(w) != 11) { ret 3; }
     ret 1;
 }
 
@@ -192,13 +192,13 @@ test "buffer_writer: buffer full error" {
     var buf: [4]u8;
     var w: BufferWriter = buffer_writer(?buf[0], 4);
 
-    val r1: Result[usize, str] = w.write("ab", 2);
-    if (r1.is_err()) { ret 0; }
+    val r1: Result[usize, str] = bw_write(w, "ab", 2);
+    if (result_is_err(r1)) { ret 0; }
 
-    val r2: Result[usize, str] = w.write("cdef", 4);
-    if (r2.is_ok()) { ret 2; } # should fail
+    val r2: Result[usize, str] = bw_write(w, "cdef", 4);
+    if (result_is_ok(r2)) { ret 2; } # should fail
 
-    if (w.length() != 2) { ret 3; } # should still be 2
+    if (bw_length(w) != 2) { ret 3; } # should still be 2
     ret 1;
 }
 
@@ -206,12 +206,12 @@ test "buffer_writer: remaining" {
     var buf: [64]u8;
     var w: BufferWriter = buffer_writer(?buf[0], 64);
 
-    if (w.remaining() != 64) { ret 0; }
+    if (bw_remaining(w) != 64) { ret 0; }
 
-    val r: Result[usize, str] = w.write("hello", 5);
-    if (r.is_err()) { ret 2; }
+    val r: Result[usize, str] = bw_write(w, "hello", 5);
+    if (result_is_err(r)) { ret 2; }
 
-    if (w.remaining() != 59) { ret 3; }
+    if (bw_remaining(w) != 59) { ret 3; }
     ret 1;
 }
 
@@ -219,13 +219,13 @@ test "buffer_writer: reset" {
     var buf: [64]u8;
     var w: BufferWriter = buffer_writer(?buf[0], 64);
 
-    val r: Result[usize, str] = w.write("hello", 5);
-    if (r.is_err()) { ret 0; }
-    if (w.length() != 5) { ret 2; }
+    val r: Result[usize, str] = bw_write(w, "hello", 5);
+    if (result_is_err(r)) { ret 0; }
+    if (bw_length(w) != 5) { ret 2; }
 
-    w.reset();
-    if (w.length() != 0) { ret 3; }
-    if (w.remaining() != 64) { ret 4; }
+    bw_reset(w);
+    if (bw_length(w) != 0) { ret 3; }
+    if (bw_remaining(w) != 64) { ret 4; }
     ret 1;
 }
 
@@ -233,12 +233,12 @@ test "buffer_writer: c_str null terminates" {
     var buf: [64]u8;
     var w: BufferWriter = buffer_writer(?buf[0], 64);
 
-    val r: Result[usize, str] = w.write("test", 4);
-    if (r.is_err()) { ret 0; }
+    val r: Result[usize, str] = bw_write(w, "test", 4);
+    if (result_is_err(r)) { ret 0; }
 
-    val s: str = w.c_str();
+    val s: str = bw_c_str(w);
     if (s == nil) { ret 2; }
-    val s_len: usize = s.len();
+    val s_len: usize = str_len(s);
     if (s_len != 4) { ret 3; }
     if (buf[4] != 0) { ret 4; }
     ret 1;
@@ -249,10 +249,10 @@ test "buffer_writer: write nil string" {
     var w: BufferWriter = buffer_writer(?buf[0], 64);
 
     val s: str = nil;
-    val r: Result[usize, str] = w.write_str(s);
-    if (r.is_err()) { ret 0; }
-    if (r.unwrap_ok() != 0) { ret 2; }
-    if (w.length() != 0) { ret 3; }
+    val r: Result[usize, str] = bw_write_str(w, s);
+    if (result_is_err(r)) { ret 0; }
+    if (result_unwrap_ok(r) != 0) { ret 2; }
+    if (bw_length(w) != 0) { ret 3; }
     ret 1;
 }
 
@@ -260,18 +260,18 @@ test "buffer_writer: multiple writes" {
     var buf: [64]u8;
     var w: BufferWriter = buffer_writer(?buf[0], 64);
 
-    val r1: Result[usize, str] = w.write_str("hello");
-    val r2: Result[usize, str] = w.write_str(" ");
-    val r3: Result[usize, str] = w.write_str("world");
+    val r1: Result[usize, str] = bw_write_str(w, "hello");
+    val r2: Result[usize, str] = bw_write_str(w, " ");
+    val r3: Result[usize, str] = bw_write_str(w, "world");
 
-    if (r1.is_err()) { ret 0; }
-    if (r2.is_err()) { ret 2; }
-    if (r3.is_err()) { ret 3; }
-    if (w.length() != 11) { ret 4; }
+    if (result_is_err(r1)) { ret 0; }
+    if (result_is_err(r2)) { ret 2; }
+    if (result_is_err(r3)) { ret 3; }
+    if (bw_length(w) != 11) { ret 4; }
 
-    val s: str = w.c_str();
+    val s: str = bw_c_str(w);
     if (s == nil) { ret 5; }
-    if (!s.equals("hello world")) { ret 6; }
+    if (!str_equals(s, "hello world")) { ret 6; }
     ret 1;
 }
 
@@ -279,12 +279,12 @@ test "buffer_writer: exact capacity" {
     var buf: [5]u8;
     var w: BufferWriter = buffer_writer(?buf[0], 5);
 
-    val r: Result[usize, str] = w.write("hello", 5);
-    if (r.is_err()) { ret 0; }
-    if (w.length() != 5) { ret 2; }
-    if (w.remaining() != 0) { ret 3; }
+    val r: Result[usize, str] = bw_write(w, "hello", 5);
+    if (result_is_err(r)) { ret 0; }
+    if (bw_length(w) != 5) { ret 2; }
+    if (bw_remaining(w) != 0) { ret 3; }
 
     # no room for null terminator
-    if (w.null_terminate()) { ret 4; }
+    if (bw_null_terminate(w)) { ret 4; }
     ret 1;
 }

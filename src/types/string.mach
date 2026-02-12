@@ -12,7 +12,7 @@ pub def str:  &char;
 # Calculate the length of a null-terminated string
 # ---
 # ret: Length of the string (not including null terminator)
-pub fun (this: str) len() usize {
+pub fun str_len(this: str) usize {
     var len: usize = 0;
     for (this[len] != 0) {
         len = len + 1;
@@ -23,15 +23,15 @@ pub fun (this: str) len() usize {
 # Return true if the string is empty
 # ---
 # ret: true if the string has zero length, false otherwise
-pub fun (this: str) empty() bool {
-    ret this.len() == 0;
+pub fun str_empty(this: str) bool {
+    ret str_len(this) == 0;
 }
 
 # Compare two null-terminated strings for equality
 # ---
 # other: The other string to compare against
 # ret:   true if the strings are equal, false otherwise
-pub fun (this: str) equals(other: str) bool {
+pub fun str_equals(this: str, other: str) bool {
     var i: usize = 0;
     for (this[i] != 0 && other[i] != 0) {
         if (this[i] != other[i]) {
@@ -46,7 +46,7 @@ pub fun (this: str) equals(other: str) bool {
 # ---
 # other: The other string to compare against
 # ret:   <0 if this < other, 0 if equal, >0 if this > other
-pub fun (this: str) compare(other: str) i64 {
+pub fun str_compare(this: str, other: str) i64 {
     var i: usize = 0;
     for {
         val a: u8 = this[i];
@@ -69,7 +69,7 @@ pub fun (this: str) compare(other: str) i64 {
 # ---
 # prefix: The prefix to check
 # ret:    true if the string starts with the prefix, false otherwise
-pub fun (this: str) starts_with(prefix: str) bool {
+pub fun str_starts_with(this: str, prefix: str) bool {
     var i: usize = 0;
     for (prefix[i] != 0) {
         if (this[i] != prefix[i]) {
@@ -84,9 +84,9 @@ pub fun (this: str) starts_with(prefix: str) bool {
 # ---
 # suffix: The suffix to check
 # ret:    true if the string ends with the suffix, false otherwise
-pub fun (this: str) ends_with(suffix: str) bool {
-    val this_len: usize = this.len();
-    val suffix_len: usize = suffix.len();
+pub fun str_ends_with(this: str, suffix: str) bool {
+    val this_len: usize = str_len(this);
+    val suffix_len: usize = str_len(suffix);
 
     if (suffix_len > this_len) {
         ret false;
@@ -107,9 +107,9 @@ pub fun (this: str) ends_with(suffix: str) bool {
 # ---
 # sub: The substring to find
 # ret: The index of the substring if found, or an error if not found
-pub fun (this: str) index_of(sub: str) Result[usize, str] {
-    val this_len: usize = this.len();
-    val sub_len:  usize = sub.len();
+pub fun str_index_of(this: str, sub: str) Result[usize, str] {
+    val this_len: usize = str_len(this);
+    val sub_len:  usize = str_len(sub);
 
     if (sub_len == 0 || sub_len > this_len) {
         ret err[usize, str]("invalid substring length");
@@ -142,9 +142,9 @@ pub fun (this: str) index_of(sub: str) Result[usize, str] {
 # ---
 # sub: The substring to find
 # ret: The last index of the substring if found, or an error if not found
-pub fun (this: str) last_index_of(sub: str) Result[usize, str] {
-    val this_len: usize = this.len();
-    val sub_len:  usize = sub.len();
+pub fun str_last_index_of(this: str, sub: str) Result[usize, str] {
+    val this_len: usize = str_len(this);
+    val sub_len:  usize = str_len(sub);
 
     if (sub_len == 0 || sub_len > this_len) {
         ret err[usize, str]("invalid substring length");
@@ -177,201 +177,201 @@ pub fun (this: str) last_index_of(sub: str) Result[usize, str] {
 # ---
 # sub: The substring to check
 # ret: true if the string contains the substring, false otherwise
-pub fun (this: str) contains(sub: str) bool {
-    val index_res: Result[usize, str] = this.index_of(sub);
-    ret index_res.is_ok();
+pub fun str_contains(this: str, sub: str) bool {
+    val index_res: Result[usize, str] = str_index_of(this, sub);
+    ret result_is_ok(index_res);
 }
 
 # --- tests ---
 
 test "string: len of empty string" {
     val s: str = "";
-    if (s.len() != 0) { ret 0; }
+    if (str_len(s) != 0) { ret 0; }
     ret 1;
 }
 
 test "string: len of non-empty string" {
     val s: str = "hello";
-    if (s.len() != 5) { ret 0; }
+    if (str_len(s) != 5) { ret 0; }
     ret 1;
 }
 
 test "string: len of single char" {
     val s: str = "x";
-    if (s.len() != 1) { ret 0; }
+    if (str_len(s) != 1) { ret 0; }
     ret 1;
 }
 
 test "string: empty returns true for empty string" {
     val s: str = "";
-    if (!s.empty()) { ret 0; }
+    if (!str_empty(s)) { ret 0; }
     ret 1;
 }
 
 test "string: empty returns false for non-empty string" {
     val s: str = "hello";
-    if (s.empty()) { ret 0; }
+    if (str_empty(s)) { ret 0; }
     ret 1;
 }
 
 test "string: equals same strings" {
     val a: str = "hello";
     val b: str = "hello";
-    if (!a.equals(b)) { ret 0; }
+    if (!str_equals(a, b)) { ret 0; }
     ret 1;
 }
 
 test "string: equals different strings" {
     val a: str = "hello";
     val b: str = "world";
-    if (a.equals(b)) { ret 0; }
+    if (str_equals(a, b)) { ret 0; }
     ret 1;
 }
 
 test "string: equals different lengths" {
     val a: str = "hello";
     val b: str = "hello world";
-    if (a.equals(b)) { ret 0; }
+    if (str_equals(a, b)) { ret 0; }
     ret 1;
 }
 
 test "string: equals empty strings" {
     val a: str = "";
     val b: str = "";
-    if (!a.equals(b)) { ret 0; }
+    if (!str_equals(a, b)) { ret 0; }
     ret 1;
 }
 
 test "string: compare equal strings" {
     val a: str = "abc";
     val b: str = "abc";
-    if (a.compare(b) != 0) { ret 0; }
+    if (str_compare(a, b) != 0) { ret 0; }
     ret 1;
 }
 
 test "string: compare less than" {
     val a: str = "abc";
     val b: str = "abd";
-    if (a.compare(b) >= 0) { ret 0; }
+    if (str_compare(a, b) >= 0) { ret 0; }
     ret 1;
 }
 
 test "string: compare greater than" {
     val a: str = "abd";
     val b: str = "abc";
-    if (a.compare(b) <= 0) { ret 0; }
+    if (str_compare(a, b) <= 0) { ret 0; }
     ret 1;
 }
 
 test "string: compare prefix is less" {
     val a: str = "abc";
     val b: str = "abcd";
-    if (a.compare(b) >= 0) { ret 0; }
+    if (str_compare(a, b) >= 0) { ret 0; }
     ret 1;
 }
 
 test "string: starts_with matching prefix" {
     val s: str = "hello world";
-    if (!s.starts_with("hello")) { ret 0; }
+    if (!str_starts_with(s, "hello")) { ret 0; }
     ret 1;
 }
 
 test "string: starts_with non-matching prefix" {
     val s: str = "hello world";
-    if (s.starts_with("world")) { ret 0; }
+    if (str_starts_with(s, "world")) { ret 0; }
     ret 1;
 }
 
 test "string: starts_with empty prefix" {
     val s: str = "hello";
-    if (!s.starts_with("")) { ret 0; }
+    if (!str_starts_with(s, "")) { ret 0; }
     ret 1;
 }
 
 test "string: starts_with full string" {
     val s: str = "hello";
-    if (!s.starts_with("hello")) { ret 0; }
+    if (!str_starts_with(s, "hello")) { ret 0; }
     ret 1;
 }
 
 test "string: ends_with matching suffix" {
     val s: str = "hello world";
-    if (!s.ends_with("world")) { ret 0; }
+    if (!str_ends_with(s, "world")) { ret 0; }
     ret 1;
 }
 
 test "string: ends_with non-matching suffix" {
     val s: str = "hello world";
-    if (s.ends_with("hello")) { ret 0; }
+    if (str_ends_with(s, "hello")) { ret 0; }
     ret 1;
 }
 
 test "string: ends_with empty suffix" {
     val s: str = "hello";
-    if (!s.ends_with("")) { ret 0; }
+    if (!str_ends_with(s, "")) { ret 0; }
     ret 1;
 }
 
 test "string: ends_with full string" {
     val s: str = "hello";
-    if (!s.ends_with("hello")) { ret 0; }
+    if (!str_ends_with(s, "hello")) { ret 0; }
     ret 1;
 }
 
 test "string: index_of finds substring at start" {
     val s: str = "hello world";
-    val r: Result[usize, str] = s.index_of("hello");
-    if (r.is_err()) { ret 0; }
-    if (r.unwrap_ok() != 0) { ret 0; }
+    val r: Result[usize, str] = str_index_of(s, "hello");
+    if (result_is_err(r)) { ret 0; }
+    if (result_unwrap_ok(r) != 0) { ret 0; }
     ret 1;
 }
 
 test "string: index_of finds substring in middle" {
     val s: str = "hello world";
-    val r: Result[usize, str] = s.index_of("wor");
-    if (r.is_err()) { ret 0; }
-    if (r.unwrap_ok() != 6) { ret 0; }
+    val r: Result[usize, str] = str_index_of(s, "wor");
+    if (result_is_err(r)) { ret 0; }
+    if (result_unwrap_ok(r) != 6) { ret 0; }
     ret 1;
 }
 
 test "string: index_of not found" {
     val s: str = "hello world";
-    val r: Result[usize, str] = s.index_of("xyz");
-    if (r.is_ok()) { ret 0; }
+    val r: Result[usize, str] = str_index_of(s, "xyz");
+    if (result_is_ok(r)) { ret 0; }
     ret 1;
 }
 
 test "string: last_index_of finds last occurrence" {
     val s: str = "abcabc";
-    val r: Result[usize, str] = s.last_index_of("abc");
-    if (r.is_err()) { ret 0; }
-    if (r.unwrap_ok() != 3) { ret 0; }
+    val r: Result[usize, str] = str_last_index_of(s, "abc");
+    if (result_is_err(r)) { ret 0; }
+    if (result_unwrap_ok(r) != 3) { ret 0; }
     ret 1;
 }
 
 test "string: last_index_of single occurrence" {
     val s: str = "hello world";
-    val r: Result[usize, str] = s.last_index_of("world");
-    if (r.is_err()) { ret 0; }
-    if (r.unwrap_ok() != 6) { ret 0; }
+    val r: Result[usize, str] = str_last_index_of(s, "world");
+    if (result_is_err(r)) { ret 0; }
+    if (result_unwrap_ok(r) != 6) { ret 0; }
     ret 1;
 }
 
 test "string: contains found" {
     val s: str = "hello world";
-    if (!s.contains("wor")) { ret 0; }
+    if (!str_contains(s, "wor")) { ret 0; }
     ret 1;
 }
 
 test "string: contains not found" {
     val s: str = "hello world";
-    if (s.contains("xyz")) { ret 0; }
+    if (str_contains(s, "xyz")) { ret 0; }
     ret 1;
 }
 
 test "string: contains empty substring" {
     val s: str = "hello";
     # empty substring should not be found (per current implementation)
-    if (s.contains("")) { ret 0; }
+    if (str_contains(s, "")) { ret 0; }
     ret 1;
 }

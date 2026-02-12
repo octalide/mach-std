@@ -55,7 +55,7 @@ pub fun reader(fd: i32) Reader { ret Reader{fd: fd}; }
 # buf: buffer to write from
 # len: number of bytes to attempt to write
 # ret: Ok(wrote) on success or Err(str) with errno message on failure.
-pub fun (this: *Writer) write(buf: &u8, len: usize) Result[usize, str] {
+pub fun writer_write(this: *Writer, buf: &u8, len: usize) Result[usize, str] {
     var retries: usize = 0;
     var raw: i64 = 0;
     val w: Writer = @this;
@@ -79,7 +79,7 @@ pub fun (this: *Writer) write(buf: &u8, len: usize) Result[usize, str] {
 # buf: buffer to read into
 # len: maximum number of bytes to read
 # ret: Ok(got) with bytes read, or Err(str) with errno message on failure.
-pub fun (this: *Reader) read(buf: *u8, len: usize) Result[usize, str] {
+pub fun reader_read(this: *Reader, buf: *u8, len: usize) Result[usize, str] {
     var retries: usize = 0;
     var raw: i64 = 0;
     val r: Reader = @this;
@@ -109,10 +109,10 @@ pub fun write_all(w: *Writer, buf: &u8, len: usize) Result[usize, str] {
     var total: usize = 0;
     for (total < len) {
         val p: &u8 = (buf::usize + total)::&u8;
-        val r: Result[usize, str] = w.write(p, len - total);
-        if (r.is_err()) { ret r; }
+        val r: Result[usize, str] = writer_write(?w, p, len - total);
+        if (result_is_err(r)) { ret r; }
 
-        val wrote: usize = r.unwrap_ok();
+        val wrote: usize = result_unwrap_ok(r);
         if (wrote == 0) { ret err[usize, str](ERR_SHORT_WRITE); }
 
         total = total + wrote;
@@ -132,10 +132,10 @@ pub fun read_exact(r: *Reader, buf: *u8, len: usize) Result[usize, str] {
     var total: usize = 0;
     for (total < len) {
         val p: *u8 = (buf::usize + total)::*u8;
-        val res: Result[usize, str] = r.read(p, len - total);
-        if (res.is_err()) { ret res; }
+        val res: Result[usize, str] = reader_read(?r, p, len - total);
+        if (result_is_err(res)) { ret res; }
 
-        val got: usize = res.unwrap_ok();
+        val got: usize = result_unwrap_ok(res);
         if (got == 0) { ret err[usize, str](ERR_EOF); }
 
         total = total + got;
