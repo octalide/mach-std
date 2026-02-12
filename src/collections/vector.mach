@@ -31,7 +31,7 @@ pub fun init[T](alloc: allocator.Allocator) Vector[T] {
 # Free the backing buffer and reset the vector fields
 # ---
 # ret: true if memory was freed successfully, false otherwise
-pub fun vector_deinit[T](this: *Vector[T]) bool {
+pub fun vector_dnit[T](this: *Vector[T]) bool {
     if (this == nil) { ret true; }
     if (this.cap == 0) {
         this.data = nil;
@@ -190,7 +190,7 @@ test "vector: push adds element" {
     if (vector_length[i64](v) != 1) { ret 0; }
     if (vector_is_empty[i64](v)) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -209,7 +209,7 @@ test "vector: push multiple elements" {
 
     if (vector_length[i64](v) != 3) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -227,7 +227,7 @@ test "vector: pop returns last element" {
     if (result_unwrap_ok[i64, str](r) != 300) { ret 0; }
     if (vector_length[i64](v) != 2) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -239,7 +239,7 @@ test "vector: pop from empty returns error" {
     val r: Result[i64, str] = vector_pop[i64](?v);
     if (result_is_ok[i64, str](r)) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -257,7 +257,7 @@ test "vector: get returns pointer to element" {
     val p: *i64 = result_unwrap_ok[*i64, str](r);
     if (@p != 222) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -271,7 +271,7 @@ test "vector: get out of bounds returns error" {
     val r: Result[*i64, str] = vector_get[i64](?v, 5);
     if (result_is_ok[*i64, str](r)) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -291,7 +291,7 @@ test "vector: get allows mutation" {
     if (result_is_err[*i64, str](r2)) { ret 0; }
     if (@result_unwrap_ok[*i64, str](r2) != 999) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -308,7 +308,7 @@ test "vector: get_ref returns immutable reference" {
     val ref: &i64 = result_unwrap_ok[&i64, str](r);
     if (@ref != 666) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -322,7 +322,7 @@ test "vector: get_ref out of bounds returns error" {
     val r: Result[&i64, str] = vector_get_ref[i64](v, 10);
     if (result_is_ok[&i64, str](r)) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -336,7 +336,7 @@ test "vector: reserve increases capacity" {
     if (vector_capacity[i64](v) < 100) { ret 0; }
     if (vector_length[i64](v) != 0) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -353,7 +353,7 @@ test "vector: reserve when already sufficient is noop" {
 
     if (cap2 != cap1) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -373,15 +373,15 @@ test "vector: clear resets length but keeps capacity" {
     if (!vector_is_empty[i64](v)) { ret 0; }
     if (vector_capacity[i64](v) != cap_before) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
 
-test "vector: deinit on empty vector succeeds" {
+test "vector: dnit on empty vector succeeds" {
     var a: allocator.Allocator = allocator.page_allocator();
     var v: Vector[i64] = init[i64](a);
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -410,7 +410,7 @@ test "vector: push triggers capacity growth" {
         j = j + 1;
     }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -445,7 +445,7 @@ test "vector: push and pop sequence" {
 
     if (!vector_is_empty[i64](v)) { ret 0; }
 
-    val ok: bool = vector_deinit[i64](?v);
+    val ok: bool = vector_dnit[i64](?v);
     if (!ok) { ret 0; }
     ret 1;
 }

@@ -76,7 +76,7 @@ pub fun init(backing: a.Allocator, cap: usize) Result[Arena, a.AllocError] {
 # Free any backing storage associated with the arena.
 # ---
 # ret: true if the backing allocator reports success; no-op for nil or empty arenas.
-pub fun arena_deinit(this: *Arena) bool {
+pub fun arena_dnit(this: *Arena) bool {
     if (this == nil) { ret true; }
     if (this.buf == nil || this.cap == 0) { ret true; }
 
@@ -187,7 +187,7 @@ test "arena: init with zero capacity succeeds" {
     val r: Result[Arena, a.AllocError] = init(backing, 0);
     if (result_is_err[Arena, a.AllocError](r)) { ret 0; }
     var ar: Arena = result_unwrap_ok[Arena, a.AllocError](r);
-    val ok: bool = arena_deinit(?ar);
+    val ok: bool = arena_dnit(?ar);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -197,7 +197,7 @@ test "arena: init with capacity allocates backing storage" {
     val r: Result[Arena, a.AllocError] = init(backing, 1024);
     if (result_is_err[Arena, a.AllocError](r)) { ret 0; }
     var ar: Arena = result_unwrap_ok[Arena, a.AllocError](r);
-    val ok: bool = arena_deinit(?ar);
+    val ok: bool = arena_dnit(?ar);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -219,7 +219,7 @@ test "arena: allocator returns functional allocator" {
     if (p[0] != 100) { ret 0; }
     if (p[1] != 200) { ret 0; }
 
-    val ok: bool = arena_deinit(?ar);
+    val ok: bool = arena_dnit(?ar);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -247,7 +247,7 @@ test "arena: multiple allocations bump offset" {
     if (p1[0] != 111) { ret 0; }
     if (p2[0] != 222) { ret 0; }
 
-    val ok: bool = arena_deinit(?ar);
+    val ok: bool = arena_dnit(?ar);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -276,7 +276,7 @@ test "arena: reset clears allocations" {
     # so p2 should be at or near the same address as p1
     if (p2 != p1) { ret 0; }
 
-    val ok: bool = arena_deinit(?ar);
+    val ok: bool = arena_dnit(?ar);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -304,7 +304,7 @@ test "arena: free is noop for non-last allocation" {
     p2[0] = 999;
     if (p2[0] != 999) { ret 0; }
 
-    val ok: bool = arena_deinit(?ar);
+    val ok: bool = arena_dnit(?ar);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -335,7 +335,7 @@ test "arena: free last allocation rolls back" {
 
     if (p3 != p2) { ret 0; }
 
-    val ok: bool = arena_deinit(?ar);
+    val ok: bool = arena_dnit(?ar);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -371,17 +371,17 @@ test "arena: resize last allocation in-place" {
     if (p2[2] != 333) { ret 0; }
     if (p2[3] != 444) { ret 0; }
 
-    val ok: bool = arena_deinit(?ar);
+    val ok: bool = arena_dnit(?ar);
     if (!ok) { ret 0; }
     ret 1;
 }
 
-test "arena: deinit on nil arena succeeds" {
+test "arena: dnit on nil arena succeeds" {
     var ar: Arena;
     ar.buf = nil;
     ar.cap = 0;
     ar.off = 0;
-    val ok: bool = arena_deinit(?ar);
+    val ok: bool = arena_dnit(?ar);
     if (!ok) { ret 0; }
     ret 1;
 }
@@ -406,7 +406,7 @@ test "arena: allocation respects alignment" {
     val addr: usize = p2::usize;
     if ((addr % 8) != 0) { ret 0; }
 
-    val ok: bool = arena_deinit(?ar);
+    val ok: bool = arena_dnit(?ar);
     if (!ok) { ret 0; }
     ret 1;
 }
