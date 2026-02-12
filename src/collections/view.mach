@@ -22,7 +22,7 @@ pub fun view_make[T](data: &T, size: usize) View[T] {
 # Checks if the View[T] is empty.
 # ---
 # ret: true if the view is empty, false otherwise.
-pub fun (this: View[T]) is_empty() bool {
+pub fun view_is_empty(this: View[T]) bool {
     ret this.size == 0;
 }
 
@@ -39,14 +39,14 @@ test "view: view_make creates view from pointer and size" {
 test "view: is_empty returns true for zero size" {
     var arr: [4]i64 = [4]i64{1, 2, 3, 4};
     val v: View[i64] = view_make[i64](?arr[0], 0);
-    if (!v.is_empty()) { ret 0; }
+    if (!view_is_empty(v)) { ret 0; }
     ret 1;
 }
 
 test "view: is_empty returns false for non-zero size" {
     var arr: [4]i64 = [4]i64{1, 2, 3, 4};
     val v: View[i64] = view_make[i64](?arr[0], 4);
-    if (v.is_empty()) { ret 0; }
+    if (view_is_empty(v)) { ret 0; }
     ret 1;
 }
 
@@ -70,6 +70,6 @@ test "view: view of u8 bytes" {
 
 test "view: nil data with zero size is empty" {
     val v: View[i64] = view_make[i64](nil, 0);
-    if (!v.is_empty()) { ret 0; }
+    if (!view_is_empty(v)) { ret 0; }
     ret 1;
 }

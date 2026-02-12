@@ -23,14 +23,14 @@ pub fun slice_make[T](data: *T, size: usize) Slice[T] {
 # Checks if the Slice[T] is empty.
 # ---
 # ret: true if the slice is empty, false otherwise.
-pub fun (this: Slice[T]) is_empty() bool {
+pub fun slice_is_empty(this: Slice[T]) bool {
     ret this.size == 0;
 }
 
 # Converts the Slice[T] to a View[T].
 # ---
 # ret: A View[T] representing the same data as the slice.
-pub fun (this: Slice[T]) as_view() View[T] {
+pub fun slice_as_view(this: Slice[T]) View[T] {
     var v: View[T];
     v.data = this.data;
     v.size = this.size;
@@ -50,14 +50,14 @@ test "slice: slice_make creates slice from pointer and size" {
 test "slice: is_empty returns true for zero size" {
     var arr: [4]i64 = [4]i64{1, 2, 3, 4};
     val s: Slice[i64] = slice_make[i64](?arr[0], 0);
-    if (!s.is_empty()) { ret 0; }
+    if (!slice_is_empty(s)) { ret 0; }
     ret 1;
 }
 
 test "slice: is_empty returns false for non-zero size" {
     var arr: [4]i64 = [4]i64{1, 2, 3, 4};
     val s: Slice[i64] = slice_make[i64](?arr[0], 4);
-    if (s.is_empty()) { ret 0; }
+    if (slice_is_empty(s)) { ret 0; }
     ret 1;
 }
 
@@ -81,7 +81,7 @@ test "slice: data is mutable via slice" {
 test "slice: as_view converts to view" {
     var arr: [3]i64 = [3]i64{5, 6, 7};
     val s: Slice[i64] = slice_make[i64](?arr[0], 3);
-    val v: View[i64] = s.as_view();
+    val v: View[i64] = slice_as_view(s);
     if (v.size != 3) { ret 0; }
     if (v.data == nil) { ret 0; }
     ret 1;
@@ -90,7 +90,7 @@ test "slice: as_view converts to view" {
 test "slice: as_view preserves data reference" {
     var arr: [2]i64 = [2]i64{42, 43};
     val s: Slice[i64] = slice_make[i64](?arr[0], 2);
-    val v: View[i64] = s.as_view();
+    val v: View[i64] = slice_as_view(s);
     if (v.data[0] != 42) { ret 0; }
     if (v.data[1] != 43) { ret 0; }
     ret 1;

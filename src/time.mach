@@ -93,36 +93,36 @@ pub fun since(t: Time) Duration {
 # until: returns the duration until t.
 # ---
 # t: target time
-# ret: Duration until t (equivalent to t.sub(now()))
+# ret: Duration until t (equivalent to time_sub(t, now()))
 pub fun until(t: Time) Duration {
-    ret t.sub(now());
+    ret time_sub(t, now());
 }
 
 # unix_sec: returns seconds since Unix epoch.
 # ---
 # ret: seconds component
-pub fun (t: Time) unix_sec() i64 {
+pub fun time_unix_sec(t: Time) i64 {
     ret t.sec;
 }
 
 # unix_nano: returns nanoseconds since Unix epoch.
 # ---
 # ret: total nanoseconds since epoch
-pub fun (t: Time) unix_nano() i64 {
+pub fun time_unix_nano(t: Time) i64 {
     ret t.sec * 1000000000 + t.nsec;
 }
 
 # unix_milli: returns milliseconds since Unix epoch.
 # ---
 # ret: total milliseconds since epoch
-pub fun (t: Time) unix_milli() i64 {
+pub fun time_unix_milli(t: Time) i64 {
     ret t.sec * 1000 + t.nsec / 1000000;
 }
 
 # unix_micro: returns microseconds since Unix epoch.
 # ---
 # ret: total microseconds since epoch
-pub fun (t: Time) unix_micro() i64 {
+pub fun time_unix_micro(t: Time) i64 {
     ret t.sec * 1000000 + t.nsec / 1000;
 }
 
@@ -130,7 +130,7 @@ pub fun (t: Time) unix_micro() i64 {
 # ---
 # d: duration to add
 # ret: new Time offset by d
-pub fun (t: Time) add(d: Duration) Time {
+pub fun time_add(t: Time, d: Duration) Time {
     var sec: i64 = t.sec + d / 1000000000;
     var nsec: i64 = t.nsec + d % 1000000000;
 
@@ -150,7 +150,7 @@ pub fun (t: Time) add(d: Duration) Time {
 # ---
 # u: time to subtract
 # ret: Duration between t and u
-pub fun (t: Time) sub(u: Time) Duration {
+pub fun time_sub(t: Time, u: Time) Duration {
     val sec_diff: i64 = t.sec - u.sec;
     val nsec_diff: i64 = t.nsec - u.nsec;
     ret sec_diff * 1000000000 + nsec_diff;
@@ -160,7 +160,7 @@ pub fun (t: Time) sub(u: Time) Duration {
 # ---
 # u: time to compare against
 # ret: true if t < u
-pub fun (t: Time) before(u: Time) bool {
+pub fun time_before(t: Time, u: Time) bool {
     if (t.sec < u.sec) { ret true; }
     if (t.sec > u.sec) { ret false; }
     ret t.nsec < u.nsec;
@@ -170,7 +170,7 @@ pub fun (t: Time) before(u: Time) bool {
 # ---
 # u: time to compare against
 # ret: true if t > u
-pub fun (t: Time) after(u: Time) bool {
+pub fun time_after(t: Time, u: Time) bool {
     if (t.sec > u.sec) { ret true; }
     if (t.sec < u.sec) { ret false; }
     ret t.nsec > u.nsec;
@@ -180,63 +180,63 @@ pub fun (t: Time) after(u: Time) bool {
 # ---
 # u: time to compare against
 # ret: true if t == u
-pub fun (t: Time) equal(u: Time) bool {
+pub fun time_equal(t: Time, u: Time) bool {
     ret t.sec == u.sec && t.nsec == u.nsec;
 }
 
 # is_zero: reports whether t represents the zero time instant.
 # ---
 # ret: true if t is zero time (Unix epoch)
-pub fun (t: Time) is_zero() bool {
+pub fun time_is_zero(t: Time) bool {
     ret t.sec == 0 && t.nsec == 0;
 }
 
 # nanoseconds: returns the duration as nanoseconds.
 # ---
 # ret: duration in nanoseconds
-pub fun (d: Duration) nanoseconds() i64 {
+pub fun duration_nanoseconds(d: Duration) i64 {
     ret d;
 }
 
 # microseconds: returns the duration as microseconds.
 # ---
 # ret: duration in microseconds
-pub fun (d: Duration) microseconds() i64 {
+pub fun duration_microseconds(d: Duration) i64 {
     ret d / 1000;
 }
 
 # milliseconds: returns the duration as milliseconds.
 # ---
 # ret: duration in milliseconds
-pub fun (d: Duration) milliseconds() i64 {
+pub fun duration_milliseconds(d: Duration) i64 {
     ret d / 1000000;
 }
 
 # seconds: returns the duration as whole seconds.
 # ---
 # ret: duration in seconds
-pub fun (d: Duration) seconds() i64 {
+pub fun duration_seconds(d: Duration) i64 {
     ret d / 1000000000;
 }
 
 # minutes: returns the duration as whole minutes.
 # ---
 # ret: duration in minutes
-pub fun (d: Duration) minutes() i64 {
+pub fun duration_minutes(d: Duration) i64 {
     ret d / 60000000000;
 }
 
 # hours: returns the duration as whole hours.
 # ---
 # ret: duration in hours
-pub fun (d: Duration) hours() i64 {
+pub fun duration_hours(d: Duration) i64 {
     ret d / 3600000000000;
 }
 
 # abs: returns the absolute value of d.
 # ---
 # ret: |d|
-pub fun (d: Duration) abs() Duration {
+pub fun duration_abs(d: Duration) Duration {
     if (d < 0) {
         ret 0 - d;
     }
@@ -275,7 +275,7 @@ test "time: unix normalizes negative nsec" {
 
 test "time: add positive duration" {
     val t: Time = unix(100, 0);
-    val t2: Time = t.add(5 * SECOND);
+    val t2: Time = time_add(t, 5 * SECOND);
     if (t2.sec != 105) { ret 0; }
     if (t2.nsec != 0) { ret 2; }
     ret 1;
@@ -283,7 +283,7 @@ test "time: add positive duration" {
 
 test "time: add duration with nsec overflow" {
     val t: Time = unix(100, 800000000);
-    val t2: Time = t.add(500 * MILLISECOND);
+    val t2: Time = time_add(t, 500 * MILLISECOND);
     if (t2.sec != 101) { ret 0; }
     if (t2.nsec != 300000000) { ret 2; }
     ret 1;
@@ -291,7 +291,7 @@ test "time: add duration with nsec overflow" {
 
 test "time: add negative duration" {
     val t: Time = unix(100, 0);
-    val t2: Time = t.add(0 - 5 * SECOND);
+    val t2: Time = time_add(t, 0 - 5 * SECOND);
     if (t2.sec != 95) { ret 0; }
     ret 1;
 }
@@ -341,33 +341,33 @@ test "time: is_zero" {
 
 test "time: unix_nano" {
     val t: Time = unix(1, 500000000);
-    val ns: i64 = t.unix_nano();
+    val ns: i64 = time_unix_nano(t);
     if (ns != 1500000000) { ret 0; }
     ret 1;
 }
 
 test "time: unix_milli" {
     val t: Time = unix(1, 500000000);
-    val ms: i64 = t.unix_milli();
+    val ms: i64 = time_unix_milli(t);
     if (ms != 1500) { ret 0; }
     ret 1;
 }
 
 test "time: unix_micro" {
     val t: Time = unix(1, 500000000);
-    val us: i64 = t.unix_micro();
+    val us: i64 = time_unix_micro(t);
     if (us != 1500000) { ret 0; }
     ret 1;
 }
 
 test "time: duration conversions" {
     val d: Duration = 3661001001001; # 1h 1m 1s 1ms 1us 1ns
-    if (d.hours() != 1) { ret 0; }
-    if (d.minutes() != 61) { ret 2; }
-    if (d.seconds() != 3661) { ret 3; }
-    if (d.milliseconds() != 3661001) { ret 4; }
-    if (d.microseconds() != 3661001001) { ret 5; }
-    if (d.nanoseconds() != 3661001001001) { ret 6; }
+    if (duration_hours(d) != 1) { ret 0; }
+    if (duration_minutes(d) != 61) { ret 2; }
+    if (duration_seconds(d) != 3661) { ret 3; }
+    if (duration_milliseconds(d) != 3661001) { ret 4; }
+    if (duration_microseconds(d) != 3661001001) { ret 5; }
+    if (duration_nanoseconds(d) != 3661001001001) { ret 6; }
     ret 1;
 }
 

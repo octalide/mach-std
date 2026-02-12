@@ -96,7 +96,7 @@ pub fun create(path: str, mode: i32) Result[File, str] {
 # close: close the underlying file descriptor.
 # ---
 # ret: Ok(true) on success or Err(str) with errno message on failure.
-pub fun (this: *File) close() Result[bool, str] {
+pub fun file_close(this: *File) Result[bool, str] {
     if (this == nil) {
         ret ok[bool, str](true);
     }
@@ -123,7 +123,7 @@ pub fun (this: *File) close() Result[bool, str] {
 # buf: buffer to read into
 # len: maximum number of bytes to read
 # ret: Ok(bytes_read) on success or Err(str) with errno message on failure.
-pub fun (this: *File) read(buf: *u8, len: usize) Result[usize, str] {
+pub fun file_read(this: *File, buf: *u8, len: usize) Result[usize, str] {
     if (this == nil) {
         ret err[usize, str]("io error");
     }
@@ -150,7 +150,7 @@ pub fun (this: *File) read(buf: *u8, len: usize) Result[usize, str] {
 # buf: buffer to write from
 # len: number of bytes to write
 # ret: Ok(bytes_written) on success or Err(str) with errno message on failure.
-pub fun (this: *File) write(buf: &u8, len: usize) Result[usize, str] {
+pub fun file_write(this: *File, buf: &u8, len: usize) Result[usize, str] {
     if (this == nil) {
         ret err[usize, str]("io error");
     }
@@ -175,7 +175,7 @@ pub fun (this: *File) write(buf: &u8, len: usize) Result[usize, str] {
 # stat: get file metadata.
 # ---
 # ret: Ok(Stat) on success or Err(str) with errno message on failure.
-pub fun (this: &File) stat() Result[Stat, str] {
+pub fun file_stat(this: &File) Result[Stat, str] {
     if (this == nil) {
         ret err[Stat, str]("io error");
     }
@@ -193,7 +193,7 @@ pub fun (this: &File) stat() Result[Stat, str] {
 # offset: offset to seek to
 # whence: seek mode (e.g., SEEK_SET, SEEK_CUR, SEEK_END)
 # ret: Ok(new_offset) on success or Err(str) with errno message on failure.
-pub fun (this: &File) seek(offset: i64, whence: i32) Result[i64, str] {
+pub fun file_seek(this: &File, offset: i64, whence: i32) Result[i64, str] {
     if (this == nil) {
         ret err[i64, str]("io error");
     }
@@ -252,11 +252,11 @@ pub fun stat_path(path: str) Result[Stat, str] {
 # ret: true if directory, false otherwise
 pub fun is_dir(path: str) bool {
     val st_res: Result[Stat, str] = stat_path(path);
-    if (st_res.is_err()) {
+    if (result_is_err(st_res)) {
         ret false;
     }
 
-    val st: Stat = st_res.unwrap_ok();
+    val st: Stat = result_unwrap_ok(st_res);
     ret (st.st_mode & c.S_IFMT) == c.S_IFDIR;
 }
 
@@ -266,11 +266,11 @@ pub fun is_dir(path: str) bool {
 # ret: true if regular file, false otherwise
 pub fun is_file(path: str) bool {
     val st_res: Result[Stat, str] = stat_path(path);
-    if (st_res.is_err()) {
+    if (result_is_err(st_res)) {
         ret false;
     }
 
-    val st: Stat = st_res.unwrap_ok();
+    val st: Stat = result_unwrap_ok(st_res);
     ret (st.st_mode & c.S_IFMT) == c.S_IFREG;
 }
 
@@ -328,28 +328,28 @@ pub fun create_dir_all(path_str: str, mode: i32) Result[bool, str] {
     }
 
     val create_res: Result[bool, str] = create_dir(path_str, mode);
-    if (create_res.is_ok()) {
+    if (result_is_ok(create_res)) {
         ret create_res;
     }
 
     var a: allocator.Allocator = allocator.default();
     val parent_res: Result[path.Path, allocator.AllocError] = path.parent(?a, path_str);
-    if (parent_res.is_err()) {
-        ret err[bool, str](parent_res.unwrap_err());
+    if (result_is_err(parent_res)) {
+        ret err[bool, str](result_unwrap_err(parent_res));
     }
 
-    val parent_path: path.Path = parent_res.unwrap_ok();
+    val parent_path: path.Path = result_unwrap_ok(parent_res);
     val parent_create_res: Result[bool, str] = create_dir_all(parent_path, mode);
 
-    val parent_len: usize = parent_path.len();
-    a.free[u8](parent_path::ptr::*u8, parent_len + 1);
+    val parent_len: usize = str_len(parent_path);
+    allocator_free[u8](a, parent_path::ptr::*u8, parent_len + 1);
 
-    if (parent_create_res.is_err()) {
+    if (result_is_err(parent_create_res)) {
         ret parent_create_res;
     }
 
     val final_res: Result[bool, str] = create_dir(path_str, mode);
-    if (final_res.is_ok()) {
+    if (result_is_ok(final_res)) {
         ret final_res;
     }
 
@@ -391,7 +391,7 @@ pub fun temp_create(prefix: str) Result[TempFile, str] {
         tf.path_len = 0;
 
         # copy "/tmp/"
-        val dir_len: usize = TEMP_DIR.len();
+        val dir_len: usize = str_len(TEMP_DIR);
         mem.raw_copy(?tf.path_buf[0], TEMP_DIR, dir_len);
         tf.path_len = dir_len;
 
@@ -401,7 +401,7 @@ pub fun temp_create(prefix: str) Result[TempFile, str] {
 
         # copy prefix
         if (prefix != nil) {
-            val prefix_len: usize = prefix.len();
+            val prefix_len: usize = str_len(prefix);
             mem.raw_copy(?tf.path_buf[tf.path_len], prefix, prefix_len);
             tf.path_len = tf.path_len + prefix_len;
         }
@@ -475,39 +475,39 @@ fun write_u64_to_buf(buf: *u8, offset: usize, cap: usize, n: u64) usize {
 # path: returns the path of the temp file as a string.
 # ---
 # ret: null-terminated path string
-pub fun (this: &TempFile) path() str {
+pub fun temp_file_path(this: &TempFile) str {
     ret ?this.path_buf[0];
 }
 
 # as_file: return a pointer to the underlying file.
 # ---
 # ret: pointer to File
-pub fun (this: *TempFile) as_file() *File {
+pub fun temp_file_as_file(this: *TempFile) *File {
     ret ?this.file;
 }
 
 # close: close the temp file (does not remove it).
 # ---
 # ret: Ok(true) on success or Err(str) on failure.
-pub fun (this: *TempFile) close() Result[bool, str] {
-    ret (?this.file).close();
+pub fun temp_file_close(this: *TempFile) Result[bool, str] {
+    ret (file_close(?this.file));
 }
 
 # remove: remove the temp file from disk (should close first).
 # ---
 # ret: Ok(true) on success or Err(str) on failure.
-pub fun (this: *TempFile) remove() Result[bool, str] {
+pub fun temp_file_remove(this: *TempFile) Result[bool, str] {
     ret unlink(?this.path_buf[0]);
 }
 
 # close_and_remove: close the file and remove it from disk.
 # ---
 # ret: Ok(true) on success or Err(str) on failure (returns first error).
-pub fun (this: *TempFile) close_and_remove() Result[bool, str] {
-    val close_res: Result[bool, str] = this.close();
-    val remove_res: Result[bool, str] = this.remove();
+pub fun temp_file_close_and_remove(this: *TempFile) Result[bool, str] {
+    val close_res: Result[bool, str] = file_close(this);
+    val remove_res: Result[bool, str] = temp_file_remove(this);
 
-    if (close_res.is_err()) {
+    if (result_is_err(close_res)) {
         ret close_res;
     }
     ret remove_res;
@@ -517,8 +517,8 @@ pub fun (this: *TempFile) close_and_remove() Result[bool, str] {
 
 test "filesystem: temp_create creates file" {
     val r: Result[TempFile, str] = temp_create("test");
-    if (r.is_err()) { ret 0; }
-    var tf: TempFile = r.unwrap_ok();
+    if (result_is_err(r)) { ret 0; }
+    var tf: TempFile = result_unwrap_ok(r);
 
     # file should have valid fd
     if (tf.file.fd < 0) { ret 2; }
@@ -527,173 +527,173 @@ test "filesystem: temp_create creates file" {
     if (tf.path_len == 0) { ret 3; }
 
     # clean up
-    val cr: Result[bool, str] = tf.close_and_remove();
-    if (cr.is_err()) { ret 4; }
+    val cr: Result[bool, str] = temp_file_close_and_remove(?tf);
+    if (result_is_err(cr)) { ret 4; }
     ret 1;
 }
 
 test "filesystem: temp_create path is valid" {
     val r: Result[TempFile, str] = temp_create("myprefix");
-    if (r.is_err()) { ret 0; }
-    var tf: TempFile = r.unwrap_ok();
+    if (result_is_err(r)) { ret 0; }
+    var tf: TempFile = result_unwrap_ok(r);
 
-    val p: str = tf.path();
+    val p: str = temp_file_path(?tf);
     if (p == nil) { ret 2; }
 
     # path should start with /tmp/
-    if (!p.starts_with("/tmp/")) { ret 3; }
+    if (!str_starts_with(p, "/tmp/")) { ret 3; }
 
     # path should contain prefix
-    if (!p.contains("myprefix")) { ret 4; }
+    if (!str_contains(p, "myprefix")) { ret 4; }
 
-    tf.close_and_remove();
+    temp_file_close_and_remove(?tf);
     ret 1;
 }
 
 test "filesystem: temp file write and read" {
     val r: Result[TempFile, str] = temp_create("rw");
-    if (r.is_err()) { ret 0; }
-    var tf: TempFile = r.unwrap_ok();
+    if (result_is_err(r)) { ret 0; }
+    var tf: TempFile = result_unwrap_ok(r);
 
     # write some data
     val data: str = "hello temp file";
-    val wr: Result[usize, str] = tf.file.write(data, data.len());
-    if (wr.is_err()) { ret 2; }
-    if (wr.unwrap_ok() != data.len()) { ret 3; }
+    val wr: Result[usize, str] = file_write(?tf.file, data, str_len(data));
+    if (result_is_err(wr)) { ret 2; }
+    if (result_unwrap_ok(wr) != str_len(data)) { ret 3; }
 
     # seek back to start
-    val sr: Result[i64, str] = tf.file.seek(0, c.SEEK_SET);
-    if (sr.is_err()) { ret 4; }
+    val sr: Result[i64, str] = file_seek(?tf.file, 0, c.SEEK_SET);
+    if (result_is_err(sr)) { ret 4; }
 
     # read back
     var buf: [64]u8;
-    val rr: Result[usize, str] = tf.file.read(?buf[0], 64);
-    if (rr.is_err()) { ret 5; }
-    if (rr.unwrap_ok() != data.len()) { ret 6; }
+    val rr: Result[usize, str] = file_read(?tf.file, ?buf[0], 64);
+    if (result_is_err(rr)) { ret 5; }
+    if (result_unwrap_ok(rr) != str_len(data)) { ret 6; }
 
     # verify content
     val read_str: str = ?buf[0];
-    if (!read_str.starts_with("hello temp file")) { ret 7; }
+    if (!str_starts_with(read_str, "hello temp file")) { ret 7; }
 
-    tf.close_and_remove();
+    temp_file_close_and_remove(?tf);
     ret 1;
 }
 
 test "filesystem: temp file close then remove" {
     val r: Result[TempFile, str] = temp_create("closeremove");
-    if (r.is_err()) { ret 0; }
-    var tf: TempFile = r.unwrap_ok();
+    if (result_is_err(r)) { ret 0; }
+    var tf: TempFile = result_unwrap_ok(r);
 
-    val cr: Result[bool, str] = tf.close();
-    if (cr.is_err()) { ret 2; }
+    val cr: Result[bool, str] = file_close(?tf);
+    if (result_is_err(cr)) { ret 2; }
 
-    val rr: Result[bool, str] = tf.remove();
-    if (rr.is_err()) { ret 3; }
+    val rr: Result[bool, str] = temp_file_remove(?tf);
+    if (result_is_err(rr)) { ret 3; }
 
     ret 1;
 }
 
 test "filesystem: open non-existent file returns error" {
     val r: Result[File, str] = open("/tmp/this_file_should_not_exist_12345");
-    if (r.is_ok()) { ret 0; }
+    if (result_is_ok(r)) { ret 0; }
     ret 1;
 }
 
 test "filesystem: create write close open read" {
     # create a temp file
     val cr: Result[TempFile, str] = temp_create("fullcycle");
-    if (cr.is_err()) { ret 0; }
-    var tf: TempFile = cr.unwrap_ok();
+    if (result_is_err(cr)) { ret 0; }
+    var tf: TempFile = result_unwrap_ok(cr);
 
     # write data
     val data: str = "test data 12345";
-    val wr: Result[usize, str] = tf.file.write(data, data.len());
-    if (wr.is_err()) { ret 2; }
+    val wr: Result[usize, str] = file_write(?tf.file, data, str_len(data));
+    if (result_is_err(wr)) { ret 2; }
 
     # close
-    val clr: Result[bool, str] = tf.close();
-    if (clr.is_err()) { ret 3; }
+    val clr: Result[bool, str] = file_close(?tf);
+    if (result_is_err(clr)) { ret 3; }
 
     # open again for reading
-    val open_res: Result[File, str] = open(tf.path());
-    if (open_res.is_err()) { ret 4; }
-    var f: File = open_res.unwrap_ok();
+    val open_res: Result[File, str] = open(temp_file_path(?tf));
+    if (result_is_err(open_res)) { ret 4; }
+    var f: File = result_unwrap_ok(open_res);
 
     # read
     var buf: [64]u8;
-    val rr: Result[usize, str] = f.read(?buf[0], 64);
-    if (rr.is_err()) { ret 5; }
-    if (rr.unwrap_ok() != data.len()) { ret 6; }
+    val rr: Result[usize, str] = file_read(?f, ?buf[0], 64);
+    if (result_is_err(rr)) { ret 5; }
+    if (result_unwrap_ok(rr) != str_len(data)) { ret 6; }
 
     # close and cleanup
-    f.close();
-    tf.remove();
+    file_close(?f);
+    temp_file_remove(?tf);
     ret 1;
 }
 
 test "filesystem: stat returns valid metadata" {
     val cr: Result[TempFile, str] = temp_create("stat");
-    if (cr.is_err()) { ret 0; }
-    var tf: TempFile = cr.unwrap_ok();
+    if (result_is_err(cr)) { ret 0; }
+    var tf: TempFile = result_unwrap_ok(cr);
 
     # write some data
     val data: str = "some content";
-    tf.file.write(data, data.len());
+    file_write(?tf.file, data, str_len(data));
 
     # get stat
-    val sr: Result[Stat, str] = tf.file.stat();
-    if (sr.is_err()) { ret 2; }
-    val st: Stat = sr.unwrap_ok();
+    val sr: Result[Stat, str] = file_stat(?tf.file);
+    if (result_is_err(sr)) { ret 2; }
+    val st: Stat = result_unwrap_ok(sr);
 
     # size should match what we wrote
-    if (st.st_size != data.len()::i64) { ret 3; }
+    if (st.st_size != str_len(data)::i64) { ret 3; }
 
-    tf.close_and_remove();
+    temp_file_close_and_remove(?tf);
     ret 1;
 }
 
 test "filesystem: seek repositions file offset" {
     val cr: Result[TempFile, str] = temp_create("seek");
-    if (cr.is_err()) { ret 0; }
-    var tf: TempFile = cr.unwrap_ok();
+    if (result_is_err(cr)) { ret 0; }
+    var tf: TempFile = result_unwrap_ok(cr);
 
     # write data
     val data: str = "0123456789";
-    tf.file.write(data, data.len());
+    file_write(?tf.file, data, str_len(data));
 
     # seek to position 5
-    val sr: Result[i64, str] = tf.file.seek(5, c.SEEK_SET);
-    if (sr.is_err()) { ret 2; }
-    if (sr.unwrap_ok() != 5) { ret 3; }
+    val sr: Result[i64, str] = file_seek(?tf.file, 5, c.SEEK_SET);
+    if (result_is_err(sr)) { ret 2; }
+    if (result_unwrap_ok(sr) != 5) { ret 3; }
 
     # read from position 5
     var buf: [10]u8;
-    val rr: Result[usize, str] = tf.file.read(?buf[0], 10);
-    if (rr.is_err()) { ret 4; }
-    if (rr.unwrap_ok() != 5) { ret 5; } # should read "56789"
+    val rr: Result[usize, str] = file_read(?tf.file, ?buf[0], 10);
+    if (result_is_err(rr)) { ret 4; }
+    if (result_unwrap_ok(rr) != 5) { ret 5; } # should read "56789"
 
     if (buf[0] != 53) { ret 6; } # '5'
     if (buf[4] != 57) { ret 7; } # '9'
 
-    tf.close_and_remove();
+    temp_file_close_and_remove(?tf);
     ret 1;
 }
 
 test "filesystem: unlink removes file" {
     val cr: Result[TempFile, str] = temp_create("unlink");
-    if (cr.is_err()) { ret 0; }
-    var tf: TempFile = cr.unwrap_ok();
-    val p: str = tf.path();
+    if (result_is_err(cr)) { ret 0; }
+    var tf: TempFile = result_unwrap_ok(cr);
+    val p: str = temp_file_path(?tf);
 
-    tf.close();
+    file_close(?tf);
 
     # unlink the file
     val ur: Result[bool, str] = unlink(p);
-    if (ur.is_err()) { ret 2; }
+    if (result_is_err(ur)) { ret 2; }
 
     # try to open - should fail
     val open_res: Result[File, str] = open(p);
-    if (open_res.is_ok()) { ret 3; }
+    if (result_is_ok(open_res)) { ret 3; }
 
     ret 1;
 }

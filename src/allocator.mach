@@ -35,7 +35,7 @@ pub rec Allocator {
 # size: number of bytes (0 returns nil).
 # align: requested alignment in bytes.
 # ret: Ok(ptr) on success or Err(AllocError) on out-of-memory.
-pub fun (this: *Allocator) alloc_bytes(size: usize, align: usize) Result[ptr, AllocError] {
+pub fun allocator_alloc_bytes(this: *Allocator, size: usize, align: usize) Result[ptr, AllocError] {
     if (size == 0) {
         ret ok[ptr, AllocError](nil);
     }
@@ -55,7 +55,7 @@ pub fun (this: *Allocator) alloc_bytes(size: usize, align: usize) Result[ptr, Al
 # new_size: desired size in bytes (0 frees the allocation).
 # align: alignment in bytes.
 # ret: Ok(ptr) with the new pointer (or nil for freed) or Err(AllocError) on OOM.
-pub fun (this: *Allocator) resize_bytes(p: ptr, old_size: usize, new_size: usize, align: usize) Result[ptr, AllocError] {
+pub fun allocator_resize_bytes(this: *Allocator, p: ptr, old_size: usize, new_size: usize, align: usize) Result[ptr, AllocError] {
     if (new_size == 0) {
         val ok_free: bool = this.free_fn(this.ctx, p, old_size, align);
         ret ok[ptr, AllocError](nil);
@@ -75,7 +75,7 @@ pub fun (this: *Allocator) resize_bytes(p: ptr, old_size: usize, new_size: usize
 # size: size in bytes that was allocated.
 # align: alignment in bytes.
 # ret: true on success.
-pub fun (this: *Allocator) free_bytes(p: ptr, size: usize, align: usize) bool {
+pub fun allocator_free_bytes(this: *Allocator, p: ptr, size: usize, align: usize) bool {
     ret this.free_fn(this.ctx, p, size, align);
 }
 
@@ -83,7 +83,7 @@ pub fun (this: *Allocator) free_bytes(p: ptr, size: usize, align: usize) bool {
 # ---
 # count: number of elements to allocate
 # ret: Ok(*T) pointer (nil for count == 0) or Err(AllocError) on OOM or overflow.
-pub fun (this: *Allocator) alloc[T](count: usize) Result[*T, AllocError] {
+pub fun allocator_alloc(this: *Allocator)[T](count: usize) Result[*T, AllocError] {
     if (count == 0) {
         ret ok[*T, AllocError](nil::*T);
     }
@@ -95,25 +95,25 @@ pub fun (this: *Allocator) alloc[T](count: usize) Result[*T, AllocError] {
         ret err[*T, AllocError]("allocation size overflow");
     }
 
-    val r: Result[ptr, AllocError] = this.alloc_bytes(total, $align_of(T));
-    if (r.is_err()) {
-        ret err[*T, AllocError](r.unwrap_err());
+    val r: Result[ptr, AllocError] = allocator_alloc_bytes(this, total, $align_of(T));
+    if (result_is_err(r)) {
+        ret err[*T, AllocError](result_unwrap_err(r));
     }
 
-    ret ok[*T, AllocError](r.unwrap_ok()::*T);
+    ret ok[*T, AllocError](result_unwrap_ok(r)::*T);
 }
 
 # Allocate and zero-initialize count elements of T.
 # ---
 # count: number of elements to allocate
 # ret: Ok(*T) pointer (nil for count == 0) or Err(AllocError) on OOM or overflow.
-pub fun (this: *Allocator) zalloc[T](count: usize) Result[*T, AllocError] {
-    val r: Result[*T, AllocError] = this.alloc[T](count);
-    if (r.is_err()) {
+pub fun allocator_zalloc(this: *Allocator)[T](count: usize) Result[*T, AllocError] {
+    val r: Result[*T, AllocError] = allocator_alloc[T](this, count);
+    if (result_is_err(r)) {
         ret r;
     }
 
-    val p: *T = r.unwrap_ok();
+    val p: *T = result_unwrap_ok(r);
     if (p != nil && count != 0) {
         val total: usize = $size_of(T) * count;
         val bytes: *u8 = p::ptr::*u8;
@@ -132,12 +132,12 @@ pub fun (this: *Allocator) zalloc[T](count: usize) Result[*T, AllocError] {
 # p: pointer returned by alloc/zalloc (may be nil)
 # count: number of elements to free
 # ret: true on success; no-op for nil pointer or count == 0.
-pub fun (this: *Allocator) free[T](p: *T, count: usize) bool {
+pub fun allocator_free(this: *Allocator)[T](p: *T, count: usize) bool {
     if (p == nil || count == 0) {
         ret true;
     }
 
-    ret this.free_bytes(p::ptr, $size_of(T) * count, $align_of(T));
+    ret allocator_free_bytes(this, p::ptr, $size_of(T) * count, $align_of(T));
 }
 
 # Resize an allocation of T elements.
@@ -146,9 +146,9 @@ pub fun (this: *Allocator) free[T](p: *T, count: usize) bool {
 # old_count: previous number of elements
 # new_count: desired number of elements (0 frees)
 # ret: Ok(*T) with new pointer or Err(AllocError) on error.
-pub fun (this: *Allocator) resize[T](p: *T, old_count: usize, new_count: usize) Result[*T, AllocError] {
+pub fun allocator_resize(this: *Allocator)[T](p: *T, old_count: usize, new_count: usize) Result[*T, AllocError] {
     if (new_count == 0) {
-        val ok_free: bool = this.free[T](p, old_count);
+        val ok_free: bool = allocator_free[T](this, p, old_count);
         ret ok[*T, AllocError](nil::*T);
     }
 
@@ -160,12 +160,12 @@ pub fun (this: *Allocator) resize[T](p: *T, old_count: usize, new_count: usize) 
         ret err[*T, AllocError]("allocation size overflow");
     }
 
-    val r: Result[ptr, AllocError] = this.resize_bytes(p::ptr, old_size, new_size, $align_of(T));
-    if (r.is_err()) {
-        ret err[*T, AllocError](r.unwrap_err());
+    val r: Result[ptr, AllocError] = allocator_resize_bytes(this, p::ptr, old_size, new_size, $align_of(T));
+    if (result_is_err(r)) {
+        ret err[*T, AllocError](result_unwrap_err(r));
     }
 
-    ret ok[*T, AllocError](r.unwrap_ok()::*T);
+    ret ok[*T, AllocError](result_unwrap_ok(r)::*T);
 }
 
 # default allocator (page-granular) backed by platform memory.
@@ -229,29 +229,29 @@ test "allocator: default returns valid allocator" {
 
 test "allocator: alloc_bytes allocates memory" {
     var a: Allocator = page_allocator();
-    val r: Result[ptr, AllocError] = a.alloc_bytes(64, 8);
-    if (r.is_err()) { ret 0; }
-    val p: ptr = r.unwrap_ok();
+    val r: Result[ptr, AllocError] = allocator_alloc_bytes(a, 64, 8);
+    if (result_is_err(r)) { ret 0; }
+    val p: ptr = result_unwrap_ok(r);
     if (p == nil) { ret 0; }
-    val ok: bool = a.free_bytes(p, 64, 8);
+    val ok: bool = allocator_free_bytes(a, p, 64, 8);
     if (!ok) { ret 0; }
     ret 1;
 }
 
 test "allocator: alloc_bytes with size zero returns nil" {
     var a: Allocator = page_allocator();
-    val r: Result[ptr, AllocError] = a.alloc_bytes(0, 8);
-    if (r.is_err()) { ret 0; }
-    val p: ptr = r.unwrap_ok();
+    val r: Result[ptr, AllocError] = allocator_alloc_bytes(a, 0, 8);
+    if (result_is_err(r)) { ret 0; }
+    val p: ptr = result_unwrap_ok(r);
     if (p != nil) { ret 0; }
     ret 1;
 }
 
 test "allocator: alloc typed allocation" {
     var a: Allocator = page_allocator();
-    val r: Result[*i64, AllocError] = a.alloc[i64](4);
-    if (r.is_err()) { ret 0; }
-    val p: *i64 = r.unwrap_ok();
+    val r: Result[*i64, AllocError] = allocator_alloc[i64](a, 4);
+    if (result_is_err(r)) { ret 0; }
+    val p: *i64 = result_unwrap_ok(r);
     if (p == nil) { ret 0; }
 
     # write and read back
@@ -262,25 +262,25 @@ test "allocator: alloc typed allocation" {
     if (p[0] != 100) { ret 0; }
     if (p[3] != 400) { ret 0; }
 
-    val ok: bool = a.free[i64](p, 4);
+    val ok: bool = allocator_free[i64](a, p, 4);
     if (!ok) { ret 0; }
     ret 1;
 }
 
 test "allocator: alloc with count zero returns nil" {
     var a: Allocator = page_allocator();
-    val r: Result[*i64, AllocError] = a.alloc[i64](0);
-    if (r.is_err()) { ret 0; }
-    val p: *i64 = r.unwrap_ok();
+    val r: Result[*i64, AllocError] = allocator_alloc[i64](a, 0);
+    if (result_is_err(r)) { ret 0; }
+    val p: *i64 = result_unwrap_ok(r);
     if (p != nil) { ret 0; }
     ret 1;
 }
 
 test "allocator: zalloc zero-initializes memory" {
     var a: Allocator = page_allocator();
-    val r: Result[*i64, AllocError] = a.zalloc[i64](4);
-    if (r.is_err()) { ret 0; }
-    val p: *i64 = r.unwrap_ok();
+    val r: Result[*i64, AllocError] = allocator_zalloc[i64](a, 4);
+    if (result_is_err(r)) { ret 0; }
+    val p: *i64 = result_unwrap_ok(r);
     if (p == nil) { ret 0; }
 
     # all values should be zero
@@ -289,87 +289,87 @@ test "allocator: zalloc zero-initializes memory" {
     if (p[2] != 0) { ret 0; }
     if (p[3] != 0) { ret 0; }
 
-    val ok: bool = a.free[i64](p, 4);
+    val ok: bool = allocator_free[i64](a, p, 4);
     if (!ok) { ret 0; }
     ret 1;
 }
 
 test "allocator: zalloc with count zero returns nil" {
     var a: Allocator = page_allocator();
-    val r: Result[*i64, AllocError] = a.zalloc[i64](0);
-    if (r.is_err()) { ret 0; }
-    val p: *i64 = r.unwrap_ok();
+    val r: Result[*i64, AllocError] = allocator_zalloc[i64](a, 0);
+    if (result_is_err(r)) { ret 0; }
+    val p: *i64 = result_unwrap_ok(r);
     if (p != nil) { ret 0; }
     ret 1;
 }
 
 test "allocator: free with nil pointer succeeds" {
     var a: Allocator = page_allocator();
-    val ok: bool = a.free[i64](nil, 10);
+    val ok: bool = allocator_free[i64](a, nil, 10);
     if (!ok) { ret 0; }
     ret 1;
 }
 
 test "allocator: free with count zero succeeds" {
     var a: Allocator = page_allocator();
-    val r: Result[*i64, AllocError] = a.alloc[i64](4);
-    if (r.is_err()) { ret 0; }
-    val p: *i64 = r.unwrap_ok();
+    val r: Result[*i64, AllocError] = allocator_alloc[i64](a, 4);
+    if (result_is_err(r)) { ret 0; }
+    val p: *i64 = result_unwrap_ok(r);
     # free with count 0 should succeed (noop)
-    val ok: bool = a.free[i64](p, 0);
+    val ok: bool = allocator_free[i64](a, p, 0);
     if (!ok) { ret 0; }
     # now actually free it
-    val ok2: bool = a.free[i64](p, 4);
+    val ok2: bool = allocator_free[i64](a, p, 4);
     if (!ok2) { ret 0; }
     ret 1;
 }
 
 test "allocator: resize grows allocation" {
     var a: Allocator = page_allocator();
-    val r1: Result[*i64, AllocError] = a.alloc[i64](2);
-    if (r1.is_err()) { ret 0; }
-    val p1: *i64 = r1.unwrap_ok();
+    val r1: Result[*i64, AllocError] = allocator_alloc[i64](a, 2);
+    if (result_is_err(r1)) { ret 0; }
+    val p1: *i64 = result_unwrap_ok(r1);
     p1[0] = 111;
     p1[1] = 222;
 
-    val r2: Result[*i64, AllocError] = a.resize[i64](p1, 2, 4);
-    if (r2.is_err()) { ret 0; }
-    val p2: *i64 = r2.unwrap_ok();
+    val r2: Result[*i64, AllocError] = allocator_resize[i64](a, p1, 2, 4);
+    if (result_is_err(r2)) { ret 0; }
+    val p2: *i64 = result_unwrap_ok(r2);
     if (p2 == nil) { ret 0; }
 
     # original data should be preserved
     if (p2[0] != 111) { ret 0; }
     if (p2[1] != 222) { ret 0; }
 
-    val ok: bool = a.free[i64](p2, 4);
+    val ok: bool = allocator_free[i64](a, p2, 4);
     if (!ok) { ret 0; }
     ret 1;
 }
 
 test "allocator: resize to zero frees and returns nil" {
     var a: Allocator = page_allocator();
-    val r1: Result[*i64, AllocError] = a.alloc[i64](4);
-    if (r1.is_err()) { ret 0; }
-    val p: *i64 = r1.unwrap_ok();
+    val r1: Result[*i64, AllocError] = allocator_alloc[i64](a, 4);
+    if (result_is_err(r1)) { ret 0; }
+    val p: *i64 = result_unwrap_ok(r1);
 
-    val r2: Result[*i64, AllocError] = a.resize[i64](p, 4, 0);
-    if (r2.is_err()) { ret 0; }
-    val p2: *i64 = r2.unwrap_ok();
+    val r2: Result[*i64, AllocError] = allocator_resize[i64](a, p, 4, 0);
+    if (result_is_err(r2)) { ret 0; }
+    val p2: *i64 = result_unwrap_ok(r2);
     if (p2 != nil) { ret 0; }
     ret 1;
 }
 
 test "allocator: resize from nil allocates new" {
     var a: Allocator = page_allocator();
-    val r: Result[*i64, AllocError] = a.resize[i64](nil, 0, 4);
-    if (r.is_err()) { ret 0; }
-    val p: *i64 = r.unwrap_ok();
+    val r: Result[*i64, AllocError] = allocator_resize[i64](a, nil, 0, 4);
+    if (result_is_err(r)) { ret 0; }
+    val p: *i64 = result_unwrap_ok(r);
     if (p == nil) { ret 0; }
 
     p[0] = 42;
     if (p[0] != 42) { ret 0; }
 
-    val ok: bool = a.free[i64](p, 4);
+    val ok: bool = allocator_free[i64](a, p, 4);
     if (!ok) { ret 0; }
     ret 1;
 }
