@@ -28,10 +28,7 @@ pub val WCONTINUED: i32 = 8;
 # code: exit code to return to the OS
 # ret: does not return
 pub fun terminate(code: i64) {
-    var unused: i64;
-    asm {
-        syscall unused, c.SYS_EXIT, code
-    }
+    syscall.syscall1(c.SYS_EXIT, code::usize);
     # safety net: halt if syscall somehow returns
     asm {
         x86_64 {
@@ -51,11 +48,7 @@ pub fun abort() {
 # ---
 # ret: in parent: child PID (>0), in child: 0, on error: negative errno
 pub fun fork() i64 {
-    var result: i64;
-    asm {
-        syscall result, SYS_FORK
-    }
-    ret result;
+    ret syscall.syscall0(SYS_FORK);
 }
 
 # vfork: create child process that shares memory with parent.
@@ -63,11 +56,7 @@ pub fun fork() i64 {
 # the parent is suspended until child calls execve or _exit.
 # ret: in parent: child PID (>0), in child: 0, on error: negative errno
 pub fun vfork() i64 {
-    var result: i64;
-    asm {
-        syscall result, SYS_VFORK
-    }
-    ret result;
+    ret syscall.syscall0(SYS_VFORK);
 }
 
 # execve: replace the current process image with a new program.
@@ -77,11 +66,7 @@ pub fun vfork() i64 {
 # envp: null-terminated array of environment strings
 # ret: does not return on success; on error: negative errno
 pub fun execve(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
-    var result: i64;
-    asm {
-        syscall result, SYS_EXECVE, pathname, argv, envp
-    }
-    ret result;
+    ret syscall.syscall3(SYS_EXECVE, pathname::usize, argv::usize, envp::usize);
 }
 
 # wait4: wait for a child process to change state.
@@ -92,11 +77,7 @@ pub fun execve(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
 # rusage: pointer to rusage struct (can be nil, not used here)
 # ret: PID of child that changed state, 0 if WNOHANG and no child ready, negative errno on error
 pub fun wait4(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
-    var result: i64;
-    asm {
-        syscall result, SYS_WAIT4, pid, wstatus, options, rusage
-    }
-    ret result;
+    ret syscall.syscall4(SYS_WAIT4, pid::usize, wstatus::usize, options::usize, rusage::usize);
 }
 
 # waitpid: wait for a specific child process.
