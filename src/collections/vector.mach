@@ -39,7 +39,7 @@ pub fun vector_dnit[T](this: *Vector[T]) bool {
         ret true;
     }
 
-    val ok_free: bool = allocator.allocator_free[T](this.alloc, this.data, this.cap);
+    val ok_free: bool = allocator.allocator_free[T](?this.alloc, this.data, this.cap);
     if (ok_free) {
         this.data = nil;
         this.len = 0;
@@ -110,7 +110,7 @@ pub fun vector_reserve[T](this: *Vector[T], additional: usize) Result[usize, str
         }
     }
 
-    val r: Result[*T, allocator.AllocError] = allocator.allocator_resize[T](this.alloc, this.data, this.cap, new_cap);
+    val r: Result[*T, allocator.AllocError] = allocator.allocator_resize[T](?this.alloc, this.data, this.cap, new_cap);
     if (result_is_err[*T, allocator.AllocError](r)) {
         ret err[usize, str](result_unwrap_err[*T, allocator.AllocError](r));
     }
