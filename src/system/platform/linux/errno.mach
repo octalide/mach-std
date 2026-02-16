@@ -31,6 +31,7 @@ pub fun message(code: i64) str {
     or (code == c.EINVAL) { ret "invalid argument"; }
     or (code == c.ENFILE) { ret "too many open files in system"; }
     or (code == c.EMFILE) { ret "too many open files"; }
+    or (code == c.ETXTBSY) { ret "text file busy"; }
     or (code == c.ENOSPC) { ret "no space left on device"; }
     or (code == c.EROFS) { ret "read-only file system"; }
     or (code == c.EPIPE) { ret "broken pipe"; }
