@@ -182,6 +182,27 @@ pub fun str_contains(this: str, sub: str) bool {
     ret result_is_ok[usize, str](index_res);
 }
 
+# Compare a region of a string against a null-terminated pattern
+# ---
+# start: byte offset into this string
+# len:   number of bytes to compare
+# other: null-terminated string to compare against
+# ret:   true if this[start..start+len] equals other exactly
+pub fun str_region_equals(this: str, start: usize, len: usize, other: str) bool {
+    if (this == nil || other == nil) { ret false; }
+
+    # check that other has exactly len bytes
+    val other_len: usize = str_len(other);
+    if (other_len != len) { ret false; }
+
+    var i: usize = 0;
+    for (i < len) {
+        if (this[start + i] != other[i]) { ret false; }
+        i = i + 1;
+    }
+    ret true;
+}
+
 # --- tests ---
 
 test "string: len of empty string" {
@@ -373,5 +394,35 @@ test "string: contains empty substring" {
     val s: str = "hello";
     # empty substring should not be found (per current implementation)
     if (str_contains(s, "")) { ret 0; }
+    ret 1;
+}
+
+test "string: region_equals matching start" {
+    if (!str_region_equals("hello world", 0, 5, "hello")) { ret 0; }
+    ret 1;
+}
+
+test "string: region_equals matching middle" {
+    if (!str_region_equals("hello world", 6, 5, "world")) { ret 0; }
+    ret 1;
+}
+
+test "string: region_equals single char" {
+    if (!str_region_equals("abcdef", 3, 1, "d")) { ret 0; }
+    ret 1;
+}
+
+test "string: region_equals full string" {
+    if (!str_region_equals("hello", 0, 5, "hello")) { ret 0; }
+    ret 1;
+}
+
+test "string: region_equals wrong length" {
+    if (str_region_equals("hello world", 0, 5, "hell")) { ret 0; }
+    ret 1;
+}
+
+test "string: region_equals mismatch" {
+    if (str_region_equals("hello world", 0, 5, "world")) { ret 0; }
     ret 1;
 }
