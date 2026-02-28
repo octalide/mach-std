@@ -122,8 +122,7 @@ fun map_find_slot[K, V](this: &Map[K, V], key: &K) rec { idx: usize; found: bool
         if (state == SLOT_EMPTY) {
             if (first_tombstone < this.cap) {
                 result.idx = first_tombstone;
-            }
-            if (first_tombstone >= this.cap) {
+            } or {
                 result.idx = idx;
             }
             ret result;
@@ -150,8 +149,7 @@ fun map_find_slot[K, V](this: &Map[K, V], key: &K) rec { idx: usize; found: bool
     # table is full (shouldn't happen with proper load factor)
     if (first_tombstone < this.cap) {
         result.idx = first_tombstone;
-    }
-    if (first_tombstone >= this.cap) {
+    } or {
         result.idx = 0;
     }
     ret result;
@@ -334,20 +332,7 @@ pub fun hash_str(p: ptr) u64 {
 pub fun eq_str(pa: ptr, pb: ptr) bool {
     val a: &str = pa::&str;
     val b: &str = pb::&str;
-    val sa: str = @a;
-    val sb: str = @b;
-
-    if (sa == nil && sb == nil) { ret true; }
-    if (sa == nil || sb == nil) { ret false; }
-
-    var i: usize = 0;
-    for (sa[i] != 0 && sb[i] != 0) {
-        if (sa[i] != sb[i]) {
-            ret false;
-        }
-        i = i + 1;
-    }
-    ret sa[i] == sb[i];
+    ret str_equals(@a, @b);
 }
 
 # hash_i64: simple hash for i64.
