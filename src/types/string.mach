@@ -24,7 +24,8 @@ pub fun str_len(this: str) usize {
 # ---
 # ret: true if the string has zero length, false otherwise
 pub fun str_empty(this: str) bool {
-    ret str_len(this) == 0;
+    if (this == nil) { ret true; }
+    ret this[0] == 0;
 }
 
 # Compare two null-terminated strings for equality
@@ -32,6 +33,9 @@ pub fun str_empty(this: str) bool {
 # other: The other string to compare against
 # ret:   true if the strings are equal, false otherwise
 pub fun str_equals(this: str, other: str) bool {
+    if (this == nil && other == nil) { ret true; }
+    if (this == nil || other == nil) { ret false; }
+    if (this == other) { ret true; }
     var i: usize = 0;
     for (this[i] != 0 && other[i] != 0) {
         if (this[i] != other[i]) {
