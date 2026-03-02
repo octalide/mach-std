@@ -111,7 +111,7 @@ pub fun wbuf_write[T](buf: *WriteBuf, value: T) Result[usize, str] {
 # p:   pointer to source bytes
 # len: number of bytes to write
 # ret: Ok(new length) or Err(error message)
-pub fun wbuf_write_bytes(buf: *WriteBuf, p: *u8, len: usize) Result[usize, str] {
+pub fun wbuf_write_bytes(buf: *WriteBuf, p: &u8, len: usize) Result[usize, str] {
     if (len == 0) { ret ok[usize, str](buf.len); }
 
     val r: Result[usize, str] = wbuf_reserve(buf, len);
