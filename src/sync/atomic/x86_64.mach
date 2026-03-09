@@ -1,0 +1,142 @@
+# x86_64 atomic operations via lock-prefixed instructions.
+#
+# all operations provide sequential consistency. arguments are saved
+# to globals before the asm block because cmach spills ABI registers
+# in the function prologue.
+#
+# results are written through a pointer using bare symbol references
+# (mov rcx, _result → MOVABS with address) to avoid cmach's broken
+# address-of-global codegen.
+
+use std.types.bool;
+
+var _arg0: i64 = 0;
+var _arg1: i64 = 0;
+var _arg2: i64 = 0;
+var _result: i64 = 0;
+
+# atomic 64-bit load. aligned mov is atomic on x86_64.
+# ---
+# ptr: address to load from
+# ret: loaded value
+pub fun load(ptr: *i64) i64 {
+    ret @ptr;
+}
+
+# atomic 64-bit store with sequential consistency.
+# ---
+# ptr: address to store to
+# v:   value to store
+pub fun store(ptr: *i64, v: i64) {
+    @ptr = v;
+    fence();
+}
+
+# atomic compare-and-swap.
+# if *ptr == *expected, stores desired and returns true.
+# otherwise, writes actual value to *expected and returns false.
+# ---
+# ptr:      address of the atomic variable
+# expected: pointer to expected value (updated on failure)
+# desired:  value to store on success
+# ret:      true if the swap succeeded
+pub fun cas(ptr: *i64, expected: *i64, desired: i64) bool {
+    _arg0 = ptr::i64;
+    _arg1 = expected::i64;
+    _arg2 = desired;
+    asm {
+        x86_64 {
+            mov rdi, [_arg0]
+            mov rsi, [_arg1]
+            mov rdx, [_arg2]
+            mov rax, [rsi]
+            lock cmpxchg [rdi], rdx
+            mov [rsi], rax
+            setz al
+            movzx eax, al
+            mov rcx, _result
+            mov [rcx], rax
+        }
+    }
+    ret _result != 0;
+}
+
+# atomic fetch-and-add. returns the old value.
+# ---
+# ptr: address of the atomic variable
+# v:   value to add
+# ret: previous value
+pub fun fetch_add(ptr: *i64, v: i64) i64 {
+    _arg0 = ptr::i64;
+    _arg1 = v;
+    asm {
+        x86_64 {
+            mov rdi, [_arg0]
+            mov rax, [_arg1]
+            lock xadd [rdi], rax
+            mov rcx, _result
+            mov [rcx], rax
+        }
+    }
+    ret _result;
+}
+
+# atomic fetch-and-subtract. returns the old value.
+# ---
+# ptr: address of the atomic variable
+# v:   value to subtract
+# ret: previous value
+pub fun fetch_sub(ptr: *i64, v: i64) i64 {
+    _arg0 = ptr::i64;
+    _arg1 = v;
+    asm {
+        x86_64 {
+            mov rdi, [_arg0]
+            mov rax, [_arg1]
+            neg rax
+            lock xadd [rdi], rax
+            mov rcx, _result
+            mov [rcx], rax
+        }
+    }
+    ret _result;
+}
+
+# atomic exchange. returns the old value.
+# xchg has an implicit lock prefix.
+# ---
+# ptr: address of the atomic variable
+# v:   new value
+# ret: previous value
+pub fun exchange(ptr: *i64, v: i64) i64 {
+    _arg0 = ptr::i64;
+    _arg1 = v;
+    asm {
+        x86_64 {
+            mov rdi, [_arg0]
+            mov rax, [_arg1]
+            xchg [rdi], rax
+            mov rcx, _result
+            mov [rcx], rax
+        }
+    }
+    ret _result;
+}
+
+# full memory barrier.
+pub fun fence() {
+    asm {
+        x86_64 {
+            mfence
+        }
+    }
+}
+
+# cpu yield hint for spin loops.
+pub fun spin_hint() {
+    asm {
+        x86_64 {
+            pause
+        }
+    }
+}
