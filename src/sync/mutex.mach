@@ -1,0 +1,116 @@
+# mutual exclusion lock.
+#
+# test-and-test-and-set spinlock using atomic operations. spins with a
+# CPU hint to reduce bus contention. fully target-agnostic — uses only
+# compiler builtin atomics.
+#
+# values: 0 = unlocked, 1 = locked
+
+use std.types.bool;
+use atomic: std.sync.atomic;
+
+pub def Mutex: i64;
+
+# create a new unlocked mutex.
+# ---
+# ret: an unlocked mutex
+pub fun make() Mutex {
+    ret 0;
+}
+
+# acquire the mutex, blocking until it is available.
+#
+# uses test-and-test-and-set: reads the state without a bus lock first,
+# then attempts CAS only when the lock appears free. emits a spin hint
+# between attempts to reduce contention on the cache line.
+# ---
+# m: pointer to the mutex
+pub fun lock(m: *Mutex) {
+    for (true) {
+        if (atomic.load(m) == 0) {
+            var expected: i64 = 0;
+            if (atomic.cas(m, ?expected, 1)) { ret; }
+        }
+        atomic.spin_hint();
+    }
+}
+
+# release the mutex.
+# ---
+# m: pointer to the mutex
+pub fun unlock(m: *Mutex) {
+    atomic.store(m, 0);
+}
+
+# try to acquire the mutex without blocking.
+# ---
+# m:   pointer to the mutex
+# ret: true if the lock was acquired, false if already held
+pub fun try_lock(m: *Mutex) bool {
+    var expected: i64 = 0;
+    ret atomic.cas(m, ?expected, 1);
+}
+
+# check whether the mutex is currently held.
+#
+# the result is immediately stale in a concurrent context; use only
+# for diagnostics or assertions, never for synchronization decisions.
+# ---
+# m:   pointer to the mutex
+# ret: true if the mutex is locked
+pub fun is_locked(m: *Mutex) bool {
+    ret atomic.load(m) != 0;
+}
+
+test "mutex: zero-initialized is unlocked" {
+    var m: Mutex = make();
+    if (m != 0) { ret 0; }
+    ret 1;
+}
+
+test "mutex: lock then unlock" {
+    var m: Mutex = make();
+    lock(?m);
+    if (m == 0) { ret 0; }
+    unlock(?m);
+    if (m != 0) { ret 0; }
+    ret 1;
+}
+
+test "mutex: try_lock on unlocked succeeds" {
+    var m: Mutex = make();
+    if (!try_lock(?m)) { ret 0; }
+    unlock(?m);
+    ret 1;
+}
+
+test "mutex: try_lock on locked fails" {
+    var m: Mutex = make();
+    lock(?m);
+    if (try_lock(?m)) {
+        unlock(?m);
+        ret 0;
+    }
+    unlock(?m);
+    ret 1;
+}
+
+test "mutex: is_locked reflects state" {
+    var m: Mutex = make();
+    if (is_locked(?m)) { ret 0; }
+    lock(?m);
+    if (!is_locked(?m)) { ret 0; }
+    unlock(?m);
+    if (is_locked(?m)) { ret 0; }
+    ret 1;
+}
+
+test "mutex: double lock-unlock cycle" {
+    var m: Mutex = make();
+    lock(?m);
+    unlock(?m);
+    lock(?m);
+    unlock(?m);
+    if (m != 0) { ret 0; }
+    ret 1;
+}

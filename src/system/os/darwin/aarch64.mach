@@ -1,0 +1,703 @@
+# std.system.os.darwin.aarch64: complete darwin aarch64 OS interface.
+#
+# raw syscall wrappers, kernel ABI types, and all OS primitives for
+# the darwin aarch64 target. uses the portable syscall DSL which the
+# compiler translates to svc #0x80 with carry-flag error handling.
+
+use std.types.size;
+use std.types.bool;
+use std.types.string;
+
+use c:      std.system.os.darwin.aarch64.constants;
+use shared: std.system.os.darwin.shared;
+
+$if ($mach.build.target.os.id != $mach.os.darwin.id) {
+    $error("std.system.os.darwin.aarch64: requires darwin target");
+}
+
+$if ($mach.build.target.arch.id != $mach.arch.aarch64.id) {
+    $error("std.system.os.darwin.aarch64: requires aarch64 target");
+}
+
+# kernel ABI types
+
+# stat_t: darwin stat64 structure for file metadata.
+pub rec stat_t {
+    st_dev:        i32;
+    st_mode:       u16;
+    st_nlink:      u16;
+    st_ino:        u64;
+    st_uid:        u32;
+    st_gid:        u32;
+    st_rdev:       i32;
+    st_atime:      i64;
+    st_atime_nsec: i64;
+    st_mtime:      i64;
+    st_mtime_nsec: i64;
+    st_ctime:      i64;
+    st_ctime_nsec: i64;
+    st_birthtime:      i64;
+    st_birthtime_nsec: i64;
+    st_size:       i64;
+    st_blocks:     i64;
+    st_blksize:    i32;
+    st_flags:      u32;
+    st_gen:        u32;
+    _reserved0:    i32;
+    _reserved1:    i64;
+    _reserved2:    i64;
+}
+
+# timeval: gettimeofday result.
+rec timeval {
+    tv_sec:  i64;
+    tv_usec: i32;
+    _pad:    i32;
+}
+
+# timespec: time specification with seconds and nanoseconds.
+pub rec timespec {
+    tv_sec:  i64;
+    tv_nsec: i64;
+}
+
+# dirent64: directory entry (darwin getdirentries64 layout).
+pub rec dirent64 {
+    d_ino:    u64;
+    d_seekoff: u64;
+    d_reclen: u16;
+    d_namlen: u16;
+    d_type:   u8;
+    d_name:   [1024]u8;
+}
+
+# path
+pub val separator: u8 = shared.separator;
+
+# portable constant re-exports
+pub val STDIN_FD:  i32 = c.STDIN_FILENO;
+pub val STDOUT_FD: i32 = c.STDOUT_FILENO;
+pub val STDERR_FD: i32 = c.STDERR_FILENO;
+
+pub val O_RDONLY:    i32 = c.O_RDONLY;
+pub val O_WRONLY:    i32 = c.O_WRONLY;
+pub val O_RDWR:      i32 = c.O_RDWR;
+pub val O_CREAT:     i32 = c.O_CREAT;
+pub val O_EXCL:      i32 = c.O_EXCL;
+pub val O_TRUNC:     i32 = c.O_TRUNC;
+pub val O_APPEND:    i32 = c.O_APPEND;
+pub val O_DIRECTORY: i32 = c.O_DIRECTORY;
+
+pub val AT_FDCWD:            i32 = c.AT_FDCWD;
+pub val AT_SYMLINK_NOFOLLOW: i32 = c.AT_SYMLINK_NOFOLLOW;
+pub val AT_REMOVEDIR:        i32 = c.AT_REMOVEDIR;
+
+pub val S_IFMT:  u32 = c.S_IFMT;
+pub val S_IFDIR: u32 = c.S_IFDIR;
+pub val S_IFREG: u32 = c.S_IFREG;
+pub val S_IFLNK: u32 = c.S_IFLNK;
+
+pub val WNOHANG:    i32 = c.WNOHANG;
+pub val WUNTRACED:  i32 = c.WUNTRACED;
+pub val WCONTINUED: i32 = c.WCONTINUED;
+
+pub val CLOCK_REALTIME:  i32 = c.CLOCK_REALTIME;
+pub val CLOCK_MONOTONIC: i32 = c.CLOCK_MONOTONIC;
+
+pub val EPERM:     i64 = c.EPERM;
+pub val ENOENT:    i64 = c.ENOENT;
+pub val ESRCH:     i64 = c.ESRCH;
+pub val EINTR:     i64 = c.EINTR;
+pub val EIO:       i64 = c.EIO;
+pub val ENXIO:     i64 = c.ENXIO;
+pub val E2BIG:     i64 = c.E2BIG;
+pub val EBADF:     i64 = c.EBADF;
+pub val ECHILD:    i64 = c.ECHILD;
+pub val EAGAIN:    i64 = c.EAGAIN;
+pub val ENOMEM:    i64 = c.ENOMEM;
+pub val EACCES:    i64 = c.EACCES;
+pub val EFAULT:    i64 = c.EFAULT;
+pub val EBUSY:     i64 = c.EBUSY;
+pub val EEXIST:    i64 = c.EEXIST;
+pub val ENODEV:    i64 = c.ENODEV;
+pub val ENOTDIR:   i64 = c.ENOTDIR;
+pub val EISDIR:    i64 = c.EISDIR;
+pub val EINVAL:    i64 = c.EINVAL;
+pub val ENFILE:    i64 = c.ENFILE;
+pub val EMFILE:    i64 = c.EMFILE;
+pub val ETXTBSY:   i64 = c.ETXTBSY;
+pub val ENOSPC:    i64 = c.ENOSPC;
+pub val EROFS:     i64 = c.EROFS;
+pub val EPIPE:     i64 = c.EPIPE;
+pub val ENOTEMPTY: i64 = c.ENOTEMPTY;
+pub val ENOTSUP:   i64 = c.ENOTSUP;
+
+pub val EINTR_MAX_RETRIES: usize = c.EINTR_MAX_RETRIES;
+
+# syscall wrappers (portable DSL — compiler emits svc #0x80 + carry-flag check)
+
+pub fun syscall0(n: usize) i64 {
+    var out: i64;
+    asm { syscall out, n }
+    ret out;
+}
+
+pub fun syscall1(n: usize, a0: usize) i64 {
+    var out: i64;
+    asm { syscall out, n, a0 }
+    ret out;
+}
+
+pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
+    var out: i64;
+    asm { syscall out, n, a0, a1 }
+    ret out;
+}
+
+pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
+    var out: i64;
+    asm { syscall out, n, a0, a1, a2 }
+    ret out;
+}
+
+pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
+    var out: i64;
+    asm { syscall out, n, a0, a1, a2, a3 }
+    ret out;
+}
+
+pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
+    var out: i64;
+    asm { syscall out, n, a0, a1, a2, a3, a4 }
+    ret out;
+}
+
+pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
+    var out: i64;
+    asm { syscall out, n, a0, a1, a2, a3, a4, a5 }
+    ret out;
+}
+
+# memory
+
+pub fun allocate(size: usize) ptr {
+    if (size == 0) {
+        ret nil;
+    }
+    val res: i64 = syscall6(
+        c.SYS_MMAP, 0, size,
+        (c.PROT_READ | c.PROT_WRITE)::u32::usize,
+        (c.MAP_PRIVATE | c.MAP_ANONYMOUS)::u32::usize,
+        (-1)::isize::usize, 0
+    );
+    if (res < 0) {
+        ret nil;
+    }
+    ret res::usize::ptr;
+}
+
+pub fun deallocate(p: ptr, size: usize) bool {
+    if (p == nil || size == 0) {
+        ret true;
+    }
+    ret syscall2(c.SYS_MUNMAP, p::usize, size) == 0;
+}
+
+# darwin has no mremap — allocate new, copy, free old.
+pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
+    if (p == nil) {
+        ret allocate(new_size);
+    }
+    if (new_size == 0) {
+        deallocate(p, old_size);
+        ret nil;
+    }
+    val new_p: ptr = allocate(new_size);
+    if (new_p == nil) {
+        ret nil;
+    }
+    var copy_size: usize = old_size;
+    if (new_size < copy_size) {
+        copy_size = new_size;
+    }
+    var i: usize = 0;
+    for (i < copy_size) {
+        @(new_p::usize + i)::*u8 = @(p::usize + i)::&u8;
+        i = i + 1;
+    }
+    deallocate(p, old_size);
+    ret new_p;
+}
+
+# darwin has no brk — simulate with mmap reserve + mprotect commit.
+var _brk_base: usize = 0;
+var _brk_end:  usize = 0;
+val _brk_reserve: usize = 268435456;
+
+pub fun heap_region_base() usize {
+    if (_brk_base != 0) {
+        ret _brk_end;
+    }
+    val res: i64 = syscall6(
+        c.SYS_MMAP, 0, _brk_reserve,
+        c.PROT_NONE::u32::usize,
+        (c.MAP_PRIVATE | c.MAP_ANONYMOUS)::u32::usize,
+        (-1)::isize::usize, 0
+    );
+    if (res < 0) {
+        ret 0;
+    }
+    _brk_base = res::usize;
+    _brk_end = _brk_base;
+    ret _brk_end;
+}
+
+pub fun heap_region_extend(addr: usize) usize {
+    if (_brk_base == 0) {
+        heap_region_base();
+        if (_brk_base == 0) {
+            ret 0;
+        }
+    }
+    if (addr <= _brk_end) {
+        ret _brk_end;
+    }
+    if (addr > _brk_base + _brk_reserve) {
+        ret _brk_end;
+    }
+    val size: usize = addr - _brk_end;
+    val res: i64 = syscall3(
+        c.SYS_MPROTECT, _brk_end,
+        size, (c.PROT_READ | c.PROT_WRITE)::u32::usize
+    );
+    if (res < 0) {
+        ret _brk_end;
+    }
+    _brk_end = addr;
+    ret _brk_end;
+}
+
+pub fun protect(p: ptr, size: usize, prot: u32) bool {
+    ret syscall3(c.SYS_MPROTECT, p::usize, size, prot::usize) == 0;
+}
+
+pub fun lock(p: ptr, size: usize) bool {
+    ret syscall2(c.SYS_MLOCK, p::usize, size) == 0;
+}
+
+pub fun unlock(p: ptr, size: usize) bool {
+    ret syscall2(c.SYS_MUNLOCK, p::usize, size) == 0;
+}
+
+pub fun advise(p: ptr, size: usize, advice: u32) bool {
+    ret syscall3(c.SYS_MADVISE, p::usize, size, advice::usize) == 0;
+}
+
+pub fun page_size() usize {
+    ret 16384;
+}
+
+pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
+    if (size == 0) {
+        ret nil;
+    }
+    val res: i64 = syscall6(
+        c.SYS_MMAP, 0, size,
+        prot::usize, c.MAP_SHARED::u32::usize,
+        fd::u32::usize, offset
+    );
+    if (res < 0) {
+        ret nil;
+    }
+    ret res::usize::ptr;
+}
+
+pub fun sync_file(p: ptr, size: usize) bool {
+    if (p == nil || size == 0) {
+        ret true;
+    }
+    ret syscall3(c.SYS_MSYNC, p::usize, size, c.MS_SYNC::u32::usize) == 0;
+}
+
+# environment (set by runtime at program start)
+pub var _envp: usize = 0;
+
+# filesystem
+
+pub fun read(fd: i32, buf: *u8, count: usize) i64 {
+    var retries: usize = 0;
+    for (retries < c.EINTR_MAX_RETRIES) {
+        val res: i64 = syscall3(c.SYS_READ, fd::isize::usize, buf::usize, count);
+        if (res != c.EINTR) { ret res; }
+        retries = retries + 1;
+    }
+    ret c.EINTR;
+}
+
+pub fun write(fd: i32, buf: &u8, count: usize) i64 {
+    var retries: usize = 0;
+    for (retries < c.EINTR_MAX_RETRIES) {
+        val res: i64 = syscall3(c.SYS_WRITE, fd::isize::usize, buf::usize, count);
+        if (res != c.EINTR) { ret res; }
+        retries = retries + 1;
+    }
+    ret c.EINTR;
+}
+
+pub fun open(dirfd: i32, path: &u8, flags: i32, mode: i32) i64 {
+    var retries: usize = 0;
+    for (retries < c.EINTR_MAX_RETRIES) {
+        val res: i64 = syscall4(c.SYS_OPENAT, dirfd::isize::usize, path::usize, flags::u32::usize, mode::u32::usize);
+        if (res != c.EINTR) { ret res; }
+        retries = retries + 1;
+    }
+    ret c.EINTR;
+}
+
+pub fun close(fd: i32) i64 {
+    ret syscall1(c.SYS_CLOSE, fd::isize::usize);
+}
+
+pub fun stat(fd: i32, st: *stat_t) i64 {
+    ret syscall2(c.SYS_FSTAT64, fd::isize::usize, st::usize);
+}
+
+pub fun stat_path(dirfd: i32, path: &u8, st: *stat_t, flags: i32) i64 {
+    ret syscall4(c.SYS_FSTATAT64, dirfd::isize::usize, path::usize, st::usize, flags::u32::usize);
+}
+
+pub fun unlink(dirfd: i32, path: &u8, flags: i32) i64 {
+    ret syscall3(c.SYS_UNLINKAT, dirfd::isize::usize, path::usize, flags::u32::usize);
+}
+
+pub fun rename(olddir: i32, oldpath: &u8, newdir: i32, newpath: &u8) i64 {
+    ret syscall4(c.SYS_RENAMEAT, olddir::isize::usize, oldpath::usize, newdir::isize::usize, newpath::usize);
+}
+
+pub fun make_dir(dirfd: i32, path: &u8, mode: i32) i64 {
+    ret syscall3(c.SYS_MKDIRAT, dirfd::isize::usize, path::usize, mode::u32::usize);
+}
+
+# darwin uses getdirentries64 instead of getdents64.
+pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
+    var basep: i64 = 0;
+    ret syscall4(c.SYS_GETDIRENTRIES64, fd::isize::usize, dirp::usize, count, ?basep::usize);
+}
+
+pub fun access(dirfd: i32, path: &u8, mode: i32, flags: i32) i64 {
+    ret syscall4(c.SYS_FACCESSAT, dirfd::isize::usize, path::usize, mode::u32::usize, flags::u32::usize);
+}
+
+pub fun seek(fd: i32, offset: i64, whence: i32) i64 {
+    ret syscall3(c.SYS_LSEEK, fd::isize::usize, offset::isize::usize, whence::u32::usize);
+}
+
+# process
+
+pub fun terminate(code: i64) {
+    syscall1(c.SYS_EXIT, code::usize);
+    asm {
+        aarch64 {
+            brk #1
+        }
+    }
+}
+
+pub fun abort() {
+    val pid: i64 = syscall0(c.SYS_GETPID);
+    syscall2(c.SYS_KILL, pid::usize, c.SIGABRT::usize);
+    terminate(255);
+}
+
+pub fun fork() i64 {
+    ret syscall0(c.SYS_FORK);
+}
+
+pub fun vfork() i64 {
+    ret syscall0(c.SYS_VFORK);
+}
+
+pub fun exec(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
+    ret syscall3(c.SYS_EXECVE, pathname::usize, argv::usize, envp::usize);
+}
+
+pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
+    var retries: usize = 0;
+    for (retries < c.EINTR_MAX_RETRIES) {
+        val res: i64 = syscall4(c.SYS_WAIT4, pid::usize, wstatus::usize, options::usize, rusage::usize);
+        if (res != c.EINTR) { ret res; }
+        retries = retries + 1;
+    }
+    ret c.EINTR;
+}
+
+pub fun wait_pid(pid: i64, wstatus: *i32, options: i32) i64 {
+    ret wait(pid, wstatus, options, nil);
+}
+
+# wait status macros are identical to linux (same POSIX encoding)
+pub fun has_exited(status: i32) bool {
+    ret (status & 0x7f) == 0;
+}
+
+pub fun exit_code(status: i32) i32 {
+    ret (status >> 8) & 0xff;
+}
+
+pub fun was_signaled(status: i32) bool {
+    val sig: i32 = status & 0x7f;
+    ret sig != 0 && sig != 0x7f;
+}
+
+pub fun term_signal(status: i32) i32 {
+    ret status & 0x7f;
+}
+
+pub fun was_stopped(status: i32) bool {
+    ret (status & 0xff) == 0x7f;
+}
+
+pub fun stop_signal(status: i32) i32 {
+    ret (status >> 8) & 0xff;
+}
+
+pub fun was_continued(status: i32) bool {
+    ret status == 0xffff;
+}
+
+# spawn: create a child process running the given program.
+# ---
+# pathname: path to executable
+# argv:     null-terminated argument array
+# envp:     null-terminated environment array
+# ret:      child PID on success, or negative errno
+pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
+    val pid: i64 = fork();
+    if (pid < 0) {
+        ret pid;
+    }
+    if (pid == 0) {
+        exec(pathname, argv, envp);
+        syscall1(c.SYS_EXIT, 127);
+    }
+    ret pid;
+}
+
+# getpid: return the current process ID.
+# ---
+# ret: process ID
+pub fun getpid() i64 {
+    ret syscall0(c.SYS_GETPID);
+}
+
+# pipe: create a unidirectional pipe.
+#
+# darwin pipe() syscall returns two fds in x0/x1. the syscall DSL only
+# captures x0, so this uses raw asm with a global to capture both.
+# ---
+# fds: pointer to two i32s; fds[0] = read end, fds[1] = write end
+# ret: 0 on success, or negative errno
+var _pipe_res: i64 = 0;
+pub fun pipe(fds: *i32) i64 {
+    asm {
+        aarch64 {
+            mov x9, x0
+            mov x16, 42
+            svc 0x80
+            b.cs 1f
+            str w0, [x9]
+            str w1, [x9, 4]
+            mov x0, 0
+            b 2f
+        1:
+            neg x0, x0
+        2:
+            adrp x1, _pipe_res
+            str x0, [x1, :lo12:_pipe_res]
+        }
+    }
+    ret _pipe_res;
+}
+
+# sleep: suspend execution for the given number of nanoseconds.
+#
+# darwin has no nanosleep syscall; uses select with a timeval timeout.
+# ---
+# nsec: nanoseconds to sleep
+pub fun sleep(nsec: i64) {
+    if (nsec <= 0) { ret; }
+    var tv: timeval;
+    tv.tv_sec = nsec / 1000000000;
+    tv.tv_usec = ((nsec % 1000000000) / 1000)::i32;
+    syscall5(c.SYS_SELECT, 0, 0, 0, 0, ?tv::usize);
+}
+
+# getcwd: get the current working directory.
+# ---
+# buf:  destination buffer
+# size: buffer capacity in bytes
+# ret:  length of path on success, or negative errno
+pub fun getcwd(buf: *u8, size: usize) i64 {
+    ret syscall2(c.SYS___GETCWD, buf::usize, size);
+}
+
+fun str_len(s: &u8) usize {
+    var i: usize = 0;
+    for (s[i] != 0) {
+        i = i + 1;
+    }
+    ret i;
+}
+
+fun str_eq_n(a: &u8, b: &u8, n: usize) bool {
+    var i: usize = 0;
+    for (i < n) {
+        if (a[i] != b[i]) { ret false; }
+        i = i + 1;
+    }
+    ret true;
+}
+
+# getenv: look up an environment variable by name.
+# ---
+# name: null-terminated variable name
+# buf:  destination buffer for the value
+# cap:  buffer capacity in bytes
+# ret:  length of value on success, or ENOENT if not found
+pub fun getenv(name: &u8, buf: *u8, cap: usize) i64 {
+    if (_envp == 0) { ret c.ENOENT; }
+    val envp: &&u8 = _envp::&&u8;
+    val name_len: usize = str_len(name);
+    var i: usize = 0;
+    for (envp[i]::usize != 0) {
+        val entry: &u8 = envp[i];
+        if (str_len(entry) > name_len && entry[name_len] == '='::u8 && str_eq_n(entry, name, name_len)) {
+            if (cap == 0) { ret 0; }
+            val val_start: usize = name_len + 1;
+            var j: usize = 0;
+            for (entry[val_start + j] != 0 && j < cap - 1) {
+                buf[j] = entry[val_start + j];
+                j = j + 1;
+            }
+            if (j < cap) {
+                buf[j] = 0;
+            }
+            ret j::i64;
+        }
+        i = i + 1;
+    }
+    ret c.ENOENT;
+}
+
+# threads
+
+var thread_registered: i64 = 0;
+
+# called by the kernel for each new thread created via bsdthread_create.
+fun thread_start(self: usize, kport: usize, func: usize, arg: usize, stacksize: usize, pflags: usize) {
+    val fn_ptr: fun() = func::fun();
+    fn_ptr();
+    val done: *i64 = arg::*i64;
+    @done = 1;
+    syscall3(c.SYS_ULOCK_WAKE, c.UL_COMPARE_AND_WAIT64, arg, 0);
+    syscall4(c.SYS_BSDTHREAD_TERMINATE, 0, 0, 0, 0);
+}
+
+# workqueue thread callback (unused, required by bsdthread_register).
+fun thread_wq_start(self: usize, kport: usize, saddr: usize, arg: usize, cnt: usize, flags: usize) {
+    syscall4(c.SYS_BSDTHREAD_TERMINATE, 0, 0, 0, 0);
+}
+
+fun ensure_thread_registered() {
+    if (thread_registered != 0) { ret; }
+    val start: fun(usize, usize, usize, usize, usize, usize) = thread_start;
+    val wq: fun(usize, usize, usize, usize, usize, usize) = thread_wq_start;
+    syscall6(c.SYS_BSDTHREAD_REGISTER, start::usize, wq::usize, 64, 0, 0, 0);
+    thread_registered = 1;
+}
+
+# thread_spawn: create a new thread via bsdthread_create.
+#
+# registers the thread start callback on first call, then creates a
+# thread that calls f. the kernel passes f and done_ptr through to
+# the registered callback, which calls f, sets *done_ptr to 1, wakes
+# waiters, and terminates the thread.
+# ---
+# f:          function to execute in the new thread
+# done_ptr:   pointer to a completion flag (set to 1 when thread exits)
+# stack_base: base address of the pre-allocated stack region
+# stack_size: size of the stack in bytes
+# ret:        thread ID on success, or negative errno on failure
+pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: usize) i64 {
+    ensure_thread_registered();
+    val stack_top: usize = stack_base + stack_size;
+    ret syscall5(c.SYS_BSDTHREAD_CREATE, f::usize, done_ptr::usize, stack_top, 0, 0);
+}
+
+# thread_wait: block until the value at addr changes from expected.
+#
+# wraps __ulock_wait with UL_COMPARE_AND_WAIT64. returns immediately
+# if *addr does not equal expected. spurious wakeups are possible.
+# ---
+# addr:     pointer to the futex word
+# expected: value to compare against
+# ret:      0 on wake, or negative errno
+pub fun thread_wait(addr: *i64, expected: i64) i64 {
+    ret syscall4(c.SYS_ULOCK_WAIT, c.UL_COMPARE_AND_WAIT64, addr::usize, expected::usize, 0);
+}
+
+# thread_wake: wake one thread blocked on a ulock wait at addr.
+# ---
+# addr: pointer to the futex word
+# ret:  number of threads woken, or negative errno
+pub fun thread_wake(addr: *i64) i64 {
+    ret syscall3(c.SYS_ULOCK_WAKE, c.UL_COMPARE_AND_WAIT64, addr::usize, 0);
+}
+
+# time (darwin uses gettimeofday; no direct clock_gettime syscall)
+# TODO: CLOCK_MONOTONIC not actually monotonic on darwin — uses gettimeofday.
+# needs mach_absolute_time() via commpage for true monotonic time.
+
+pub fun clock_gettime(clock_id: i32, ts: *timespec) i64 {
+    var tv: timeval;
+    val res: i64 = syscall2(c.SYS_GETTIMEOFDAY, ?tv::usize, 0);
+    if (res < 0) {
+        ret res;
+    }
+    ts.tv_sec = tv.tv_sec;
+    ts.tv_nsec = tv.tv_usec::i64 * 1000;
+    ret 0;
+}
+
+# errno
+
+pub fun error_message(code: i64) str {
+    if (code == c.EPERM) { ret "operation not permitted"; }
+    or (code == c.ENOENT) { ret "no such file or directory"; }
+    or (code == c.ESRCH) { ret "no such process"; }
+    or (code == c.EINTR) { ret "interrupted system call"; }
+    or (code == c.EIO) { ret "input/output error"; }
+    or (code == c.ENXIO) { ret "no such device or address"; }
+    or (code == c.E2BIG) { ret "argument list too long"; }
+    or (code == c.EBADF) { ret "bad file descriptor"; }
+    or (code == c.ECHILD) { ret "no child processes"; }
+    or (code == c.EAGAIN) { ret "resource temporarily unavailable"; }
+    or (code == c.ENOMEM) { ret "out of memory"; }
+    or (code == c.EACCES) { ret "permission denied"; }
+    or (code == c.EFAULT) { ret "bad address"; }
+    or (code == c.EBUSY) { ret "device or resource busy"; }
+    or (code == c.EEXIST) { ret "file exists"; }
+    or (code == c.ENODEV) { ret "no such device"; }
+    or (code == c.ENOTDIR) { ret "not a directory"; }
+    or (code == c.EISDIR) { ret "is a directory"; }
+    or (code == c.EINVAL) { ret "invalid argument"; }
+    or (code == c.ENFILE) { ret "too many open files in system"; }
+    or (code == c.EMFILE) { ret "too many open files"; }
+    or (code == c.ETXTBSY) { ret "text file busy"; }
+    or (code == c.ENOSPC) { ret "no space left on device"; }
+    or (code == c.EROFS) { ret "read-only file system"; }
+    or (code == c.EPIPE) { ret "broken pipe"; }
+    or (code == c.ENOTEMPTY) { ret "directory not empty"; }
+    or (code == c.ENOTSUP) { ret "operation not supported"; }
+    or { ret "unknown error"; }
+}

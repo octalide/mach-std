@@ -1,0 +1,122 @@
+# x86_64 atomic operations via lock-prefixed instructions.
+#
+# all operations provide sequential consistency.
+
+use std.types.bool;
+
+# atomic 64-bit load. aligned mov is atomic on x86_64.
+# ---
+# ptr: address to load from
+# ret: loaded value
+pub fun load(ptr: *i64) i64 {
+    ret @ptr;
+}
+
+# atomic 64-bit store with sequential consistency.
+# ---
+# ptr: address to store to
+# v:   value to store
+pub fun store(ptr: *i64, v: i64) {
+    @ptr = v;
+    fence();
+}
+
+# atomic compare-and-swap.
+# if *ptr == *expected, stores desired and returns true.
+# otherwise, writes actual value to *expected and returns false.
+# ---
+# ptr:      address of the atomic variable
+# expected: pointer to expected value (updated on failure)
+# desired:  value to store on success
+# ret:      true if the swap succeeded
+pub fun cas(ptr: *i64, expected: *i64, desired: i64) bool {
+    var ok: i64 = 0;
+    asm {
+        x86_64 {
+            mov rdi, [ptr]
+            mov rsi, [expected]
+            mov rdx, [desired]
+            mov rax, [rsi]
+            lock cmpxchg [rdi], rdx
+            mov [rsi], rax
+            setz al
+            movzx eax, al
+            mov [ok], rax
+        }
+    }
+    ret ok != 0;
+}
+
+# atomic fetch-and-add. returns the old value.
+# ---
+# ptr: address of the atomic variable
+# v:   value to add
+# ret: previous value
+pub fun fetch_add(ptr: *i64, v: i64) i64 {
+    var old: i64 = 0;
+    asm {
+        x86_64 {
+            mov rdi, [ptr]
+            mov rax, [v]
+            lock xadd [rdi], rax
+            mov [old], rax
+        }
+    }
+    ret old;
+}
+
+# atomic fetch-and-subtract. returns the old value.
+# ---
+# ptr: address of the atomic variable
+# v:   value to subtract
+# ret: previous value
+pub fun fetch_sub(ptr: *i64, v: i64) i64 {
+    var old: i64 = 0;
+    asm {
+        x86_64 {
+            mov rdi, [ptr]
+            mov rax, [v]
+            neg rax
+            lock xadd [rdi], rax
+            mov [old], rax
+        }
+    }
+    ret old;
+}
+
+# atomic exchange. returns the old value.
+# xchg has an implicit lock prefix.
+# ---
+# ptr: address of the atomic variable
+# v:   new value
+# ret: previous value
+pub fun exchange(ptr: *i64, v: i64) i64 {
+    var old: i64 = 0;
+    asm {
+        x86_64 {
+            mov rdi, [ptr]
+            mov rax, [v]
+            xchg [rdi], rax
+            mov [old], rax
+        }
+    }
+    ret old;
+}
+
+# full memory barrier.
+pub fun fence() {
+    asm {
+        x86_64 {
+            mfence
+        }
+    }
+}
+
+# cpu yield hint for spin loops.
+pub fun spin_hint() {
+    asm {
+        x86_64 {
+            pause
+        }
+    }
+}

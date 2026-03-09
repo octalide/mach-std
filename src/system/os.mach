@@ -1,0 +1,203 @@
+# std.system.os: cross-platform OS interface.
+#
+# forwards the portable intersection of all supported targets.
+# for platform-specific functionality, import the target module
+# directly (e.g. std.system.os.linux).
+
+use std.types.string;
+
+use shared: std.system.os.shared;
+
+$if ($mach.build.target.os.id == $mach.os.linux.id) {
+    use impl: std.system.os.linux;
+}
+$or ($mach.build.target.os.id == $mach.os.darwin.id) {
+    use impl: std.system.os.darwin;
+}
+$or ($mach.build.target.os.id == $mach.os.windows.id) {
+    use impl: std.system.os.windows;
+}
+$or {
+    $error("std.system.os: unsupported target");
+}
+
+# abstract types
+pub fwd Timespec: shared.Timespec;
+
+# kernel ABI types
+pub fwd impl.stat_t;
+pub fwd impl.dirent64;
+
+# path
+pub fwd impl.separator;
+
+# standard file descriptors
+pub fwd impl.STDIN_FD;
+pub fwd impl.STDOUT_FD;
+pub fwd impl.STDERR_FD;
+
+# file access modes
+pub fwd impl.O_RDONLY;
+pub fwd impl.O_WRONLY;
+pub fwd impl.O_RDWR;
+pub fwd impl.O_CREAT;
+pub fwd impl.O_EXCL;
+pub fwd impl.O_TRUNC;
+pub fwd impl.O_APPEND;
+pub fwd impl.O_DIRECTORY;
+
+# directory helpers
+pub fwd impl.AT_FDCWD;
+pub fwd impl.AT_SYMLINK_NOFOLLOW;
+pub fwd impl.AT_REMOVEDIR;
+
+# stat mode flags
+pub fwd impl.S_IFMT;
+pub fwd impl.S_IFDIR;
+pub fwd impl.S_IFREG;
+pub fwd impl.S_IFLNK;
+
+# seek whence
+pub fwd SEEK_SET: shared.SEEK_SET;
+pub fwd SEEK_CUR: shared.SEEK_CUR;
+pub fwd SEEK_END: shared.SEEK_END;
+
+# memory protection
+pub fwd PROT_NONE:  shared.PROT_NONE;
+pub fwd PROT_READ:  shared.PROT_READ;
+pub fwd PROT_WRITE: shared.PROT_WRITE;
+pub fwd PROT_EXEC:  shared.PROT_EXEC;
+
+# memory advisory hints
+pub fwd ADVISE_NORMAL:     shared.ADVISE_NORMAL;
+pub fwd ADVISE_RANDOM:     shared.ADVISE_RANDOM;
+pub fwd ADVISE_SEQUENTIAL: shared.ADVISE_SEQUENTIAL;
+pub fwd ADVISE_WILL_NEED:  shared.ADVISE_WILL_NEED;
+pub fwd ADVISE_DONT_NEED:  shared.ADVISE_DONT_NEED;
+
+# huge page sizes
+pub fwd HUGE_2MB: shared.HUGE_2MB;
+pub fwd HUGE_1GB: shared.HUGE_1GB;
+
+# wait options
+pub fwd impl.WNOHANG;
+pub fwd impl.WUNTRACED;
+pub fwd impl.WCONTINUED;
+
+# errno values
+pub fwd impl.EPERM;
+pub fwd impl.ENOENT;
+pub fwd impl.ESRCH;
+pub fwd impl.EINTR;
+pub fwd impl.EIO;
+pub fwd impl.ENXIO;
+pub fwd impl.E2BIG;
+pub fwd impl.EBADF;
+pub fwd impl.ECHILD;
+pub fwd impl.EAGAIN;
+pub fwd impl.ENOMEM;
+pub fwd impl.EACCES;
+pub fwd impl.EFAULT;
+pub fwd impl.EBUSY;
+pub fwd impl.EEXIST;
+pub fwd impl.ENODEV;
+pub fwd impl.ENOTDIR;
+pub fwd impl.EISDIR;
+pub fwd impl.EINVAL;
+pub fwd impl.ENFILE;
+pub fwd impl.EMFILE;
+pub fwd impl.ETXTBSY;
+pub fwd impl.ENOSPC;
+pub fwd impl.EROFS;
+pub fwd impl.EPIPE;
+pub fwd impl.ENOTEMPTY;
+pub fwd impl.ENOTSUP;
+
+# retry policy
+pub fwd impl.EINTR_MAX_RETRIES;
+
+# syscall wrappers
+pub fwd impl.syscall0;
+pub fwd impl.syscall1;
+pub fwd impl.syscall2;
+pub fwd impl.syscall3;
+pub fwd impl.syscall4;
+pub fwd impl.syscall5;
+pub fwd impl.syscall6;
+
+# memory
+pub fwd impl.allocate;
+pub fwd impl.deallocate;
+pub fwd impl.reallocate;
+pub fwd impl.heap_region_base;
+pub fwd impl.heap_region_extend;
+pub fwd impl.protect;
+pub fwd impl.lock;
+pub fwd impl.unlock;
+pub fwd impl.advise;
+pub fwd impl.page_size;
+pub fwd impl.map_file;
+pub fwd impl.sync_file;
+
+# filesystem
+pub fwd impl.read;
+pub fwd impl.write;
+pub fwd impl.open;
+pub fwd impl.close;
+pub fwd impl.stat;
+pub fwd impl.stat_path;
+pub fwd impl.unlink;
+pub fwd impl.rename;
+pub fwd impl.make_dir;
+pub fwd impl.read_dir;
+pub fwd impl.access;
+pub fwd impl.seek;
+
+# process
+pub fwd impl.terminate;
+pub fwd impl.abort;
+pub fwd impl.spawn;
+pub fwd impl.getpid;
+pub fwd impl.pipe;
+pub fwd impl.sleep;
+pub fwd impl.getcwd;
+pub fwd impl.getenv;
+pub fwd impl.wait;
+pub fwd impl.wait_pid;
+pub fwd impl.has_exited;
+pub fwd impl.exit_code;
+
+# threads
+pub fwd impl.thread_spawn;
+pub fwd impl.thread_wait;
+pub fwd impl.thread_wake;
+
+# time
+pub fwd CLOCK_REALTIME:  impl.CLOCK_REALTIME;
+pub fwd CLOCK_MONOTONIC: impl.CLOCK_MONOTONIC;
+
+pub fun realtime() Timespec {
+    var ts: impl.timespec;
+    val r: i64 = impl.clock_gettime(CLOCK_REALTIME, ?ts);
+    if (r < 0) {
+        ret Timespec{sec: 0, nsec: 0};
+    }
+    ret Timespec{sec: ts.tv_sec, nsec: ts.tv_nsec};
+}
+
+pub fun monotonic() Timespec {
+    var ts: impl.timespec;
+    val r: i64 = impl.clock_gettime(CLOCK_MONOTONIC, ?ts);
+    if (r < 0) {
+        ret Timespec{sec: 0, nsec: 0};
+    }
+    ret Timespec{sec: ts.tv_sec, nsec: ts.tv_nsec};
+}
+
+# error
+pub fun message(code: i64) str {
+    if (code >= 0) {
+        ret "not an error";
+    }
+    ret impl.error_message(code);
+}

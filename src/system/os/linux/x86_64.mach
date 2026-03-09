@@ -1,0 +1,1027 @@
+# std.system.os.linux.x86_64: complete linux x86_64 OS interface.
+#
+# raw syscall wrappers, kernel ABI types, and all OS primitives for
+# the linux x86_64 target. this is the layer 1 entry point — higher
+# layers (os.linux, os) forward a subset of this surface.
+
+use std.types.size;
+use std.types.bool;
+use std.types.string;
+
+use c:      std.system.os.linux.x86_64.constants;
+use shared: std.system.os.linux.shared;
+
+$if ($mach.build.target.os.id != $mach.os.linux.id) {
+    $error("std.system.os.linux.x86_64: requires linux target");
+}
+
+$if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
+    $error("std.system.os.linux.x86_64: requires x86_64 target");
+}
+
+# kernel ABI types
+
+# stat_t: linux stat structure for file metadata.
+pub rec stat_t {
+    st_dev:        u64;
+    st_ino:        u64;
+    st_nlink:      u64;
+    st_mode:       u32;
+    st_uid:        u32;
+    st_gid:        u32;
+    pad0:          i32;
+    st_rdev:       u64;
+    st_size:       i64;
+    st_blksize:    i64;
+    st_blocks:     i64;
+    st_atime:      i64;
+    st_atime_nsec: i64;
+    st_mtime:      i64;
+    st_mtime_nsec: i64;
+    st_ctime:      i64;
+    st_ctime_nsec: i64;
+    _reserved0:    i64;
+    _reserved1:    i64;
+    _reserved2:    i64;
+}
+
+# timespec: time specification with seconds and nanoseconds.
+pub rec timespec {
+    tv_sec:  i64;
+    tv_nsec: i64;
+}
+
+# dirent64: directory entry from getdents64.
+pub rec dirent64 {
+    d_ino:    u64;
+    d_off:    i64;
+    d_reclen: u16;
+    d_type:   u8;
+    d_name:   [256]u8;
+}
+
+# path
+pub val separator: u8 = shared.separator;
+
+# portable constant re-exports
+pub val STDIN_FD:  i32 = c.STDIN_FILENO;
+pub val STDOUT_FD: i32 = c.STDOUT_FILENO;
+pub val STDERR_FD: i32 = c.STDERR_FILENO;
+
+pub val O_RDONLY:    i32 = c.O_RDONLY;
+pub val O_WRONLY:    i32 = c.O_WRONLY;
+pub val O_RDWR:      i32 = c.O_RDWR;
+pub val O_CREAT:     i32 = c.O_CREAT;
+pub val O_EXCL:      i32 = c.O_EXCL;
+pub val O_TRUNC:     i32 = c.O_TRUNC;
+pub val O_APPEND:    i32 = c.O_APPEND;
+pub val O_DIRECTORY: i32 = c.O_DIRECTORY;
+
+pub val AT_FDCWD:            i32 = c.AT_FDCWD;
+pub val AT_SYMLINK_NOFOLLOW: i32 = c.AT_SYMLINK_NOFOLLOW;
+pub val AT_REMOVEDIR:        i32 = c.AT_REMOVEDIR;
+
+pub val S_IFMT:  u32 = c.S_IFMT;
+pub val S_IFDIR: u32 = c.S_IFDIR;
+pub val S_IFREG: u32 = c.S_IFREG;
+pub val S_IFLNK: u32 = c.S_IFLNK;
+
+pub val WNOHANG:    i32 = c.WNOHANG;
+pub val WUNTRACED:  i32 = c.WUNTRACED;
+pub val WCONTINUED: i32 = c.WCONTINUED;
+
+pub val CLOCK_REALTIME:  i32 = c.CLOCK_REALTIME;
+pub val CLOCK_MONOTONIC: i32 = c.CLOCK_MONOTONIC;
+
+pub val EPERM:     i64 = c.EPERM;
+pub val ENOENT:    i64 = c.ENOENT;
+pub val ESRCH:     i64 = c.ESRCH;
+pub val EINTR:     i64 = c.EINTR;
+pub val EIO:       i64 = c.EIO;
+pub val ENXIO:     i64 = c.ENXIO;
+pub val E2BIG:     i64 = c.E2BIG;
+pub val EBADF:     i64 = c.EBADF;
+pub val ECHILD:    i64 = c.ECHILD;
+pub val EAGAIN:    i64 = c.EAGAIN;
+pub val ENOMEM:    i64 = c.ENOMEM;
+pub val EACCES:    i64 = c.EACCES;
+pub val EFAULT:    i64 = c.EFAULT;
+pub val EBUSY:     i64 = c.EBUSY;
+pub val EEXIST:    i64 = c.EEXIST;
+pub val ENODEV:    i64 = c.ENODEV;
+pub val ENOTDIR:   i64 = c.ENOTDIR;
+pub val EISDIR:    i64 = c.EISDIR;
+pub val EINVAL:    i64 = c.EINVAL;
+pub val ENFILE:    i64 = c.ENFILE;
+pub val EMFILE:    i64 = c.EMFILE;
+pub val ETXTBSY:   i64 = c.ETXTBSY;
+pub val ENOSPC:    i64 = c.ENOSPC;
+pub val EROFS:     i64 = c.EROFS;
+pub val EPIPE:     i64 = c.EPIPE;
+pub val ENOTEMPTY: i64 = c.ENOTEMPTY;
+pub val ENOTSUP:   i64 = c.ENOTSUP;
+
+pub val EINTR_MAX_RETRIES: usize = c.EINTR_MAX_RETRIES;
+
+val HUGE_2MB: usize = 2097152;
+
+# syscall wrappers
+
+# syscall0: execute a syscall with no arguments.
+# ---
+# n:   syscall number
+# ret: syscall result (negative on error)
+pub fun syscall0(n: usize) i64 {
+    var out: i64;
+    asm {
+        syscall out, n
+    }
+    ret out;
+}
+
+# syscall1: execute a syscall with 1 argument.
+# ---
+# n:   syscall number
+# a0:  first argument
+# ret: syscall result (negative on error)
+pub fun syscall1(n: usize, a0: usize) i64 {
+    var out: i64;
+    asm {
+        syscall out, n, a0
+    }
+    ret out;
+}
+
+# syscall2: execute a syscall with 2 arguments.
+# ---
+# n:   syscall number
+# a0:  first argument
+# a1:  second argument
+# ret: syscall result (negative on error)
+pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
+    var out: i64;
+    asm {
+        syscall out, n, a0, a1
+    }
+    ret out;
+}
+
+# syscall3: execute a syscall with 3 arguments.
+# ---
+# n:   syscall number
+# a0:  first argument
+# a1:  second argument
+# a2:  third argument
+# ret: syscall result (negative on error)
+pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
+    var out: i64;
+    asm {
+        syscall out, n, a0, a1, a2
+    }
+    ret out;
+}
+
+# syscall4: execute a syscall with 4 arguments.
+# ---
+# n:   syscall number
+# a0:  first argument
+# a1:  second argument
+# a2:  third argument
+# a3:  fourth argument
+# ret: syscall result (negative on error)
+pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
+    var out: i64;
+    asm {
+        syscall out, n, a0, a1, a2, a3
+    }
+    ret out;
+}
+
+# syscall5: execute a syscall with 5 arguments.
+# ---
+# n:   syscall number
+# a0:  first argument
+# a1:  second argument
+# a2:  third argument
+# a3:  fourth argument
+# a4:  fifth argument
+# ret: syscall result (negative on error)
+pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
+    var out: i64;
+    asm {
+        syscall out, n, a0, a1, a2, a3, a4
+    }
+    ret out;
+}
+
+# syscall6: execute a syscall with 6 arguments.
+# ---
+# n:   syscall number
+# a0:  first argument
+# a1:  second argument
+# a2:  third argument
+# a3:  fourth argument
+# a4:  fifth argument
+# a5:  sixth argument
+# ret: syscall result (negative on error)
+pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
+    var out: i64;
+    asm {
+        syscall out, n, a0, a1, a2, a3, a4, a5
+    }
+    ret out;
+}
+
+# memory
+
+# allocate: allocate anonymous read-write memory via mmap.
+# ---
+# size: number of bytes to allocate; if 0, returns nil
+# ret:  pointer to allocated memory, or nil on failure
+pub fun allocate(size: usize) ptr {
+    if (size == 0) {
+        ret nil;
+    }
+    val res: i64 = syscall6(
+        c.SYS_MMAP, 0, size,
+        (c.PROT_READ | c.PROT_WRITE)::u32::usize,
+        (c.MAP_PRIVATE | c.MAP_ANONYMOUS)::u32::usize,
+        (-1)::isize::usize, 0
+    );
+    if (res < 0) {
+        ret nil;
+    }
+    ret res::usize::ptr;
+}
+
+# deallocate: free memory via munmap.
+# ---
+# p:    pointer to memory; if nil, returns true
+# size: allocation size in bytes; if 0, returns true
+# ret:  true on success
+pub fun deallocate(p: ptr, size: usize) bool {
+    if (p == nil || size == 0) {
+        ret true;
+    }
+    ret syscall2(c.SYS_MUNMAP, p::usize, size) == 0;
+}
+
+# reallocate: resize a memory region via mremap.
+# ---
+# p:        pointer to memory; if nil, behaves like allocate
+# old_size: current allocation size in bytes
+# new_size: desired size; if 0, deallocates and returns nil
+# ret:      pointer to reallocated memory, or nil on failure
+pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
+    if (p == nil) {
+        ret allocate(new_size);
+    }
+    if (new_size == 0) {
+        deallocate(p, old_size);
+        ret nil;
+    }
+    val res: i64 = syscall4(c.SYS_MREMAP, p::usize, old_size, new_size, c.MREMAP_MAYMOVE);
+    if (res < 0) {
+        ret nil;
+    }
+    ret res::usize::ptr;
+}
+
+# heap_region_base: query the current program break via brk(0).
+# ---
+# ret: current break address
+pub fun heap_region_base() usize {
+    ret syscall1(c.SYS_BRK, 0)::usize;
+}
+
+# heap_region_extend: set the program break to addr via brk.
+# ---
+# addr: desired new break address
+# ret:  actual break address after the call
+pub fun heap_region_extend(addr: usize) usize {
+    ret syscall1(c.SYS_BRK, addr)::usize;
+}
+
+# protect: change protection on a memory region via mprotect.
+# ---
+# p:    page-aligned pointer to the region
+# size: size of the region in bytes
+# prot: protection flags (PROT_READ, PROT_WRITE, PROT_EXEC, PROT_NONE)
+# ret:  true on success
+pub fun protect(p: ptr, size: usize, prot: u32) bool {
+    ret syscall3(c.SYS_MPROTECT, p::usize, size, prot::usize) == 0;
+}
+
+# lock: lock a memory region into physical RAM via mlock.
+# ---
+# p:    pointer to the region
+# size: size of the region in bytes
+# ret:  true on success
+pub fun lock(p: ptr, size: usize) bool {
+    ret syscall2(c.SYS_MLOCK, p::usize, size) == 0;
+}
+
+# unlock: unlock a previously locked memory region via munlock.
+# ---
+# p:    pointer to the region
+# size: size of the region in bytes
+# ret:  true on success
+pub fun unlock(p: ptr, size: usize) bool {
+    ret syscall2(c.SYS_MUNLOCK, p::usize, size) == 0;
+}
+
+# advise: advise the kernel on expected access patterns via madvise.
+# ---
+# p:      pointer to the region
+# size:   size of the region in bytes
+# advice: advisory hint (MADV_NORMAL, MADV_RANDOM, etc.)
+# ret:    true on success
+pub fun advise(p: ptr, size: usize, advice: u32) bool {
+    ret syscall3(c.SYS_MADVISE, p::usize, size, advice::usize) == 0;
+}
+
+# page_size: return the system page size (4096 on x86_64 linux).
+# ---
+# ret: page size in bytes
+pub fun page_size() usize {
+    ret 4096;
+}
+
+fun log2_usize(v: usize) usize {
+    var n: usize = 0;
+    var x: usize = v >> 1;
+    for (x > 0) {
+        n = n + 1;
+        x = x >> 1;
+    }
+    ret n;
+}
+
+# allocate_huge: allocate memory backed by huge pages via mmap.
+# ---
+# size:      number of bytes; if 0, returns nil
+# page_size: huge page size in bytes (must be power of two)
+# ret:       pointer to allocated memory, or nil on failure
+pub fun allocate_huge(size: usize, page_size: usize) ptr {
+    if (size == 0) {
+        ret nil;
+    }
+    val order: i32 = log2_usize(page_size)::i32;
+    val flags: i32 = c.MAP_PRIVATE | c.MAP_ANONYMOUS | c.MAP_HUGETLB | (order << c.MAP_HUGE_SHIFT);
+    val res: i64 = syscall6(
+        c.SYS_MMAP, 0, size,
+        (c.PROT_READ | c.PROT_WRITE)::u32::usize,
+        flags::u32::usize,
+        (-1)::isize::usize, 0
+    );
+    if (res < 0) {
+        ret nil;
+    }
+    ret res::usize::ptr;
+}
+
+# numa_node_count: return the number of NUMA nodes via get_mempolicy.
+# ---
+# ret: number of NUMA nodes (at least 1)
+pub fun numa_node_count() usize {
+    var mask: usize = 0;
+    val res: i64 = syscall5(c.SYS_GET_MEMPOLICY, 0, (?mask)::usize, 64, 0, c.MPOL_F_MEMS_ALLOWED);
+    if (res < 0) {
+        ret 1;
+    }
+    var count: usize = 0;
+    var bits:  usize = mask;
+    for (bits != 0) {
+        count = count + (bits & 1);
+        bits = bits >> 1;
+    }
+    ret count;
+}
+
+# numa_current_node: return the NUMA node of the current CPU via getcpu.
+# ---
+# ret: NUMA node id (0 on failure)
+pub fun numa_current_node() usize {
+    var node: u32 = 0;
+    val res: i64 = syscall3(c.SYS_GETCPU, 0, (?node)::usize, 0);
+    if (res < 0) {
+        ret 0;
+    }
+    ret node::usize;
+}
+
+# numa_allocate: allocate memory pinned to a specific NUMA node.
+# ---
+# size: number of bytes; if 0, returns nil
+# node: target NUMA node id
+# ret:  pointer to allocated memory, or nil on failure
+pub fun numa_allocate(size: usize, node: usize) ptr {
+    if (size == 0) {
+        ret nil;
+    }
+    val p: ptr = allocate(size);
+    if (p == nil) {
+        ret nil;
+    }
+    var mask: usize = 1 << node;
+    val res: i64 = syscall6(c.SYS_MBIND, p::usize, size, c.MPOL_BIND, (?mask)::usize, 64, 0);
+    if (res < 0) {
+        deallocate(p, size);
+        ret nil;
+    }
+    ret p;
+}
+
+# numa_move: move a memory region to a different NUMA node via mbind.
+# ---
+# p:    pointer to the region
+# size: size of the region in bytes
+# node: target NUMA node id
+# ret:  true on success
+pub fun numa_move(p: ptr, size: usize, node: usize) bool {
+    if (p == nil || size == 0) {
+        ret true;
+    }
+    var mask: usize = 1 << node;
+    ret syscall6(c.SYS_MBIND, p::usize, size, c.MPOL_BIND, (?mask)::usize, 64, c.MPOL_MF_MOVE) == 0;
+}
+
+# map_file: map a file descriptor into memory via mmap.
+# ---
+# fd:     file descriptor to map
+# offset: offset into the file (must be page-aligned)
+# size:   number of bytes to map; if 0, returns nil
+# prot:   protection flags
+# ret:    pointer to mapped region, or nil on failure
+pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
+    if (size == 0) {
+        ret nil;
+    }
+    val res: i64 = syscall6(
+        c.SYS_MMAP, 0, size,
+        prot::usize, c.MAP_SHARED::u32::usize,
+        fd::u32::usize, offset
+    );
+    if (res < 0) {
+        ret nil;
+    }
+    ret res::usize::ptr;
+}
+
+# sync_file: flush a memory-mapped region to its backing file via msync.
+# ---
+# p:    pointer to the mapped region
+# size: size of the region in bytes
+# ret:  true on success
+pub fun sync_file(p: ptr, size: usize) bool {
+    if (p == nil || size == 0) {
+        ret true;
+    }
+    ret syscall3(c.SYS_MSYNC, p::usize, size, c.MS_SYNC::u32::usize) == 0;
+}
+
+# feature detection
+
+# has_numa: check if the kernel supports NUMA memory policy.
+# ---
+# ret: true if get_mempolicy syscall is available
+pub fun has_numa() bool {
+    var mask: usize = 0;
+    val res: i64 = syscall5(c.SYS_GET_MEMPOLICY, 0, (?mask)::usize, 64, 0, c.MPOL_F_MEMS_ALLOWED);
+    ret res != c.ENOSYS;
+}
+
+# has_huge_pages: check if the kernel supports huge page allocation.
+# ---
+# ret: true if MAP_HUGETLB mmap succeeds
+pub fun has_huge_pages() bool {
+    val res: i64 = syscall6(
+        c.SYS_MMAP, 0, HUGE_2MB,
+        (c.PROT_READ | c.PROT_WRITE)::u32::usize,
+        (c.MAP_PRIVATE | c.MAP_ANONYMOUS | c.MAP_HUGETLB)::u32::usize,
+        (-1)::isize::usize, 0
+    );
+    if (res < 0) {
+        ret false;
+    }
+    syscall2(c.SYS_MUNMAP, res::usize, HUGE_2MB);
+    ret true;
+}
+
+# filesystem
+
+# read: read bytes from a file descriptor.
+#
+# retries automatically on EINTR.
+# ---
+# fd:    file descriptor
+# buf:   destination buffer
+# count: maximum bytes to read
+# ret:   bytes read, or negative errno
+pub fun read(fd: i32, buf: *u8, count: usize) i64 {
+    var retries: usize = 0;
+    for (retries < c.EINTR_MAX_RETRIES) {
+        val res: i64 = syscall3(c.SYS_READ, fd::isize::usize, buf::usize, count);
+        if (res != c.EINTR) { ret res; }
+        retries = retries + 1;
+    }
+    ret c.EINTR;
+}
+
+# write: write bytes to a file descriptor.
+#
+# retries automatically on EINTR.
+# ---
+# fd:    file descriptor
+# buf:   source buffer
+# count: bytes to write
+# ret:   bytes written, or negative errno
+pub fun write(fd: i32, buf: &u8, count: usize) i64 {
+    var retries: usize = 0;
+    for (retries < c.EINTR_MAX_RETRIES) {
+        val res: i64 = syscall3(c.SYS_WRITE, fd::isize::usize, buf::usize, count);
+        if (res != c.EINTR) { ret res; }
+        retries = retries + 1;
+    }
+    ret c.EINTR;
+}
+
+# openat: open a file relative to a directory file descriptor.
+#
+# retries automatically on EINTR.
+# ---
+# dirfd: directory fd (or AT_FDCWD)
+# path:  null-terminated path
+# flags: open flags
+# mode:  permission bits for creation
+# ret:   new fd, or negative errno
+pub fun open(dirfd: i32, path: &u8, flags: i32, mode: i32) i64 {
+    var retries: usize = 0;
+    for (retries < c.EINTR_MAX_RETRIES) {
+        val res: i64 = syscall4(c.SYS_OPENAT, dirfd::isize::usize, path::usize, flags::u32::usize, mode::u32::usize);
+        if (res != c.EINTR) { ret res; }
+        retries = retries + 1;
+    }
+    ret c.EINTR;
+}
+
+# close: close a file descriptor.
+# ---
+# fd:  file descriptor
+# ret: 0 on success, or negative errno
+pub fun close(fd: i32) i64 {
+    ret syscall1(c.SYS_CLOSE, fd::isize::usize);
+}
+
+# fstat: get file status by file descriptor.
+# ---
+# fd:  file descriptor
+# st:  pointer to stat_t to fill
+# ret: 0 on success, or negative errno
+pub fun stat(fd: i32, st: *stat_t) i64 {
+    ret syscall2(c.SYS_FSTAT, fd::isize::usize, st::usize);
+}
+
+# newfstatat: get file status relative to a directory fd.
+# ---
+# dirfd: directory fd (or AT_FDCWD)
+# path:  null-terminated path
+# st:    pointer to stat_t to fill
+# flags: AT_* flags
+# ret:   0 on success, or negative errno
+pub fun stat_path(dirfd: i32, path: &u8, st: *stat_t, flags: i32) i64 {
+    ret syscall4(c.SYS_NEWFSTATAT, dirfd::isize::usize, path::usize, st::usize, flags::u32::usize);
+}
+
+# unlinkat: remove a file or directory relative to a directory fd.
+# ---
+# dirfd: directory fd (or AT_FDCWD)
+# path:  null-terminated path
+# flags: AT_REMOVEDIR to remove a directory
+# ret:   0 on success, or negative errno
+pub fun unlink(dirfd: i32, path: &u8, flags: i32) i64 {
+    ret syscall3(c.SYS_UNLINKAT, dirfd::isize::usize, path::usize, flags::u32::usize);
+}
+
+# renameat: rename a file relative to directory fds.
+# ---
+# olddir:  source directory fd
+# oldpath: source path
+# newdir:  destination directory fd
+# newpath: destination path
+# ret:     0 on success, or negative errno
+pub fun rename(olddir: i32, oldpath: &u8, newdir: i32, newpath: &u8) i64 {
+    ret syscall4(c.SYS_RENAMEAT, olddir::isize::usize, oldpath::usize, newdir::isize::usize, newpath::usize);
+}
+
+# mkdirat: create a directory relative to a directory fd.
+# ---
+# dirfd: directory fd (or AT_FDCWD)
+# path:  null-terminated path
+# mode:  permission bits
+# ret:   0 on success, or negative errno
+pub fun make_dir(dirfd: i32, path: &u8, mode: i32) i64 {
+    ret syscall3(c.SYS_MKDIRAT, dirfd::isize::usize, path::usize, mode::u32::usize);
+}
+
+# getdents64: read directory entries.
+# ---
+# fd:    directory fd
+# dirp:  pointer to dirent64 buffer
+# count: buffer size in bytes
+# ret:   bytes read, 0 at end, or negative errno
+pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
+    ret syscall3(c.SYS_GETDENTS64, fd::isize::usize, dirp::usize, count);
+}
+
+# faccessat: check file accessibility relative to a directory fd.
+# ---
+# dirfd: directory fd (or AT_FDCWD)
+# path:  null-terminated path
+# mode:  access mode flags
+# flags: AT_* flags
+# ret:   0 if accessible, or negative errno
+pub fun access(dirfd: i32, path: &u8, mode: i32, flags: i32) i64 {
+    ret syscall4(c.SYS_FACCESSAT, dirfd::isize::usize, path::usize, mode::u32::usize, flags::u32::usize);
+}
+
+# lseek: reposition read/write offset of a file descriptor.
+# ---
+# fd:     file descriptor
+# offset: byte offset
+# whence: SEEK_SET, SEEK_CUR, or SEEK_END
+# ret:    resulting offset, or negative errno
+pub fun seek(fd: i32, offset: i64, whence: i32) i64 {
+    ret syscall3(c.SYS_LSEEK, fd::isize::usize, offset::isize::usize, whence::u32::usize);
+}
+
+# environment (set by runtime at program start)
+pub var _envp: usize = 0;
+
+# process
+
+# terminate: exit the process with the given code.
+# ---
+# code: exit code
+pub fun terminate(code: i64) {
+    syscall1(c.SYS_EXIT, code::usize);
+    asm {
+        x86_64 {
+            hlt
+        }
+    }
+}
+
+# abort: abort the process immediately with exit code 255.
+pub fun abort() {
+    terminate(255);
+}
+
+# fork: create a new child process.
+# ---
+# ret: in parent: child PID (>0), in child: 0, on error: negative errno
+pub fun fork() i64 {
+    ret syscall0(c.SYS_FORK);
+}
+
+# vfork: create child process sharing memory with parent.
+# ---
+# ret: in parent: child PID (>0), in child: 0, on error: negative errno
+pub fun vfork() i64 {
+    ret syscall0(c.SYS_VFORK);
+}
+
+# execve: replace the current process image with a new program.
+# ---
+# pathname: path to executable
+# argv:     null-terminated argument array
+# envp:     null-terminated environment array
+# ret:      does not return on success; negative errno on error
+pub fun exec(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
+    ret syscall3(c.SYS_EXECVE, pathname::usize, argv::usize, envp::usize);
+}
+
+# wait4: wait for a child process to change state.
+#
+# retries automatically on EINTR.
+# ---
+# pid:     process ID (-1 = any child)
+# wstatus: pointer to status (can be nil)
+# options: wait options (WNOHANG, WUNTRACED, etc.)
+# rusage:  pointer to rusage (can be nil)
+# ret:     child PID, 0 if WNOHANG, or negative errno
+pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
+    var retries: usize = 0;
+    for (retries < c.EINTR_MAX_RETRIES) {
+        val res: i64 = syscall4(c.SYS_WAIT4, pid::usize, wstatus::usize, options::usize, rusage::usize);
+        if (res != c.EINTR) { ret res; }
+        retries = retries + 1;
+    }
+    ret c.EINTR;
+}
+
+# waitpid: wait for a specific child process.
+# ---
+# pid:     process ID (-1 = any child)
+# wstatus: pointer to status (can be nil)
+# options: wait options
+# ret:     child PID or negative errno
+pub fun wait_pid(pid: i64, wstatus: *i32, options: i32) i64 {
+    ret wait(pid, wstatus, options, nil);
+}
+
+# wifexited: check if child exited normally.
+# ---
+# status: status from wait
+# ret:    true if exited normally
+pub fun has_exited(status: i32) bool {
+    ret (status & 0x7f) == 0;
+}
+
+# wexitstatus: get exit code from wait status.
+# ---
+# status: status from wait
+# ret:    exit code (0-255)
+pub fun exit_code(status: i32) i32 {
+    ret (status >> 8) & 0xff;
+}
+
+# wifsignaled: check if child was terminated by a signal.
+# ---
+# status: status from wait
+# ret:    true if terminated by signal
+pub fun was_signaled(status: i32) bool {
+    val sig: i32 = status & 0x7f;
+    ret sig != 0 && sig != 0x7f;
+}
+
+# wtermsig: get signal number that terminated the child.
+# ---
+# status: status from wait
+# ret:    signal number
+pub fun term_signal(status: i32) i32 {
+    ret status & 0x7f;
+}
+
+# wifstopped: check if child is currently stopped.
+# ---
+# status: status from wait
+# ret:    true if stopped
+pub fun was_stopped(status: i32) bool {
+    ret (status & 0xff) == 0x7f;
+}
+
+# wstopsig: get signal number that stopped the child.
+# ---
+# status: status from wait
+# ret:    signal number
+pub fun stop_signal(status: i32) i32 {
+    ret (status >> 8) & 0xff;
+}
+
+# wifcontinued: check if child was resumed by SIGCONT.
+# ---
+# status: status from wait
+# ret:    true if continued
+pub fun was_continued(status: i32) bool {
+    ret status == 0xffff;
+}
+
+# spawn: create a child process running the given program.
+# ---
+# pathname: path to executable
+# argv:     null-terminated argument array
+# envp:     null-terminated environment array
+# ret:      child PID on success, or negative errno
+pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
+    val pid: i64 = fork();
+    if (pid < 0) {
+        ret pid;
+    }
+    if (pid == 0) {
+        exec(pathname, argv, envp);
+        syscall1(c.SYS_EXIT, 127);
+    }
+    ret pid;
+}
+
+# getpid: return the current process ID.
+# ---
+# ret: process ID
+pub fun getpid() i64 {
+    ret syscall0(c.SYS_GETPID);
+}
+
+# pipe: create a unidirectional pipe.
+# ---
+# fds: pointer to two i32s; fds[0] = read end, fds[1] = write end
+# ret: 0 on success, or negative errno
+pub fun pipe(fds: *i32) i64 {
+    ret syscall2(c.SYS_PIPE2, fds::usize, 0);
+}
+
+# sleep: suspend execution for the given number of nanoseconds.
+# ---
+# nsec: nanoseconds to sleep
+pub fun sleep(nsec: i64) {
+    if (nsec <= 0) { ret; }
+    var req: timespec;
+    req.tv_sec = nsec / 1000000000;
+    req.tv_nsec = nsec % 1000000000;
+    syscall2(c.SYS_NANOSLEEP, (?req)::usize, 0);
+}
+
+# getcwd: get the current working directory.
+# ---
+# buf:  destination buffer
+# size: buffer capacity in bytes
+# ret:  length of path on success, or negative errno
+pub fun getcwd(buf: *u8, size: usize) i64 {
+    ret syscall2(c.SYS_GETCWD, buf::usize, size);
+}
+
+fun str_len(s: &u8) usize {
+    var i: usize = 0;
+    for (s[i] != 0) {
+        i = i + 1;
+    }
+    ret i;
+}
+
+fun str_eq_n(a: &u8, b: &u8, n: usize) bool {
+    var i: usize = 0;
+    for (i < n) {
+        if (a[i] != b[i]) { ret false; }
+        i = i + 1;
+    }
+    ret true;
+}
+
+# getenv: look up an environment variable by name.
+# ---
+# name: null-terminated variable name
+# buf:  destination buffer for the value
+# cap:  buffer capacity in bytes
+# ret:  length of value on success, or ENOENT if not found
+pub fun getenv(name: &u8, buf: *u8, cap: usize) i64 {
+    if (_envp == 0) { ret c.ENOENT; }
+    val envp: &&u8 = _envp::&&u8;
+    val name_len: usize = str_len(name);
+    var i: usize = 0;
+    for (envp[i]::usize != 0) {
+        val entry: &u8 = envp[i];
+        if (str_len(entry) > name_len && entry[name_len] == '='::u8 && str_eq_n(entry, name, name_len)) {
+            if (cap == 0) { ret 0; }
+            val val_start: usize = name_len + 1;
+            var j: usize = 0;
+            for (entry[val_start + j] != 0 && j < cap - 1) {
+                buf[j] = entry[val_start + j];
+                j = j + 1;
+            }
+            if (j < cap) {
+                buf[j] = 0;
+            }
+            ret j::i64;
+        }
+        i = i + 1;
+    }
+    ret c.ENOENT;
+}
+
+# threads
+
+val THREAD_CLONE_FLAGS: usize = c.CLONE_VM | c.CLONE_FS | c.CLONE_FILES | c.CLONE_SIGHAND | c.CLONE_THREAD | c.CLONE_SYSVSEM;
+
+var thread_fn: usize = 0;
+var thread_done_ptr: usize = 0;
+var thread_entry_stack: usize = 0;
+var thread_clone_result: i64 = 0;
+var thread_trampoline_addr: usize = 0;
+
+fun thread_trampoline() {
+    val fn_addr: usize = thread_fn;
+    val fn_ptr: fun() = fn_addr::fun();
+    fn_ptr();
+    val done: *i64 = thread_done_ptr::*i64;
+    @done = 1;
+    syscall6(c.SYS_FUTEX, thread_done_ptr, c.FUTEX_WAKE, 1, 0, 0, 0);
+    syscall1(c.SYS_EXIT, 0);
+}
+
+# thread_spawn: create a new thread sharing the current address space.
+#
+# allocates the clone syscall with shared VM, FS, files, and signals.
+# the child thread calls the entry function, then sets *done_ptr to 1,
+# wakes one futex waiter, and exits.
+#
+# only one thread may be spawned at a time. the caller must ensure the
+# previous thread has read its function pointer before spawning again.
+# ---
+# f:          function to execute in the new thread
+# done_ptr:   pointer to a completion flag (set to 1 when thread exits)
+# stack_base: base address of the pre-allocated stack region
+# stack_size: size of the stack in bytes
+# ret:        thread ID on success, or negative errno on failure
+pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: usize) i64 {
+    thread_fn = f::usize;
+    thread_done_ptr = done_ptr::usize;
+    val tramp: fun() = thread_trampoline;
+    thread_trampoline_addr = tramp::usize;
+
+    asm {
+        x86_64 {
+            mfence
+        }
+    }
+
+    val stack_top: usize = stack_base + stack_size;
+    val child_sp: usize = stack_top - 8;
+    @(child_sp::*usize) = thread_trampoline_addr;
+    thread_entry_stack = child_sp;
+
+    asm {
+        x86_64 {
+            mov rdi, [THREAD_CLONE_FLAGS]
+            mov rsi, [thread_entry_stack]
+            xor rdx, rdx
+            xor r10, r10
+            xor r8, r8
+            mov rax, 56
+            syscall
+            mov [thread_clone_result], rax
+            test rax, rax
+            .byte 0x75, 0x01
+            ret
+        }
+    }
+
+    ret thread_clone_result;
+}
+
+# thread_wait: block until the value at addr changes from expected.
+#
+# wraps the futex FUTEX_WAIT operation. returns immediately if *addr
+# does not equal expected. spurious wakeups are possible.
+# ---
+# addr:     pointer to the futex word
+# expected: value to compare against
+# ret:      0 on wake, or negative errno
+pub fun thread_wait(addr: *i64, expected: i64) i64 {
+    ret syscall6(c.SYS_FUTEX, addr::usize, c.FUTEX_WAIT, expected::usize, 0, 0, 0);
+}
+
+# thread_wake: wake one thread blocked on a futex wait at addr.
+# ---
+# addr: pointer to the futex word
+# ret:  number of threads woken, or negative errno
+pub fun thread_wake(addr: *i64) i64 {
+    ret syscall6(c.SYS_FUTEX, addr::usize, c.FUTEX_WAKE, 1, 0, 0, 0);
+}
+
+# time
+
+# clock_gettime: get time from a clock source.
+# ---
+# clock_id: clock to query (CLOCK_REALTIME, CLOCK_MONOTONIC)
+# ts:       pointer to timespec to fill
+# ret:      0 on success, negative errno on failure
+pub fun clock_gettime(clock_id: i32, ts: *timespec) i64 {
+    ret syscall2(c.SYS_CLOCK_GETTIME, clock_id::usize, ts::usize);
+}
+
+# errno
+
+# error_message: return a human-readable message for a negated errno code.
+# ---
+# code: negated errno value (e.g., -2 for ENOENT)
+# ret:  descriptive error message string
+pub fun error_message(code: i64) str {
+    if (code == c.EPERM) { ret "operation not permitted"; }
+    or (code == c.ENOENT) { ret "no such file or directory"; }
+    or (code == c.ESRCH) { ret "no such process"; }
+    or (code == c.EINTR) { ret "interrupted system call"; }
+    or (code == c.EIO) { ret "input/output error"; }
+    or (code == c.ENXIO) { ret "no such device or address"; }
+    or (code == c.E2BIG) { ret "argument list too long"; }
+    or (code == c.EBADF) { ret "bad file descriptor"; }
+    or (code == c.ECHILD) { ret "no child processes"; }
+    or (code == c.EAGAIN) { ret "resource temporarily unavailable"; }
+    or (code == c.ENOMEM) { ret "out of memory"; }
+    or (code == c.EACCES) { ret "permission denied"; }
+    or (code == c.EFAULT) { ret "bad address"; }
+    or (code == c.EBUSY) { ret "device or resource busy"; }
+    or (code == c.EEXIST) { ret "file exists"; }
+    or (code == c.ENODEV) { ret "no such device"; }
+    or (code == c.ENOTDIR) { ret "not a directory"; }
+    or (code == c.EISDIR) { ret "is a directory"; }
+    or (code == c.EINVAL) { ret "invalid argument"; }
+    or (code == c.ENFILE) { ret "too many open files in system"; }
+    or (code == c.EMFILE) { ret "too many open files"; }
+    or (code == c.ETXTBSY) { ret "text file busy"; }
+    or (code == c.ENOSPC) { ret "no space left on device"; }
+    or (code == c.EROFS) { ret "read-only file system"; }
+    or (code == c.EPIPE) { ret "broken pipe"; }
+    or (code == c.ENOTEMPTY) { ret "directory not empty"; }
+    or (code == c.ENOTSUP) { ret "operation not supported"; }
+    or { ret "unknown error"; }
+}
