@@ -1,0 +1,32 @@
+# linux getrandom(2) implementation.
+
+use std.types.bool;
+use std.types.size;
+use sys: std.system.os.linux.x86_64;
+
+val SYS_GETRANDOM: usize = 318;
+
+pub fun fill(buf: *u8, len: usize) bool {
+    if (len == 0) { ret true; }
+    var filled: usize = 0;
+    for (filled < len) {
+        val remaining: usize = len - filled;
+        val dst: usize = buf::usize + filled;
+        val result: i64 = sys.syscall3(SYS_GETRANDOM, dst, remaining, 0);
+        if (result < 0) { ret false; }
+        filled = filled + result::usize;
+    }
+    ret true;
+}
+
+pub fun u64() u64 {
+    var v: u64 = 0;
+    fill((?v)::*u8, 8);
+    ret v;
+}
+
+pub fun u32() u32 {
+    var v: u32 = 0;
+    fill((?v)::*u8, 4);
+    ret v;
+}
