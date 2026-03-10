@@ -136,7 +136,7 @@ pub fun date_to_time(d: Date) Time {
     ret unix(days * SECONDS_PER_DAY, 0);
 }
 
-fun floor_div(a: i64, b: i64) i64 {
+pub fun floor_div(a: i64, b: i64) i64 {
     val d: i64 = a / b;
     val r: i64 = a - d * b;
     if (r != 0 && (r ^ b) < 0) { ret d - 1; }
@@ -162,7 +162,7 @@ fun civil_from_days(epoch_days: i64, y: *i64, m: *i64, d: *i64) {
     @y = year;
 }
 
-fun civil_to_days(y: i64, m: i64, d: i64) i64 {
+pub fun civil_to_days(y: i64, m: i64, d: i64) i64 {
     var yr: i64 = y;
     if (m <= 2) { yr = yr - 1; }
 

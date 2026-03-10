@@ -4,37 +4,14 @@ use std.types.bool;
 use std.types.size;
 use std.types.result;
 use std.types.string;
-use memory: std.memory;
 use os: std.system.os;
 use ip: std.net.ip;
-
-val SOCKADDR_IN_SIZE: usize = 16;
 
 # Socket: a bound or unbound UDP socket.
 # ---
 # fd: the underlying socket file descriptor
 pub rec Socket {
     fd: i32;
-}
-
-fun to_sockaddr(ep: ip.Endpoint, sa: *u8) {
-    memory.raw_zero(sa::ptr, SOCKADDR_IN_SIZE);
-    sa[0] = os.AF_INET::u8;
-    sa[1] = 0;
-    sa[2] = (ep.port >> 8)::u8;
-    sa[3] = (ep.port & 255)::u8;
-    sa[4] = ep.addr.octets[0];
-    sa[5] = ep.addr.octets[1];
-    sa[6] = ep.addr.octets[2];
-    sa[7] = ep.addr.octets[3];
-}
-
-fun from_sockaddr(sa: &u8, ep: *ip.Endpoint) {
-    ep.port = (sa[2]::u16 << 8) | sa[3]::u16;
-    ep.addr.octets[0] = sa[4];
-    ep.addr.octets[1] = sa[5];
-    ep.addr.octets[2] = sa[6];
-    ep.addr.octets[3] = sa[7];
 }
 
 # create: create an unbound UDP socket.
@@ -58,9 +35,9 @@ pub fun bind(ep: ip.Endpoint) Result[Socket, str] {
     os.sock_setopt(fd::i32, os.SOL_SOCKET, os.SO_REUSEADDR, (?opt)::*u8, 4);
 
     var sa: [16]u8;
-    to_sockaddr(ep, ?sa[0]);
+    ip.to_sockaddr(ep, ?sa[0]);
 
-    val br: i64 = os.sock_bind(fd::i32, ?sa[0], SOCKADDR_IN_SIZE);
+    val br: i64 = os.sock_bind(fd::i32, ?sa[0], ip.SOCKADDR_IN_SIZE);
     if (br < 0) {
         os.close(fd::i32);
         ret err[Socket, str]("bind failed");
@@ -78,8 +55,8 @@ pub fun bind(ep: ip.Endpoint) Result[Socket, str] {
 # ret: number of bytes sent, or negative on error
 pub fun send_to(s: &Socket, buf: &u8, len: usize, ep: ip.Endpoint) i64 {
     var sa: [16]u8;
-    to_sockaddr(ep, ?sa[0]);
-    ret os.sock_sendto(s.fd, buf, len, 0, ?sa[0], SOCKADDR_IN_SIZE);
+    ip.to_sockaddr(ep, ?sa[0]);
+    ret os.sock_sendto(s.fd, buf, len, 0, ?sa[0], ip.SOCKADDR_IN_SIZE);
 }
 
 # recv_from: receive a datagram and populate the source endpoint.
@@ -91,10 +68,10 @@ pub fun send_to(s: &Socket, buf: &u8, len: usize, ep: ip.Endpoint) i64 {
 # ret: number of bytes received, or negative on error
 pub fun recv_from(s: &Socket, buf: *u8, len: usize, ep: *ip.Endpoint) i64 {
     var sa: [16]u8;
-    var sa_len: u32 = SOCKADDR_IN_SIZE::u32;
+    var sa_len: u32 = ip.SOCKADDR_IN_SIZE::u32;
     val n: i64 = os.sock_recvfrom(s.fd, buf, len, 0, ?sa[0], ?sa_len);
     if (n >= 0 && ep != nil) {
-        from_sockaddr(?sa[0], ep);
+        ip.from_sockaddr(?sa[0], ep);
     }
     ret n;
 }
