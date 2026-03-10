@@ -19,17 +19,19 @@ pub rec Time {
 
 # now: return the current wall-clock time.
 # ---
-# ret: current Time from system clock
+# ret: current Time from system clock, zero on error
 pub fun now() Time {
-    val ts: os.Timespec = os.realtime();
+    var ts: os.Timespec;
+    os.realtime(?ts);
     ret Time{sec: ts.sec, nsec: ts.nsec};
 }
 
 # monotonic: return the current monotonic clock time.
 # ---
-# ret: current Time from monotonic clock (for measuring elapsed time)
+# ret: current Time from monotonic clock (for measuring elapsed time), zero on error
 pub fun monotonic() Time {
-    val ts: os.Timespec = os.monotonic();
+    var ts: os.Timespec;
+    os.monotonic(?ts);
     ret Time{sec: ts.sec, nsec: ts.nsec};
 }
 
