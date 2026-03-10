@@ -57,11 +57,11 @@ pub fun dnit(bs: *Bitset) bool {
         bs.nbits = 0;
         ret true;
     }
-    val ok_free: bool = allocator.deallocate[u64](bs.alloc, bs.words, bs.nwords);
+    val res: i64 = allocator.deallocate[u64](bs.alloc, bs.words, bs.nwords);
     bs.words  = nil;
     bs.nbits  = 0;
     bs.nwords = 0;
-    ret ok_free;
+    ret res == 0;
 }
 
 # set: set the bit at the given index.

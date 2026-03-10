@@ -86,7 +86,7 @@ fun alloc_chunk(ar: &Arena, min_cap: usize) *Chunk {
 }
 
 # free_chunk: deallocate a chunk through the backing allocator.
-fun free_chunk(ar: &Arena, c: *Chunk) bool {
+fun free_chunk(ar: &Arena, c: *Chunk) i64 {
     val total: usize = CHUNK_HDR + c.cap;
     ret allo.deallocate_raw(?ar.backing, c::ptr, total, CHUNK_HDR);
 }
@@ -152,18 +152,19 @@ pub fun init(ar: *Arena, backing: &allo.Allocator, cap: usize) Option[str] {
 # dnit: free all chunks and zero the Arena state.
 # ---
 # ar:  Arena to destroy
-# ret: true if all backing frees succeeded
-pub fun dnit(ar: *Arena) bool {
+# ret: 0 if all backing frees succeeded, or first negative errno
+pub fun dnit(ar: *Arena) i64 {
     if (ar == nil) {
-        ret true;
+        ret 0;
     }
 
-    var ok_all: bool   = true;
-    var c:      *Chunk = ar.chunk;
+    var first_err: i64 = 0;
+    var c:         *Chunk = ar.chunk;
     for (c != nil) {
         val prev: *Chunk = c.prev;
-        if (!free_chunk(ar, c)) {
-            ok_all = false;
+        val res: i64 = free_chunk(ar, c);
+        if (res < 0 && first_err == 0) {
+            first_err = res;
         }
         c = prev;
     }
@@ -176,7 +177,7 @@ pub fun dnit(ar: *Arena) bool {
     ar.chunk       = nil;
     ar.first_chunk = nil;
 
-    ret ok_all;
+    ret first_err;
 }
 
 # make: wire up an Allocator backed by this Arena.
@@ -298,11 +299,11 @@ fun reallocate(ctx: ptr, p: ptr, old_size: usize, new_size: usize, align: usize)
 }
 
 # deallocate: arena free callback. rolls back the most recent allocation if matched.
-fun deallocate(ctx: ptr, p: ptr, size: usize, align: usize) bool {
-    if (ctx == nil) { ret false; }
+fun deallocate(ctx: ptr, p: ptr, size: usize, align: usize) i64 {
+    if (ctx == nil) { ret -1; }
 
     val ar: *Arena = ctx::*Arena;
-    if (p == nil) { ret true; }
+    if (p == nil) { ret 0; }
 
     if (ar.buf != nil) {
         val last_ptr: ptr = (ar.buf::usize + ar.last_off)::ptr;
@@ -313,7 +314,7 @@ fun deallocate(ctx: ptr, p: ptr, size: usize, align: usize) bool {
         }
     }
 
-    ret true;
+    ret 0;
 }
 
 test "arena: init with zero capacity succeeds" {
@@ -322,7 +323,7 @@ test "arena: init with zero capacity succeeds" {
 
     var ar: Arena;
     if (is_some[str](init(?ar, ?pa, 0))) { ret 0; }
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -332,7 +333,7 @@ test "arena: init with capacity allocates backing storage" {
 
     var ar: Arena;
     if (is_some[str](init(?ar, ?pa, 1024))) { ret 0; }
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -355,7 +356,7 @@ test "arena: allocator returns functional allocator" {
     if (p[0] != 100) { ret 0; }
     if (p[1] != 200) { ret 0; }
 
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -383,7 +384,7 @@ test "arena: multiple allocations bump offset" {
     if (p1[0] != 111) { ret 0; }
     if (p2[0] != 222) { ret 0; }
 
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -408,7 +409,7 @@ test "arena: reset clears allocations" {
 
     if (p2 != p1) { ret 0; }
 
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -429,12 +430,12 @@ test "arena: free is noop for non-last allocation" {
     if (is_err[*i64, str](r2)) { ret 0; }
     val p2: *i64 = unwrap_ok[*i64, str](r2);
 
-    if (!allo.deallocate[i64](?aa, p1, 2)) { ret 0; }
+    if (allo.deallocate[i64](?aa, p1, 2) < 0) { ret 0; }
 
     p2[0] = 999;
     if (p2[0] != 999) { ret 0; }
 
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -454,7 +455,7 @@ test "arena: free last allocation rolls back" {
     if (is_err[*i64, str](r2)) { ret 0; }
     val p2: *i64 = unwrap_ok[*i64, str](r2);
 
-    if (!allo.deallocate[i64](?aa, p2, 2)) { ret 0; }
+    if (allo.deallocate[i64](?aa, p2, 2) < 0) { ret 0; }
 
     val r3: Result[*i64, str] = allo.allocate[i64](?aa, 2);
     if (is_err[*i64, str](r3)) { ret 0; }
@@ -462,7 +463,7 @@ test "arena: free last allocation rolls back" {
 
     if (p3 != p2) { ret 0; }
 
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -494,7 +495,7 @@ test "arena: resize last allocation in-place" {
     if (p2[2] != 333) { ret 0; }
     if (p2[3] != 444) { ret 0; }
 
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -504,7 +505,7 @@ test "arena: dnit on empty arena succeeds" {
 
     var ar: Arena;
     if (is_some[str](init(?ar, ?pa, 0))) { ret 0; }
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -526,7 +527,7 @@ test "arena: allocation respects alignment" {
 
     if ((p2::usize % 8) != 0) { ret 0; }
 
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -558,7 +559,7 @@ test "arena: grows automatically when chunk is full" {
     if (p2[0] != 200) { ret 0; }
     if (p3[0] != 300) { ret 0; }
 
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
 
@@ -579,6 +580,6 @@ test "arena: zero-cap arena grows on first alloc" {
     p1[0] = 42;
     if (p1[0] != 42) { ret 0; }
 
-    if (!dnit(?ar)) { ret 0; }
+    if (dnit(?ar) < 0) { ret 0; }
     ret 1;
 }
