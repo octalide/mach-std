@@ -7,6 +7,7 @@
 use std.types.size;
 use std.types.bool;
 use std.types.string;
+use atomic: std.sync.atomic;
 
 $if ($mach.build.target.os.id != $mach.os.darwin.id) {
     $error("std.system.os.darwin.shared: requires darwin target");
@@ -545,11 +546,12 @@ fun thread_wq_start(self: usize, kport: usize, saddr: usize, arg: usize, cnt: us
 }
 
 fun ensure_thread_registered() {
-    if (thread_registered != 0) { ret; }
+    if (atomic.load(?thread_registered) != 0) { ret; }
+    var expected: i64 = 0;
+    if (!atomic.cas(?thread_registered, ?expected, 1)) { ret; }
     val start: fun(usize, usize, usize, usize, usize, usize) = thread_start;
     val wq: fun(usize, usize, usize, usize, usize, usize) = thread_wq_start;
     syscall6(c.SYS_BSDTHREAD_REGISTER, start::usize, wq::usize, 64, 0, 0, 0);
-    thread_registered = 1;
 }
 
 # thread_spawn: create a new thread via bsdthread_create.
