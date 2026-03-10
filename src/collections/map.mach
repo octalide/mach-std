@@ -21,23 +21,25 @@ val LOAD_FACTOR_PERCENT: usize = 70;
 
 # Map[K, V]: generic hash map with user-provided hash and equality functions.
 # ---
-# alloc:   allocator for backing storage
-# keys:    key buffer
-# values:  value buffer
-# states:  per-slot state (empty/occupied/tombstone)
-# len:     number of entries
-# cap:     total slot count
-# hash_fn: hash function taking a ptr, returning u64
-# eq_fn:   equality function taking two ptrs, returning bool
+# alloc:      allocator for backing storage
+# keys:       key buffer
+# values:     value buffer
+# states:     per-slot state (empty/occupied/tombstone)
+# len:        number of entries
+# tombstones: number of tombstone slots
+# cap:        total slot count
+# hash_fn:    hash function taking a ptr, returning u64
+# eq_fn:      equality function taking two ptrs, returning bool
 pub rec Map[K, V] {
-    alloc:   *allocator.Allocator;
-    keys:    *K;
-    values:  *V;
-    states:  *u8;
-    len:     usize;
-    cap:     usize;
-    hash_fn: fun(ptr) u64;
-    eq_fn:   fun(ptr, ptr) bool;
+    alloc:      *allocator.Allocator;
+    keys:       *K;
+    values:     *V;
+    states:     *u8;
+    len:        usize;
+    tombstones: usize;
+    cap:        usize;
+    hash_fn:    fun(ptr) u64;
+    eq_fn:      fun(ptr, ptr) bool;
 }
 
 # init: create an empty map.
@@ -48,14 +50,15 @@ pub rec Map[K, V] {
 # ret:     a new empty Map[K, V]
 pub fun init[K, V](alloc: *allocator.Allocator, hash_fn: fun(ptr) u64, eq_fn: fun(ptr, ptr) bool) Map[K, V] {
     var m: Map[K, V];
-    m.alloc   = alloc;
-    m.keys    = nil;
-    m.values  = nil;
-    m.states  = nil;
-    m.len     = 0;
-    m.cap     = 0;
-    m.hash_fn = hash_fn;
-    m.eq_fn   = eq_fn;
+    m.alloc      = alloc;
+    m.keys       = nil;
+    m.values     = nil;
+    m.states     = nil;
+    m.len        = 0;
+    m.tombstones = 0;
+    m.cap        = 0;
+    m.hash_fn    = hash_fn;
+    m.eq_fn      = eq_fn;
     ret m;
 }
 
@@ -65,10 +68,11 @@ pub fun init[K, V](alloc: *allocator.Allocator, hash_fn: fun(ptr) u64, eq_fn: fu
 pub fun dnit[K, V](m: *Map[K, V]) bool {
     if (m == nil) { ret true; }
     if (m.cap == 0) {
-        m.keys   = nil;
-        m.values = nil;
-        m.states = nil;
-        m.len    = 0;
+        m.keys       = nil;
+        m.values     = nil;
+        m.states     = nil;
+        m.len        = 0;
+        m.tombstones = 0;
         ret true;
     }
 
@@ -77,11 +81,12 @@ pub fun dnit[K, V](m: *Map[K, V]) bool {
     ok = allocator.deallocate[V](m.alloc, m.values, m.cap) && ok;
     ok = allocator.deallocate[u8](m.alloc, m.states, m.cap) && ok;
 
-    m.keys   = nil;
-    m.values = nil;
-    m.states = nil;
-    m.len    = 0;
-    m.cap    = 0;
+    m.keys       = nil;
+    m.values     = nil;
+    m.states     = nil;
+    m.len        = 0;
+    m.tombstones = 0;
+    m.cap        = 0;
 
     ret ok;
 }
@@ -111,7 +116,8 @@ pub fun capacity[K, V](m: Map[K, V]) usize {
 pub fun clear[K, V](m: *Map[K, V]) {
     if (m == nil || m.cap == 0) { ret; }
     mem.raw_fill(m.states::ptr, SLOT_EMPTY, m.cap);
-    m.len = 0;
+    m.len        = 0;
+    m.tombstones = 0;
 }
 
 # find_slot: locate the slot for a key, or the first available slot.
@@ -205,11 +211,12 @@ fun grow[K, V](m: *Map[K, V], new_cap: usize) Result[usize, str] {
     val old_states: *u8   = m.states;
     val old_cap:    usize = m.cap;
 
-    m.keys   = new_keys;
-    m.values = new_values;
-    m.states = new_states;
-    m.cap    = new_cap;
-    m.len    = 0;
+    m.keys       = new_keys;
+    m.values     = new_values;
+    m.states     = new_states;
+    m.cap        = new_cap;
+    m.len        = 0;
+    m.tombstones = 0;
 
     if (old_cap > 0) {
         var i: usize = 0;
@@ -247,7 +254,7 @@ fun ensure_capacity[K, V](m: *Map[K, V]) Result[usize, str] {
     }
 
     val threshold: usize = (m.cap * LOAD_FACTOR_PERCENT) / 100;
-    if (m.len >= threshold) {
+    if ((m.len + m.tombstones) >= threshold) {
         ret grow[K, V](m, m.cap * 2);
     }
 
@@ -272,6 +279,9 @@ pub fun insert[K, V](m: *Map[K, V], key: K, value: V) Result[bool, str] {
         ret ok[bool, str](false);
     }
 
+    if (m.states[slot.idx] == SLOT_TOMBSTONE) {
+        m.tombstones = m.tombstones - 1;
+    }
     m.keys[slot.idx]   = key;
     m.values[slot.idx] = value;
     m.states[slot.idx] = SLOT_OCCUPIED;
@@ -323,6 +333,7 @@ pub fun remove[K, V](m: *Map[K, V], key: &K) Result[bool, str] {
 
     m.states[slot.idx] = SLOT_TOMBSTONE;
     m.len              = m.len - 1;
+    m.tombstones       = m.tombstones + 1;
 
     ret ok[bool, str](true);
 }
