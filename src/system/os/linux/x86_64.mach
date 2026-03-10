@@ -436,16 +436,16 @@ pub fun numa_allocate(size: usize, node: usize) ptr {
 # p:    pointer to the region
 # size: size of the region in bytes
 # node: target NUMA node id
-# ret:  true on success
-pub fun numa_move(p: ptr, size: usize, node: usize) bool {
+# ret:  0 on success, or negative errno
+pub fun numa_move(p: ptr, size: usize, node: usize) i64 {
     if (p == nil || size == 0) {
-        ret true;
+        ret 0;
     }
     if (node >= 64) {
-        ret false;
+        ret c.EINVAL;
     }
     var mask: usize = 1 << node;
-    ret syscall6(c.SYS_MBIND, p::usize, size, c.MPOL_BIND, (?mask)::usize, 64, c.MPOL_MF_MOVE) == 0;
+    ret syscall6(c.SYS_MBIND, p::usize, size, c.MPOL_BIND, (?mask)::usize, 64, c.MPOL_MF_MOVE);
 }
 
 # map_file: map a file descriptor into memory via mmap.
