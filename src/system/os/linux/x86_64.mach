@@ -946,11 +946,11 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
             mov rax, 56
             syscall
             mov [result], rax
-            test rax, rax
-            jnz 1f
-            ret
-        1:
         }
+    }
+
+    if (result == 0) {
+        asm { x86_64 { ret } }
     }
 
     ret result;
