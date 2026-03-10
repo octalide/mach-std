@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-03-10
+
+### Added
+- Multi-target OS layer with darwin (x86_64, aarch64) and windows (x86_64) backends
+- Socket primitives in the OS layer (sock_create, sock_bind, sock_listen, sock_accept, sock_connect, sock_sendto, sock_recvfrom, sock_shutdown, sock_setopt)
+- OS-level random_fill primitive (getrandom on linux, getentropy on darwin, RtlGenRandom on windows)
+- Thread primitives for darwin (bsdthread_create, ulock) and windows (CreateThread, WaitOnAddress)
+- aarch64 atomic backend (ldaxr/stlxr)
+- New modules: chrono, encoding (hex, base64), format, io (buffer, reader, writer), log, math, process (args, env, exec), rand (xoshiro256**)
+- New collection types: bitset, deque, heap, set, sort
+- Page allocator, char type, utf8 module, json parser, crypto/hash (sha256, sha512)
+- Platform-specific runtime modules for linux, darwin, and windows
+
+### Changed
+- Restructured OS layer: extracted constants into per-ISA files, added shared.mach for cross-platform values, proper forwarding chains through ISA → OS → os.mach
+- Removed non-portable symbols from os.mach surface (syscall wrappers, CLOCK_*, wait flags, EINTR_MAX_RETRIES, huge page sizes)
+- Rewrote crypto/rand to use os.random_fill — eliminated OS-specific backend
+- Rewrote net/tcp, net/udp, net/dns to use OS layer socket primitives — eliminated OS-specific backends
+- Eliminated thread globals on all platforms (stack-based parameter passing on linux, lpParameter on windows)
+- Updated core types, allocator, collections, memory, print, and filesystem modules
+
+### Removed
+- Legacy platform/ abstraction layer (replaced by system/os/)
+- Superseded modules: fmt, stream, time, text/ascii, text/builder, text/buffer_writer, types/int, io/bytebuf
+
 ## [0.3.0] - 2025-11-18
 
 ### Added
