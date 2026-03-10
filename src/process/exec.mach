@@ -82,8 +82,7 @@ pub fun code(status: ExitStatus) i32 {
 # status: exit status to inspect
 # ret:    true if terminated by signal
 pub fun signaled(status: ExitStatus) bool {
-    val sig: i32 = status.raw & 0x7f;
-    ret sig != 0 && sig != 0x7f;
+    ret os.was_signaled(status.raw);
 }
 
 # signal: get the signal number that killed the process.
@@ -91,7 +90,7 @@ pub fun signaled(status: ExitStatus) bool {
 # status: exit status to inspect
 # ret:    signal number
 pub fun signal(status: ExitStatus) i32 {
-    ret status.raw & 0x7f;
+    ret os.term_signal(status.raw);
 }
 
 # exit: terminate the current process.
