@@ -224,31 +224,31 @@ pub fun str_trim_left(s: str) str {
 # str_index_char: find the first occurrence of a character in a string.
 # ---
 # c:   character to find
-# ret: byte offset, or -1 if not found
-pub fun str_index_char(s: str, c: char) i64 {
-    if (s == nil) { ret -1; }
+# ret: the index of the first occurrence, or an error message
+pub fun str_index_char(s: str, c: char) Result[usize, str] {
+    if (s == nil) { ret err[usize, str]("nil string"); }
     var i: usize = 0;
     for (s[i] != 0) {
-        if (s[i] == c) { ret i::u64::i64; }
+        if (s[i] == c) { ret ok[usize, str](i); }
         i = i + 1;
     }
-    ret -1;
+    ret err[usize, str]("character not found");
 }
 
 # str_last_index_char: find the last occurrence of a character in a string.
 # ---
 # c:   character to find
-# ret: byte offset, or -1 if not found
-pub fun str_last_index_char(s: str, c: char) i64 {
-    if (s == nil) { ret -1; }
+# ret: the index of the last occurrence, or an error message
+pub fun str_last_index_char(s: str, c: char) Result[usize, str] {
+    if (s == nil) { ret err[usize, str]("nil string"); }
     val len: usize = str_len(s);
-    if (len == 0) { ret -1; }
+    if (len == 0) { ret err[usize, str]("character not found"); }
     var i: usize = len;
     for (i > 0) {
         i = i - 1;
-        if (s[i] == c) { ret i::u64::i64; }
+        if (s[i] == c) { ret ok[usize, str](i); }
     }
-    ret -1;
+    ret err[usize, str]("character not found");
 }
 
 # str_contains_char: check if a string contains a character.
@@ -256,7 +256,8 @@ pub fun str_last_index_char(s: str, c: char) i64 {
 # c:   character to find
 # ret: true if c appears in s
 pub fun str_contains_char(s: str, c: char) bool {
-    ret str_index_char(s, c) >= 0;
+    val r: Result[usize, str] = str_index_char(s, c);
+    ret is_ok[usize, str](r);
 }
 
 test "string: len of empty string" {
@@ -487,17 +488,29 @@ test "string: trim_left" {
 }
 
 test "string: index_char" {
-    if (str_index_char("hello", 'l') != 2) { ret 0; }
-    if (str_index_char("hello", 'h') != 0) { ret 0; }
-    if (str_index_char("hello", 'o') != 4) { ret 0; }
-    if (str_index_char("hello", 'x') != -1) { ret 0; }
+    var r: Result[usize, str] = str_index_char("hello", 'l');
+    if (is_err[usize, str](r)) { ret 0; }
+    if (unwrap_ok[usize, str](r) != 2) { ret 0; }
+    r = str_index_char("hello", 'h');
+    if (is_err[usize, str](r)) { ret 0; }
+    if (unwrap_ok[usize, str](r) != 0) { ret 0; }
+    r = str_index_char("hello", 'o');
+    if (is_err[usize, str](r)) { ret 0; }
+    if (unwrap_ok[usize, str](r) != 4) { ret 0; }
+    r = str_index_char("hello", 'x');
+    if (is_ok[usize, str](r)) { ret 0; }
     ret 1;
 }
 
 test "string: last_index_char" {
-    if (str_last_index_char("hello", 'l') != 3) { ret 0; }
-    if (str_last_index_char("hello", 'h') != 0) { ret 0; }
-    if (str_last_index_char("hello", 'x') != -1) { ret 0; }
+    var r: Result[usize, str] = str_last_index_char("hello", 'l');
+    if (is_err[usize, str](r)) { ret 0; }
+    if (unwrap_ok[usize, str](r) != 3) { ret 0; }
+    r = str_last_index_char("hello", 'h');
+    if (is_err[usize, str](r)) { ret 0; }
+    if (unwrap_ok[usize, str](r) != 0) { ret 0; }
+    r = str_last_index_char("hello", 'x');
+    if (is_ok[usize, str](r)) { ret 0; }
     ret 1;
 }
 
