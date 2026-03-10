@@ -206,7 +206,9 @@ pub fun realtime(out: *Timespec) i64 {
     ret 0;
 }
 
-<<<<<<< HEAD
+# sentinels
+pub fwd NOT_FOUND: shared.NOT_FOUND;
+
 # monotonic: read the monotonic clock.
 # ---
 # out: pointer to Timespec to populate

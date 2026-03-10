@@ -1032,13 +1032,13 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
 # name: null-terminated variable name
 # buf:  destination buffer for the value
 # cap:  buffer capacity in bytes
-# ret:  length of value on success, or ENOENT if not found
+# ret:  length of value on success, or NOT_FOUND
 pub fun getenv(name: &u8, buf: *u8, cap: usize) i64 {
     val len: u32 = GetEnvironmentVariableA(name, buf, cap::u32);
     if (len == 0) {
         val err: u32 = GetLastError();
         if (err == 203) {
-            ret c.ENOENT;
+            ret os_shared.NOT_FOUND;
         }
         ret c.EIO;
     }
