@@ -416,7 +416,7 @@ pub fun numa_current_node() usize {
 # node: target NUMA node id
 # ret:  pointer to allocated memory, or nil on failure
 pub fun numa_allocate(size: usize, node: usize) ptr {
-    if (size == 0) {
+    if (size == 0 || node >= 64) {
         ret nil;
     }
     val p: ptr = allocate(size);
@@ -441,6 +441,9 @@ pub fun numa_allocate(size: usize, node: usize) ptr {
 pub fun numa_move(p: ptr, size: usize, node: usize) bool {
     if (p == nil || size == 0) {
         ret true;
+    }
+    if (node >= 64) {
+        ret false;
     }
     var mask: usize = 1 << node;
     ret syscall6(c.SYS_MBIND, p::usize, size, c.MPOL_BIND, (?mask)::usize, 64, c.MPOL_MF_MOVE) == 0;
