@@ -319,8 +319,8 @@ pub fun sync_file(p: ptr, size: usize) bool {
     ret syscall3(c.SYS_MSYNC, p::usize, size, c.MS_SYNC::u32::usize) == 0;
 }
 
-# environment (set by runtime at program start)
-pub var _envp: usize = 0;
+# environment
+pub fwd os_shared._envp;
 
 # filesystem
 
@@ -497,53 +497,7 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
     ret syscall2(c.SYS___GETCWD, buf::usize, size);
 }
 
-fun str_len(s: &u8) usize {
-    var i: usize = 0;
-    for (s[i] != 0) {
-        i = i + 1;
-    }
-    ret i;
-}
-
-fun str_eq_n(a: &u8, b: &u8, n: usize) bool {
-    var i: usize = 0;
-    for (i < n) {
-        if (a[i] != b[i]) { ret false; }
-        i = i + 1;
-    }
-    ret true;
-}
-
-# getenv: look up an environment variable by name.
-# ---
-# name: null-terminated variable name
-# buf:  destination buffer for the value
-# cap:  buffer capacity in bytes
-# ret:  length of value on success, or ENOENT if not found
-pub fun getenv(name: &u8, buf: *u8, cap: usize) i64 {
-    if (_envp == 0) { ret c.ENOENT; }
-    val envp: &&u8 = _envp::&&u8;
-    val name_len: usize = str_len(name);
-    var i: usize = 0;
-    for (envp[i]::usize != 0) {
-        val entry: &u8 = envp[i];
-        if (str_len(entry) > name_len && entry[name_len] == '='::u8 && str_eq_n(entry, name, name_len)) {
-            if (cap == 0) { ret 0; }
-            val val_start: usize = name_len + 1;
-            var j: usize = 0;
-            for (entry[val_start + j] != 0 && j < cap - 1) {
-                buf[j] = entry[val_start + j];
-                j = j + 1;
-            }
-            if (j < cap) {
-                buf[j] = 0;
-            }
-            ret j::i64;
-        }
-        i = i + 1;
-    }
-    ret c.ENOENT;
-}
+pub fwd os_shared.getenv;
 
 # threads
 
