@@ -183,7 +183,9 @@ pub fun peek[T](h: &Heap[T]) Result[*T, str] {
 }
 
 fun cmp_i64(a: *i64, b: *i64) i64 {
-    ret @a - @b;
+    if (@a < @b) { ret -1; }
+    if (@a > @b) { ret 1; }
+    ret 0;
 }
 
 test "heap: init creates empty heap" {
