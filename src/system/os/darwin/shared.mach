@@ -445,8 +445,13 @@ pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
         ret pid;
     }
     if (pid == 0) {
+        var rl: [2]u64;
+        var max_fd: i32 = 1024;
+        if (syscall2(c.SYS_GETRLIMIT, c.RLIMIT_NOFILE, (?rl[0])::usize) == 0 && rl[0] > 0) {
+            max_fd = rl[0]::i32;
+        }
         var fd: i32 = 3;
-        for (fd < 1024) {
+        for (fd < max_fd) {
             syscall1(c.SYS_CLOSE, fd::isize::usize);
             fd = fd + 1;
         }

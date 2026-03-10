@@ -57,6 +57,7 @@ pub val SYS_CONNECT:       usize = 42;
 pub val SYS_ACCEPT:        usize = 43;
 pub val SYS_GETRANDOM:     usize = 318;
 pub val SYS_GETCPU:        usize = 309;
+pub val SYS_CLOSE_RANGE:   usize = 436;
 
 # futex operations
 pub val FUTEX_WAIT: usize = 0;

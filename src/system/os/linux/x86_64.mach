@@ -756,10 +756,13 @@ pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
         ret pid;
     }
     if (pid == 0) {
-        var fd: i32 = 3;
-        for (fd < 1024) {
-            syscall1(c.SYS_CLOSE, fd::isize::usize);
-            fd = fd + 1;
+        val r: i64 = syscall3(c.SYS_CLOSE_RANGE, 3, ~(0::usize), 0);
+        if (r < 0) {
+            var fd: i32 = 3;
+            for (fd < 1024) {
+                syscall1(c.SYS_CLOSE, fd::isize::usize);
+                fd = fd + 1;
+            }
         }
         exec(pathname, argv, envp);
         syscall1(c.SYS_EXIT, 127);

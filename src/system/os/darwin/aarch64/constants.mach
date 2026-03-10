@@ -53,6 +53,8 @@ pub val SYS_SHUTDOWN:         usize = 134;
 pub val SYS_BIND:             usize = 104;
 pub val SYS_LISTEN:           usize = 106;
 pub val SYS_SETSOCKOPT:       usize = 105;
+pub val SYS_GETRLIMIT:        usize = 194;
+pub val RLIMIT_NOFILE:        usize = 8;
 
 # signals
 pub val SIGABRT: i32 = 6;
