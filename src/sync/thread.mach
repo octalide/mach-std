@@ -5,9 +5,6 @@
 # completion flag using the OS wait/wake primitives.
 #
 # limitations:
-#   - uses a global function pointer in the OS layer, so only one thread
-#     may be spawned at a time. the caller must join (or ensure the child
-#     has read the function pointer) before spawning another.
 #   - no thread-local storage support.
 
 use std.types.bool;
@@ -34,8 +31,6 @@ pub rec Thread {
 # handles clone and trampoline setup. the child sets the done flag and
 # wakes waiters on exit.
 #
-# the caller must join the returned thread before calling spawn again,
-# because the OS layer uses a global function pointer.
 # ---
 # f:   function to execute in the new thread
 # ret: a Thread handle, or a Thread with tid < 0 on failure
