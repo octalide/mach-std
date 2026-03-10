@@ -430,6 +430,15 @@ fun temp_build_path(a: &allocator.Allocator, prefix: str, counter: u64) Result[p
     var off: usize = 0;
 
     val dir_len: usize = str_len(TEMP_DIR);
+    var prefix_len: usize = 0;
+    if (prefix != nil) {
+        prefix_len = str_len(prefix);
+    }
+    val needed: usize = dir_len + 1 + prefix_len + 1 + 20 + 1;
+    if (needed > 256) {
+        ret err[path.Path, str]("temp path too long");
+    }
+
     mem.raw_copy(?buf[0], TEMP_DIR, dir_len);
     off = dir_len;
 
@@ -437,9 +446,8 @@ fun temp_build_path(a: &allocator.Allocator, prefix: str, counter: u64) Result[p
     off = off + 1;
 
     if (prefix != nil) {
-        val plen: usize = str_len(prefix);
-        mem.raw_copy(?buf[off], prefix, plen);
-        off = off + plen;
+        mem.raw_copy(?buf[off], prefix, prefix_len);
+        off = off + prefix_len;
     }
 
     buf[off] = 95;
