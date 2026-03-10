@@ -17,6 +17,7 @@ use page:      std.allocator.page;
 use path:      std.types.path;
 use writer:    std.io.writer;
 use reader:    std.io.reader;
+use atomic:    std.sync.atomic;
 
 # File: wrapper around a file descriptor.
 # ---
@@ -55,7 +56,7 @@ pub val stderr: File = File{fd: 2};
 
 val TEMP_DIR:          str   = "/tmp";
 val TEMP_MAX_ATTEMPTS: usize = 100;
-var temp_counter:      u64   = 0;
+var temp_counter:      i64   = 0;
 
 # open: open a file for reading.
 # ---
@@ -364,9 +365,9 @@ pub fun create_dir_all(a: &allocator.Allocator, p: str, mode: i32) Result[bool, 
 pub fun temp_create(a: &allocator.Allocator, prefix: str) Result[TempFile, str] {
     var attempt: usize = 0;
     for (attempt < TEMP_MAX_ATTEMPTS) {
-        temp_counter = temp_counter + 1;
+        val count: u64 = (atomic.fetch_add(?temp_counter, 1) + 1)::u64;
 
-        val name_res: Result[path.Path, str] = temp_build_path(a, prefix, temp_counter);
+        val name_res: Result[path.Path, str] = temp_build_path(a, prefix, count);
         if (is_err[path.Path, str](name_res)) {
             ret err[TempFile, str](unwrap_err[path.Path, str](name_res));
         }
