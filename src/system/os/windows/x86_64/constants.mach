@@ -192,5 +192,34 @@ pub val SHUT_RDWR:    i32 = 2;
 pub val INVALID_SOCKET: usize = (-1)::isize::usize;
 pub val SOCKET_ERROR:   i32 = -1;
 
+pub val WSAEWOULDBLOCK:    i32 = 10035;
+pub val WSAEINPROGRESS:    i32 = 10036;
+pub val WSAENOTSOCK:       i32 = 10038;
+pub val WSAEMSGSIZE:       i32 = 10040;
+pub val WSAEAFNOSUPPORT:   i32 = 10047;
+pub val WSAEADDRINUSE:     i32 = 10048;
+pub val WSAEADDRNOTAVAIL:  i32 = 10049;
+pub val WSAENETUNREACH:    i32 = 10051;
+pub val WSAECONNABORTED:   i32 = 10053;
+pub val WSAECONNRESET:     i32 = 10054;
+pub val WSAENOTCONN:       i32 = 10057;
+pub val WSAETIMEDOUT:      i32 = 10060;
+pub val WSAECONNREFUSED:   i32 = 10061;
+pub val WSAEHOSTUNREACH:   i32 = 10065;
+
+pub val ECONNREFUSED:  i64 = -111;
+pub val ETIMEDOUT:     i64 = -110;
+pub val ECONNRESET:    i64 = -104;
+pub val ECONNABORTED:  i64 = -103;
+pub val ENETUNREACH:   i64 = -101;
+pub val EADDRINUSE:    i64 = -98;
+pub val EADDRNOTAVAIL: i64 = -99;
+pub val EHOSTUNREACH:  i64 = -113;
+pub val ENOTCONN:      i64 = -107;
+pub val EMSGSIZE:      i64 = -90;
+pub val EAFNOSUPPORT:  i64 = -97;
+pub val EINPROGRESS:   i64 = -115;
+pub val ENOTSOCK:      i64 = -88;
+
 # retry limit for EINTR handling
 pub val EINTR_MAX_RETRIES: usize = 8;

@@ -1315,19 +1315,38 @@ pub fun sock_addr_read(sa: &u8, port: *u16, addr: *u8) {
 pub fun sock_send(fd: i32, buf: &u8, len: usize) i64 {
     if (!ensure_wsa()) { ret c.EIO; }
     val res: i32 = ws2_send(fd::usize, buf, len::i32, 0);
-    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
     ret res::i64;
 }
 
 pub fun sock_recv(fd: i32, buf: *u8, len: usize) i64 {
     if (!ensure_wsa()) { ret c.EIO; }
     val res: i32 = ws2_recv(fd::usize, buf, len::i32, 0);
-    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
     ret res::i64;
 }
 
 pub fun sock_close(fd: i32) i64 {
     ret closesocket(fd::usize)::i64;
+}
+
+fun wsa_last_error() i64 {
+    val err: i32 = WSAGetLastError();
+    if (err == c.WSAECONNREFUSED)  { ret c.ECONNREFUSED; }
+    or (err == c.WSAETIMEDOUT)     { ret c.ETIMEDOUT; }
+    or (err == c.WSAECONNRESET)    { ret c.ECONNRESET; }
+    or (err == c.WSAECONNABORTED)  { ret c.ECONNABORTED; }
+    or (err == c.WSAENOTCONN)      { ret c.ENOTCONN; }
+    or (err == c.WSAENETUNREACH)   { ret c.ENETUNREACH; }
+    or (err == c.WSAEHOSTUNREACH)  { ret c.EHOSTUNREACH; }
+    or (err == c.WSAEADDRINUSE)    { ret c.EADDRINUSE; }
+    or (err == c.WSAEADDRNOTAVAIL) { ret c.EADDRNOTAVAIL; }
+    or (err == c.WSAEWOULDBLOCK)   { ret c.EAGAIN; }
+    or (err == c.WSAEINPROGRESS)   { ret c.EINPROGRESS; }
+    or (err == c.WSAENOTSOCK)      { ret c.ENOTSOCK; }
+    or (err == c.WSAEMSGSIZE)      { ret c.EMSGSIZE; }
+    or (err == c.WSAEAFNOSUPPORT)  { ret c.EAFNOSUPPORT; }
+    or { ret c.EIO; }
 }
 
 var wsa_initialized: i64 = 0;
@@ -1344,55 +1363,55 @@ fun ensure_wsa() bool {
 pub fun sock_create(domain: i32, typ: i32, protocol: i32) i64 {
     if (!ensure_wsa()) { ret c.EIO; }
     val s: usize = ws2_socket(domain, typ, protocol);
-    if (s == c.INVALID_SOCKET) { ret c.EIO; }
+    if (s == c.INVALID_SOCKET) { ret wsa_last_error(); }
     ret s::i64;
 }
 
 pub fun sock_bind(fd: i32, addr: *u8, addrlen: usize) i64 {
     val res: i32 = ws2_bind(fd::usize, addr, addrlen::i32);
-    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
     ret 0;
 }
 
 pub fun sock_listen(fd: i32, backlog: i32) i64 {
     val res: i32 = ws2_listen(fd::usize, backlog);
-    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
     ret 0;
 }
 
 pub fun sock_accept(fd: i32, addr: *u8, addrlen: *u32) i64 {
     val s: usize = ws2_accept(fd::usize, addr, addrlen::*i32);
-    if (s == c.INVALID_SOCKET) { ret c.EIO; }
+    if (s == c.INVALID_SOCKET) { ret wsa_last_error(); }
     ret s::i64;
 }
 
 pub fun sock_connect(fd: i32, addr: *u8, addrlen: usize) i64 {
     val res: i32 = ws2_connect(fd::usize, addr, addrlen::i32);
-    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
     ret 0;
 }
 
 pub fun sock_sendto(fd: i32, buf: &u8, len: usize, flags: i32, addr: *u8, addrlen: usize) i64 {
     val res: i32 = ws2_sendto(fd::usize, buf, len::i32, flags, addr, addrlen::i32);
-    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
     ret res::i64;
 }
 
 pub fun sock_recvfrom(fd: i32, buf: *u8, len: usize, flags: i32, addr: *u8, addrlen: *u32) i64 {
     val res: i32 = ws2_recvfrom(fd::usize, buf, len::i32, flags, addr, addrlen::*i32);
-    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
     ret res::i64;
 }
 
 pub fun sock_shutdown(fd: i32, how: i32) i64 {
     val res: i32 = ws2_shutdown(fd::usize, how);
-    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
     ret 0;
 }
 
 pub fun sock_setopt(fd: i32, level: i32, opt: i32, value: *u8, vallen: usize) i64 {
     val res: i32 = ws2_setsockopt(fd::usize, level, opt, value, vallen::i32);
-    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
     ret 0;
 }
 
