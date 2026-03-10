@@ -798,7 +798,21 @@ pub fun random_fill(buf: *u8, len: usize) bool {
 # TODO: CLOCK_MONOTONIC not actually monotonic on darwin — uses gettimeofday.
 # needs mach_absolute_time() via commpage for true monotonic time.
 
+# Converts a clock_id to a timespec using the best available mechanism.
+#
+# Darwin has no clock_gettime syscall; both CLOCK_REALTIME and CLOCK_MONOTONIC
+# fall back to gettimeofday for now.
+# TODO: CLOCK_MONOTONIC should use mach_absolute_time() via the commpage.
+# ---
+# clock_id: CLOCK_REALTIME or CLOCK_MONOTONIC
+# ts:       output timespec
+# ret:      0 on success, -EINVAL for unknown clock_id
 pub fun clock_gettime(clock_id: i32, ts: *timespec) i64 {
+    if (clock_id != c.CLOCK_REALTIME) {
+        if (clock_id != c.CLOCK_MONOTONIC) {
+            ret -c.EINVAL::i64;
+        }
+    }
     var tv: timeval;
     val res: i64 = syscall2(c.SYS_GETTIMEOFDAY, ?tv::usize, 0);
     if (res < 0) {
