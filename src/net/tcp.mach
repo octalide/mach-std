@@ -39,15 +39,15 @@ pub fun listen(ep: ip.Endpoint, backlog: i32) Result[Listener, str] {
     var sa: [16]u8;
     ip.to_sockaddr(ep, ?sa[0]);
 
-    val br: i64 = os.sock_bind(fd::i32, ?sa[0], ip.SOCKADDR_IN_SIZE);
+    val br: i64 = os.sock_bind(fd::i32, ?sa[0], os.SOCKADDR_IN_SIZE);
     if (br < 0) {
-        os.close(fd::i32);
+        os.sock_close(fd::i32);
         ret err[Listener, str]("bind failed");
     }
 
     val lr: i64 = os.sock_listen(fd::i32, backlog);
     if (lr < 0) {
-        os.close(fd::i32);
+        os.sock_close(fd::i32);
         ret err[Listener, str]("listen failed");
     }
 
@@ -60,7 +60,7 @@ pub fun listen(ep: ip.Endpoint, backlog: i32) Result[Listener, str] {
 # ret: a connected Stream, or an error message
 pub fun accept(ln: &Listener) Result[Stream, str] {
     var sa: [16]u8;
-    var sa_len: u32 = ip.SOCKADDR_IN_SIZE::u32;
+    var sa_len: u32 = os.SOCKADDR_IN_SIZE::u32;
     val fd: i64 = os.sock_accept(ln.fd, ?sa[0], ?sa_len);
     if (fd < 0) { ret err[Stream, str]("accept failed"); }
     ret ok[Stream, str](Stream{fd: fd::i32});
@@ -73,7 +73,7 @@ pub fun accept(ln: &Listener) Result[Stream, str] {
 # ret: a connected Stream, or an error message
 pub fun accept_ep(ln: &Listener, ep: *ip.Endpoint) Result[Stream, str] {
     var sa: [16]u8;
-    var sa_len: u32 = ip.SOCKADDR_IN_SIZE::u32;
+    var sa_len: u32 = os.SOCKADDR_IN_SIZE::u32;
     val fd: i64 = os.sock_accept(ln.fd, ?sa[0], ?sa_len);
     if (fd < 0) { ret err[Stream, str]("accept failed"); }
     ip.from_sockaddr(?sa[0], ep);
@@ -91,9 +91,9 @@ pub fun connect(ep: ip.Endpoint) Result[Stream, str] {
     var sa: [16]u8;
     ip.to_sockaddr(ep, ?sa[0]);
 
-    val cr: i64 = os.sock_connect(fd::i32, ?sa[0], ip.SOCKADDR_IN_SIZE);
+    val cr: i64 = os.sock_connect(fd::i32, ?sa[0], os.SOCKADDR_IN_SIZE);
     if (cr < 0) {
-        os.close(fd::i32);
+        os.sock_close(fd::i32);
         ret err[Stream, str]("connect failed");
     }
 
@@ -107,7 +107,7 @@ pub fun connect(ep: ip.Endpoint) Result[Stream, str] {
 # len: maximum bytes to read
 # ret: number of bytes read, or negative on error
 pub fun stream_read(s: &Stream, buf: *u8, len: usize) i64 {
-    ret os.read(s.fd, buf, len);
+    ret os.sock_recv(s.fd, buf, len);
 }
 
 # stream_write: write bytes to a TCP stream.
@@ -117,7 +117,7 @@ pub fun stream_read(s: &Stream, buf: *u8, len: usize) i64 {
 # len: number of bytes to write
 # ret: number of bytes written, or negative on error
 pub fun stream_write(s: &Stream, buf: &u8, len: usize) i64 {
-    ret os.write(s.fd, buf, len);
+    ret os.sock_send(s.fd, buf, len);
 }
 
 # stream_shutdown: shut down part or all of a TCP stream.
@@ -132,14 +132,14 @@ pub fun stream_shutdown(s: &Stream, how: i32) i64 {
 # ---
 # s: the stream to close
 pub fun stream_close(s: *Stream) {
-    os.close(s.fd);
+    os.sock_close(s.fd);
 }
 
 # listener_close: close a TCP listener.
 # ---
 # ln: the listener to close
 pub fun listener_close(ln: *Listener) {
-    os.close(ln.fd);
+    os.sock_close(ln.fd);
 }
 
 test "tcp: create and close socket" {
