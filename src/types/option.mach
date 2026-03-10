@@ -1,6 +1,8 @@
 # optional value type
 
 use std.types.bool;
+use std.types.string;
+use os: std.system.os;
 
 # Option[T]: represents an optional value that may or may not be present.
 # ---
@@ -42,9 +44,16 @@ pub fun is_none[T](opt: Option[T]) bool {
 }
 
 # unwrap: return the contained value.
+#
+# aborts the process if no value is present.
 # ---
-# ret: the contained value; behavior is undefined if no value is present
+# ret: the contained value
 pub fun unwrap[T](opt: Option[T]) T {
+    if (!opt.has_value) {
+        val msg: str = "unwrap called on None\n";
+        os.write(os.STDERR_FD, msg::&u8, str_len(msg));
+        os.abort();
+    }
     ret opt.value;
 }
 
