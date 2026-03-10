@@ -1,3 +1,0 @@
-# linux path conventions
-
-pub val separator: u8 = 47; # '/'
