@@ -648,8 +648,10 @@ pub fun write(fd: i32, buf: &u8, count: usize) i64 {
     ret bytes_written::i64;
 }
 
-# stub: dirfd is ignored — path must be absolute or relative to cwd
 pub fun open(dirfd: i32, path: &u8, flags: i32, mode: i32) i64 {
+    if (dirfd != c.AT_FDCWD) {
+        ret c.ENOTSUP;
+    }
     var access: u32 = 0;
     var creation: u32 = c.OPEN_EXISTING;
     var attrs: u32 = c.FILE_ATTRIBUTE_NORMAL;
