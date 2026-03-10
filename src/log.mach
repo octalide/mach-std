@@ -21,7 +21,7 @@ pub val OFF:   Level = 4;
 var min_level:   Level = INFO;
 var out_ctx:     ptr = nil;
 var out_fn:      usize = 0;
-var configured:  u8 = 0;
+var configured:  bool = false;
 
 # set the minimum log level.
 #
@@ -40,7 +40,7 @@ pub fun set_level(level: Level) {
 pub fun set_writer(w: &writer.Writer) {
     out_ctx = w.ctx;
     out_fn = w.fn_write::usize;
-    configured = 1;
+    configured = true;
 }
 
 fun write_stderr(buf: &u8, len: usize) {
@@ -48,7 +48,7 @@ fun write_stderr(buf: &u8, len: usize) {
 }
 
 fun write_piece(buf: &u8, len: usize) {
-    if (configured != 0) {
+    if (configured) {
         val f: fun(ptr, &u8, usize) Result[usize, str] = out_fn::fun(ptr, &u8, usize) Result[usize, str];
         f(out_ctx, buf, len);
     }
