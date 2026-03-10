@@ -123,6 +123,7 @@ pub fun move[T](dst: *T, src: *T, count: usize) {
     if (dst == nil || src == nil || count == 0) {
         ret;
     }
+    if (count > ~(0::usize) / $size_of(T)) { ret; }
 
     raw_move(dst::ptr, src::ptr, $size_of(T) * count);
 }
@@ -133,6 +134,7 @@ pub fun move[T](dst: *T, src: *T, count: usize) {
 # count: number of elements to zero out
 pub fun zero[T](p: *T, count: usize) {
     if (p == nil || count == 0) { ret; }
+    if (count > ~(0::usize) / $size_of(T)) { ret; }
     raw_zero(p::ptr, $size_of(T) * count);
 }
 
