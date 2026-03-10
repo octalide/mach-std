@@ -1063,9 +1063,10 @@ pub fun sock_recv(fd: i32, buf: *u8, len: usize) i64 {
 
 # sock_close: close a socket file descriptor.
 # ---
-# fd: socket fd
-pub fun sock_close(fd: i32) {
-    close(fd);
+# fd:  socket fd
+# ret: 0 on success, or negative errno
+pub fun sock_close(fd: i32) i64 {
+    ret close(fd);
 }
 
 # sock_create: create a socket file descriptor.

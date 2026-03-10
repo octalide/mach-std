@@ -1253,8 +1253,8 @@ pub fun sock_recv(fd: i32, buf: *u8, len: usize) i64 {
     ret res::i64;
 }
 
-pub fun sock_close(fd: i32) {
-    closesocket(fd::usize);
+pub fun sock_close(fd: i32) i64 {
+    ret closesocket(fd::usize)::i64;
 }
 
 var wsa_initialized: i64 = 0;

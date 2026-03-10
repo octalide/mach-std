@@ -703,8 +703,8 @@ pub fun sock_recv(fd: i32, buf: *u8, len: usize) i64 {
     ret read(fd, buf, len);
 }
 
-pub fun sock_close(fd: i32) {
-    close(fd);
+pub fun sock_close(fd: i32) i64 {
+    ret close(fd);
 }
 
 pub fun sock_create(domain: i32, typ: i32, protocol: i32) i64 {
