@@ -43,6 +43,10 @@ ext ReadFile: fun(isize, *u8, u32, *u32, ptr) i32;
 ext WriteFile: fun(isize, &u8, u32, *u32, ptr) i32;
 ext SetFilePointerEx: fun(isize, i64, *i64, u32) i32;
 ext GetFileInformationByHandle: fun(isize, *u8) i32;
+ext CreateFileMappingA: fun(isize, ptr, u32, u32, u32, ptr) isize;
+ext MapViewOfFile: fun(isize, u32, u32, u32, usize) ptr;
+ext UnmapViewOfFile: fun(ptr) i32;
+ext FlushViewOfFile: fun(ptr, usize) i32;
 ext DeleteFileA: fun(&u8) i32;
 ext MoveFileA: fun(&u8, &u8) i32;
 ext CreateDirectoryA: fun(&u8, ptr) i32;
@@ -587,8 +591,13 @@ pub fun page_size() usize {
     ret 4096;
 }
 
-# stub: reads file into allocated memory; prot is ignored (always read-only).
-# writes to the returned region are not persisted to disk.
+# map a file descriptor into memory via CreateFileMapping + MapViewOfFile.
+# ---
+# fd:     file descriptor to map
+# offset: offset into the file (must be page-aligned)
+# size:   number of bytes to map; if 0, returns nil
+# prot:   protection flags (PROT_READ, PROT_WRITE, PROT_EXEC)
+# ret:    pointer to mapped region, or nil on failure
 pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
     if (size == 0) {
         ret nil;
@@ -597,27 +606,40 @@ pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
     if (h == c.INVALID_HANDLE_VALUE) {
         ret nil;
     }
-    val p: ptr = allocate(size);
-    if (p == nil) {
+    val page_prot: u32 = prot_to_win32(prot);
+    val map_end: usize = offset + size;
+    val mapping: isize = CreateFileMappingA(h, nil, page_prot, (map_end >> 32)::u32, map_end::u32, nil);
+    if (mapping == 0) {
         ret nil;
     }
-    var new_pos: i64 = 0;
-    SetFilePointerEx(h, offset::i64, ?new_pos, c.FILE_BEGIN);
-    var bytes_read: u32 = 0;
-    val ok: i32 = ReadFile(h, p::*u8, size::u32, ?bytes_read, nil);
-    if (ok == 0) {
-        deallocate(p, size);
+    var access: u32 = 0;
+    if ((prot & 4) != 0 && (prot & 2) != 0) {
+        access = c.FILE_MAP_WRITE | c.FILE_MAP_EXECUTE;
+    } or ((prot & 4) != 0) {
+        access = c.FILE_MAP_READ | c.FILE_MAP_EXECUTE;
+    } or ((prot & 2) != 0) {
+        access = c.FILE_MAP_WRITE;
+    } or {
+        access = c.FILE_MAP_READ;
+    }
+    val p: ptr = MapViewOfFile(mapping, access, (offset >> 32)::u32, offset::u32, size);
+    CloseHandle(mapping);
+    if (p == nil) {
         ret nil;
     }
     ret p;
 }
 
-# stub: no actual flush — writes to mapped memory are not persisted
+# flush a memory-mapped region to its backing file via FlushViewOfFile.
+# ---
+# p:    pointer to the mapped region
+# size: size of the region in bytes
+# ret:  true on success
 pub fun sync_file(p: ptr, size: usize) bool {
     if (p == nil || size == 0) {
         ret true;
     }
-    ret true;
+    ret FlushViewOfFile(p, size) != 0;
 }
 
 # filesystem
