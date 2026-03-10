@@ -111,6 +111,22 @@ pub fun copy[T](dst: *T, src: &T, count: usize) {
     }
 }
 
+# copy a typed block of memory, correctly handling overlapping regions.
+#
+# delegates to raw_move for the actual byte-level overlapping copy.
+# for non-overlapping regions, copy[T] is preferred.
+# ---
+# dst:   pointer to the destination memory block
+# src:   pointer to the source memory block
+# count: number of elements to copy
+pub fun move[T](dst: *T, src: *T, count: usize) {
+    if (dst == nil || src == nil || count == 0) {
+        ret;
+    }
+
+    raw_move(dst::ptr, src::ptr, $size_of(T) * count);
+}
+
 # zero: zero out a block of memory for a number of elements of type T.
 # ---
 # p:     pointer to the start of the memory block
