@@ -141,6 +141,7 @@ pub fun push[T](vec: *Vector[T], value: T) Result[usize, str] {
 # ---
 # ret: the value, or an error message if empty
 pub fun pop[T](vec: *Vector[T]) Result[T, str] {
+    if (vec == nil) { ret err[T, str]("vector is nil"); }
     if (vec.len == 0) {
         ret err[T, str]("pop from empty vector");
     }
@@ -154,6 +155,7 @@ pub fun pop[T](vec: *Vector[T]) Result[T, str] {
 # index: element index
 # ret:   pointer to the element, or an error message
 pub fun get[T](vec: &Vector[T], index: usize) Result[*T, str] {
+    if (vec == nil) { ret err[*T, str]("vector is nil"); }
     if (index >= vec.len) {
         ret err[*T, str]("index out of bounds");
     }

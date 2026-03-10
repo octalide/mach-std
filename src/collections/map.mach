@@ -267,6 +267,7 @@ fun ensure_capacity[K, V](m: *Map[K, V]) Result[usize, str] {
 # value: value to associate
 # ret:   true if a new entry was inserted, false if an existing entry was updated
 pub fun insert[K, V](m: *Map[K, V], key: K, value: V) Result[bool, str] {
+    if (m == nil) { ret err[bool, str]("map is nil"); }
     val cap_r: Result[usize, str] = ensure_capacity[K, V](m);
     if (is_err[usize, str](cap_r)) {
         ret err[bool, str](unwrap_err[usize, str](cap_r));
@@ -295,6 +296,7 @@ pub fun insert[K, V](m: *Map[K, V], key: K, value: V) Result[bool, str] {
 # key: pointer to the key to look up
 # ret: pointer to the value, or an error message
 pub fun get[K, V](m: &Map[K, V], key: &K) Result[*V, str] {
+    if (m == nil) { ret err[*V, str]("map is nil"); }
     if (m.cap == 0) {
         ret err[*V, str]("key not found");
     }
@@ -312,6 +314,7 @@ pub fun get[K, V](m: &Map[K, V], key: &K) Result[*V, str] {
 # key: pointer to the key to check
 # ret: true if the key exists
 pub fun contains[K, V](m: &Map[K, V], key: &K) bool {
+    if (m == nil) { ret false; }
     if (m.cap == 0) { ret false; }
     val slot: rec { idx: usize; found: bool; } = find_slot[K, V](m, key);
     ret slot.found;
@@ -322,6 +325,7 @@ pub fun contains[K, V](m: &Map[K, V], key: &K) bool {
 # key: pointer to the key to remove
 # ret: true if removed, false if the key was not found
 pub fun remove[K, V](m: *Map[K, V], key: &K) Result[bool, str] {
+    if (m == nil) { ret err[bool, str]("map is nil"); }
     if (m.cap == 0) {
         ret ok[bool, str](false);
     }
