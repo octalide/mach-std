@@ -201,7 +201,11 @@ pub fun read_all(a: &allocator.Allocator, p: str) Result[str, str] {
     var total: usize = 0;
     for (total < size) {
         val n: i64 = os.read(f.fd, (buf::usize + total)::*u8, size - total);
-        if (n <= 0) { brk; }
+        if (n < 0) {
+            close(?f);
+            ret err[str, str]("read error");
+        }
+        if (n == 0) { brk; }
         total = total + n::usize;
     }
     close(?f);

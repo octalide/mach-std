@@ -574,14 +574,14 @@ fun decode_escape(src: str, si: *usize, buf: *u8, di: usize) usize {
             code = (code << 4) | d::u32;
             k = k + 1;
         }
+
+        if (code >= 0xD800 && code <= 0xDFFF) { ret 0; }
+
         @si = @si + ndig + 1;
         ret encode_utf8(buf, di, code);
     }
 
-    # unknown escape: emit literal
-    buf[di] = e;
-    @si = @si + 1;
-    ret 1;
+    ret 0;
 }
 
 # count_escape_len: count output bytes for an escape at src[@i].

@@ -26,7 +26,16 @@ $if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
     $error("std.runtime.darwin.x86_64: requires x86_64 target");
 }
 
-var envp: usize = 0;
+use os: std.system.os.darwin.x86_64;
+
+var _rt_argc: i64 = 0;
+var _rt_argv: u64 = 0;
+var _rt_envp: u64 = 0;
+
+$_rt_init.symbol = "_rt_init";
+fun _rt_init() {
+    os._envp = _rt_envp;
+}
 
 $_start.symbol = "start";
 pub fun _start() {
@@ -40,10 +49,17 @@ pub fun _start() {
             mov rcx, rdi
             inc rcx
             lea rcx, [rsi + rcx*8]
-            mov [envp], rcx
+
+            mov [_rt_argc], rdi
+            mov [_rt_argv], rsi
+            mov [_rt_envp], rcx
 
             and rsp, -16      # align stack to 16 bytes
             sub rsp, 8        # adjust for CALL (pushes 8-byte return address)
+            call _rt_init
+
+            mov rdi, [_rt_argc]
+            mov rsi, [_rt_argv]
             call main
 
             mov rdi, rax      # exit code from main -> rdi (1st syscall arg)

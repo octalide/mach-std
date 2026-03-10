@@ -116,6 +116,7 @@ pub fun copy[T](dst: *T, src: &T, count: usize) {
 # p:     pointer to the start of the memory block
 # count: number of elements to zero out
 pub fun zero[T](p: *T, count: usize) {
+    if (p == nil || count == 0) { ret; }
     raw_zero(p::ptr, $size_of(T) * count);
 }
 

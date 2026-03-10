@@ -57,14 +57,6 @@ fun write_piece(buf: &u8, len: usize) {
     }
 }
 
-fun str_len(s: &u8) usize {
-    var i: usize = 0;
-    for (s[i] != 0) {
-        i = i + 1;
-    }
-    ret i;
-}
-
 fun log_msg(level: Level, prefix: str, msg: str) {
     if (level < min_level) { ret; }
     write_piece("[", 1);

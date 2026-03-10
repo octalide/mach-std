@@ -96,8 +96,8 @@ pub fun lookup_hosts(hostname: str, addr: *ip.IPv4) bool {
 # addr:     pointer to an IPv4 to fill on success
 # ret:      true if resolution succeeded
 pub fun query(hostname: str, addr: *ip.IPv4) bool {
-    var ns: ip.IPv4 = ip.ipv4(8, 8, 8, 8);
-    read_nameserver(?ns);
+    var ns: ip.IPv4;
+    if (!read_nameserver(?ns)) { ret false; }
 
     var pkt: [512]u8;
     val qlen: usize = build_query(hostname, ?pkt[0], 512);
@@ -167,14 +167,14 @@ fun parse_ipv4(buf: &u8, len: usize, addr: *ip.IPv4) bool {
     ret true;
 }
 
-fun read_nameserver(ns: *ip.IPv4) {
+fun read_nameserver(ns: *ip.IPv4) bool {
     val fd: i64 = os.open(os.AT_FDCWD, "/etc/resolv.conf", os.O_RDONLY, 0);
-    if (fd < 0) { ret; }
+    if (fd < 0) { ret false; }
 
     var buf: [2048]u8;
     val n: i64 = os.read(fd::i32, ?buf[0], 2048);
     os.close(fd::i32);
-    if (n <= 0) { ret; }
+    if (n <= 0) { ret false; }
 
     val len: usize = n::usize;
     val prefix: str = "nameserver";
@@ -192,13 +192,15 @@ fun read_nameserver(ns: *ip.IPv4) {
                 pos = pos + 1;
             }
             if (pos > start) {
-                if (parse_ipv4(?buf[start], pos - start, ns)) { ret; }
+                if (parse_ipv4(?buf[start], pos - start, ns)) { ret true; }
             }
         }
 
         for (pos < len && buf[pos] != 10) { pos = pos + 1; }
         if (pos < len) { pos = pos + 1; }
     }
+
+    ret false;
 }
 
 fun build_query(hostname: str, buf: *u8, cap: usize) usize {

@@ -198,6 +198,9 @@ pub fun str_region_equals(s: str, start: usize, len: usize, other: str) bool {
     val other_len: usize = str_len(other);
     if (other_len != len) { ret false; }
 
+    val s_len: usize = str_len(s);
+    if (start + len > s_len) { ret false; }
+
     var i: usize = 0;
     for (i < len) {
         if (s[start + i] != other[i]) { ret false; }
