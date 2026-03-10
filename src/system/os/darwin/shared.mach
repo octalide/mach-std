@@ -201,11 +201,11 @@ pub fun allocate(size: usize) ptr {
     ret res::usize::ptr;
 }
 
-pub fun deallocate(p: ptr, size: usize) bool {
+pub fun deallocate(p: ptr, size: usize) i64 {
     if (p == nil || size == 0) {
-        ret true;
+        ret 0;
     }
-    ret syscall2(c.SYS_MUNMAP, p::usize, size) == 0;
+    ret syscall2(c.SYS_MUNMAP, p::usize, size);
 }
 
 # darwin has no mremap — allocate new, copy, free old.
@@ -281,20 +281,20 @@ pub fun heap_region_extend(addr: usize) usize {
     ret _brk_end;
 }
 
-pub fun protect(p: ptr, size: usize, prot: u32) bool {
-    ret syscall3(c.SYS_MPROTECT, p::usize, size, prot::usize) == 0;
+pub fun protect(p: ptr, size: usize, prot: u32) i64 {
+    ret syscall3(c.SYS_MPROTECT, p::usize, size, prot::usize);
 }
 
-pub fun lock(p: ptr, size: usize) bool {
-    ret syscall2(c.SYS_MLOCK, p::usize, size) == 0;
+pub fun lock(p: ptr, size: usize) i64 {
+    ret syscall2(c.SYS_MLOCK, p::usize, size);
 }
 
-pub fun unlock(p: ptr, size: usize) bool {
-    ret syscall2(c.SYS_MUNLOCK, p::usize, size) == 0;
+pub fun unlock(p: ptr, size: usize) i64 {
+    ret syscall2(c.SYS_MUNLOCK, p::usize, size);
 }
 
-pub fun advise(p: ptr, size: usize, advice: u32) bool {
-    ret syscall3(c.SYS_MADVISE, p::usize, size, advice::usize) == 0;
+pub fun advise(p: ptr, size: usize, advice: u32) i64 {
+    ret syscall3(c.SYS_MADVISE, p::usize, size, advice::usize);
 }
 
 pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
@@ -312,11 +312,11 @@ pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
     ret res::usize::ptr;
 }
 
-pub fun sync_file(p: ptr, size: usize) bool {
+pub fun sync_file(p: ptr, size: usize) i64 {
     if (p == nil || size == 0) {
-        ret true;
+        ret 0;
     }
-    ret syscall3(c.SYS_MSYNC, p::usize, size, c.MS_SYNC::u32::usize) == 0;
+    ret syscall3(c.SYS_MSYNC, p::usize, size, c.MS_SYNC::u32::usize);
 }
 
 # environment (set by runtime at program start)
@@ -683,15 +683,16 @@ pub val DNS_HOSTS_PATH: str = "/etc/hosts";
 # dns_nameserver: read the first nameserver from /etc/resolv.conf.
 # ---
 # ns:  pointer to 4 bytes to fill with the IPv4 address
-# ret: true if a nameserver was found
-pub fun dns_nameserver(ns: *u8) bool {
+# ret: 0 on success, or NOT_FOUND / negative errno
+pub fun dns_nameserver(ns: *u8) i64 {
     val fd: i64 = open(AT_FDCWD, "/etc/resolv.conf", O_RDONLY, 0);
-    if (fd < 0) { ret false; }
+    if (fd < 0) { ret fd; }
 
     var buf: [2048]u8;
     val n: i64 = read(fd::i32, ?buf[0], 2048);
     close(fd::i32);
-    if (n <= 0) { ret false; }
+    if (n < 0) { ret n; }
+    if (n == 0) { ret os_shared.NOT_FOUND; }
 
     val len: usize = n::usize;
     var pos: usize = 0;
@@ -707,7 +708,7 @@ pub fun dns_nameserver(ns: *u8) bool {
                 pos = pos + 1;
             }
             if (pos > start && dns_parse_ns_addr(?buf[start], pos - start, ns)) {
-                ret true;
+                ret 0;
             }
         }
 
@@ -715,7 +716,7 @@ pub fun dns_nameserver(ns: *u8) bool {
         if (pos < len) { pos = pos + 1; }
     }
 
-    ret false;
+    ret os_shared.NOT_FOUND;
 }
 
 fun dns_prefix_match(a: &u8, b: &u8, len: usize) bool {
@@ -755,19 +756,19 @@ fun dns_parse_ns_addr(buf: &u8, len: usize, addr: *u8) bool {
 # ---
 # buf:  destination buffer
 # len:  number of bytes to fill
-# ret:  true on success
-pub fun random_fill(buf: *u8, len: usize) bool {
-    if (len == 0) { ret true; }
+# ret:  0 on success, or negative errno
+pub fun random_fill(buf: *u8, len: usize) i64 {
+    if (len == 0) { ret 0; }
     var filled: usize = 0;
     for (filled < len) {
         var chunk: usize = len - filled;
         if (chunk > 256) { chunk = 256; }
         val dst: usize = buf::usize + filled;
         val res: i64 = syscall2(c.SYS_GETENTROPY, dst, chunk);
-        if (res < 0) { ret false; }
+        if (res < 0) { ret res; }
         filled = filled + chunk;
     }
-    ret true;
+    ret 0;
 }
 
 # time (darwin uses gettimeofday; no direct clock_gettime syscall)
