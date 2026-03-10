@@ -1,0 +1,320 @@
+# DNS hostname resolution.
+
+use std.types.bool;
+use std.types.size;
+use std.types.result;
+use std.types.string;
+use memory: std.memory;
+use os: std.system.os;
+use ip: std.net.ip;
+use udp: std.net.udp;
+
+val DNS_PORT:       u16   = 53;
+val DNS_HEADER_LEN: usize = 12;
+val DNS_MAX_PACKET: usize = 512;
+val DNS_TYPE_A:     u16   = 1;
+val DNS_CLASS_IN:   u16   = 1;
+
+# lookup_hosts: resolve a hostname via /etc/hosts.
+#
+# searches /etc/hosts for a matching hostname and writes the first
+# IPv4 address found into addr.
+# ---
+# hostname: null-terminated hostname to look up
+# addr:     pointer to an IPv4 to fill on success
+# ret:      true if a match was found
+pub fun lookup_hosts(hostname: str, addr: *ip.IPv4) bool {
+    val fd: i64 = os.open(os.AT_FDCWD, "/etc/hosts", os.O_RDONLY, 0);
+    if (fd < 0) { ret false; }
+
+    var buf: [4096]u8;
+    val n: i64 = os.read(fd::i32, ?buf[0], 4096);
+    os.close(fd::i32);
+    if (n <= 0) { ret false; }
+
+    val len: usize = n::usize;
+    var pos: usize = 0;
+
+    for (pos < len) {
+        for (pos < len && (buf[pos] == ' ' || buf[pos] == 9)) {
+            pos = pos + 1;
+        }
+
+        if (pos < len && buf[pos] == '#') {
+            for (pos < len && buf[pos] != 10) { pos = pos + 1; }
+            if (pos < len) { pos = pos + 1; }
+            cnt;
+        }
+
+        if (pos >= len || buf[pos] == 10) {
+            if (pos < len) { pos = pos + 1; }
+            cnt;
+        }
+
+        var ip_start: usize = pos;
+        for (pos < len && buf[pos] != ' ' && buf[pos] != 9 && buf[pos] != 10) {
+            pos = pos + 1;
+        }
+        val ip_end: usize = pos;
+
+        for (pos < len && buf[pos] != 10) {
+            for (pos < len && (buf[pos] == ' ' || buf[pos] == 9)) {
+                pos = pos + 1;
+            }
+            if (pos >= len || buf[pos] == 10) { brk; }
+
+            var name_start: usize = pos;
+            for (pos < len && buf[pos] != ' ' && buf[pos] != 9 && buf[pos] != 10 && buf[pos] != '#') {
+                pos = pos + 1;
+            }
+            val name_len: usize = pos - name_start;
+
+            val host_len: usize = str_len(hostname);
+            if (name_len == host_len && region_eq(?buf[name_start], hostname, host_len)) {
+                val parsed: bool = parse_ipv4(?buf[ip_start], ip_end - ip_start, addr);
+                if (parsed) { ret true; }
+            }
+
+            if (pos < len && buf[pos] == '#') {
+                for (pos < len && buf[pos] != 10) { pos = pos + 1; }
+            }
+        }
+
+        if (pos < len) { pos = pos + 1; }
+    }
+
+    ret false;
+}
+
+# query: resolve a hostname via DNS A record query.
+#
+# reads the first nameserver from /etc/resolv.conf and sends a DNS
+# A record query over UDP. writes the first address from the response
+# into addr.
+# ---
+# hostname: null-terminated hostname to resolve
+# addr:     pointer to an IPv4 to fill on success
+# ret:      true if resolution succeeded
+pub fun query(hostname: str, addr: *ip.IPv4) bool {
+    var ns: ip.IPv4 = ip.ipv4(8, 8, 8, 8);
+    read_nameserver(?ns);
+
+    var pkt: [512]u8;
+    val qlen: usize = build_query(hostname, ?pkt[0], 512);
+    if (qlen == 0) { ret false; }
+
+    val ep: ip.Endpoint = ip.Endpoint{addr: ns, port: DNS_PORT};
+    val sr: Result[udp.Socket, str] = udp.create();
+    if (is_err[udp.Socket, str](sr)) { ret false; }
+    var sock: udp.Socket = unwrap_ok[udp.Socket, str](sr);
+
+    val sent: i64 = udp.send_to(?sock, ?pkt[0], qlen, ep);
+    if (sent < 0) {
+        udp.socket_close(?sock);
+        ret false;
+    }
+
+    var resp: [512]u8;
+    val recvd: i64 = udp.recv_from(?sock, ?resp[0], 512, nil);
+    udp.socket_close(?sock);
+    if (recvd < DNS_HEADER_LEN::i64) { ret false; }
+
+    ret parse_response(?resp[0], recvd::usize, addr);
+}
+
+# resolve: resolve a hostname, trying /etc/hosts first then DNS.
+# ---
+# hostname: null-terminated hostname to resolve
+# addr:     pointer to an IPv4 to fill on success
+# ret:      true if resolution succeeded
+pub fun resolve(hostname: str, addr: *ip.IPv4) bool {
+    if (lookup_hosts(hostname, addr)) { ret true; }
+    ret query(hostname, addr);
+}
+
+fun region_eq(a: &u8, b: &u8, len: usize) bool {
+    var i: usize = 0;
+    for (i < len) {
+        var ca: u8 = a[i];
+        var cb: u8 = b[i];
+        if (ca >= 65 && ca <= 90) { ca = ca + 32; }
+        if (cb >= 65 && cb <= 90) { cb = cb + 32; }
+        if (ca != cb) { ret false; }
+        i = i + 1;
+    }
+    ret true;
+}
+
+fun parse_ipv4(buf: &u8, len: usize, addr: *ip.IPv4) bool {
+    var octet: u16 = 0;
+    var idx: usize = 0;
+    var i: usize = 0;
+    for (i < len) {
+        if (buf[i] == '.') {
+            if (octet > 255 || idx >= 4) { ret false; }
+            addr.octets[idx] = octet::u8;
+            idx = idx + 1;
+            octet = 0;
+        } or (buf[i] >= 48 && buf[i] <= 57) {
+            octet = octet * 10 + (buf[i] - 48)::u16;
+        } or {
+            ret false;
+        }
+        i = i + 1;
+    }
+    if (idx != 3 || octet > 255) { ret false; }
+    addr.octets[3] = octet::u8;
+    ret true;
+}
+
+fun read_nameserver(ns: *ip.IPv4) {
+    val fd: i64 = os.open(os.AT_FDCWD, "/etc/resolv.conf", os.O_RDONLY, 0);
+    if (fd < 0) { ret; }
+
+    var buf: [2048]u8;
+    val n: i64 = os.read(fd::i32, ?buf[0], 2048);
+    os.close(fd::i32);
+    if (n <= 0) { ret; }
+
+    val len: usize = n::usize;
+    val prefix: str = "nameserver";
+    val plen: usize = 10;
+    var pos: usize = 0;
+
+    for (pos < len) {
+        for (pos < len && (buf[pos] == ' ' || buf[pos] == 9)) { pos = pos + 1; }
+
+        if (pos + plen < len && region_eq(?buf[pos], prefix, plen)) {
+            pos = pos + plen;
+            for (pos < len && (buf[pos] == ' ' || buf[pos] == 9)) { pos = pos + 1; }
+            var start: usize = pos;
+            for (pos < len && buf[pos] != ' ' && buf[pos] != 9 && buf[pos] != 10) {
+                pos = pos + 1;
+            }
+            if (pos > start) {
+                if (parse_ipv4(?buf[start], pos - start, ns)) { ret; }
+            }
+        }
+
+        for (pos < len && buf[pos] != 10) { pos = pos + 1; }
+        if (pos < len) { pos = pos + 1; }
+    }
+}
+
+fun build_query(hostname: str, buf: *u8, cap: usize) usize {
+    val host_len: usize = str_len(hostname);
+    val qname_len: usize = host_len + 2;
+    val total: usize = DNS_HEADER_LEN + qname_len + 4;
+    if (total > cap) { ret 0; }
+
+    memory.raw_zero(buf::ptr, total);
+
+    buf[0] = 0xAB;
+    buf[1] = 0xCD;
+    buf[2] = 0x01;
+    buf[3] = 0x00;
+    buf[4] = 0;
+    buf[5] = 1;
+
+    var pos: usize = DNS_HEADER_LEN;
+    var label_start: usize = pos;
+    pos = pos + 1;
+    var label_len: usize = 0;
+    var i: usize = 0;
+    for (i < host_len) {
+        if ((hostname::&u8)[i] == '.') {
+            buf[label_start] = label_len::u8;
+            label_start = pos;
+            label_len = 0;
+            pos = pos + 1;
+        } or {
+            buf[pos] = (hostname::&u8)[i];
+            pos = pos + 1;
+            label_len = label_len + 1;
+        }
+        i = i + 1;
+    }
+    buf[label_start] = label_len::u8;
+    buf[pos] = 0;
+    pos = pos + 1;
+
+    buf[pos] = 0;
+    buf[pos + 1] = DNS_TYPE_A::u8;
+    buf[pos + 2] = 0;
+    buf[pos + 3] = DNS_CLASS_IN::u8;
+    pos = pos + 4;
+
+    ret pos;
+}
+
+fun parse_response(buf: &u8, len: usize, addr: *ip.IPv4) bool {
+    if (len < DNS_HEADER_LEN) { ret false; }
+
+    val flags: u8 = buf[3];
+    val rcode: u8 = flags & 0x0F;
+    if (rcode != 0) { ret false; }
+
+    val ancount: u16 = (buf[6]::u16 << 8) | buf[7]::u16;
+    if (ancount == 0) { ret false; }
+
+    var pos: usize = DNS_HEADER_LEN;
+
+    for (pos < len && buf[pos] != 0) {
+        if ((buf[pos] & 0xC0) == 0xC0) {
+            pos = pos + 2;
+            brk;
+        }
+        pos = pos + buf[pos]::usize + 1;
+    }
+    if (pos < len && buf[pos] == 0) { pos = pos + 1; }
+    pos = pos + 4;
+
+    var i: u16 = 0;
+    for (i < ancount && pos + 10 < len) {
+        if ((buf[pos] & 0xC0) == 0xC0) {
+            pos = pos + 2;
+        } or {
+            for (pos < len && buf[pos] != 0) {
+                pos = pos + buf[pos]::usize + 1;
+            }
+            if (pos < len) { pos = pos + 1; }
+        }
+
+        if (pos + 10 > len) { ret false; }
+
+        val rtype: u16 = (buf[pos]::u16 << 8) | buf[pos + 1]::u16;
+        val rdlen: u16 = (buf[pos + 8]::u16 << 8) | buf[pos + 9]::u16;
+        pos = pos + 10;
+
+        if (rtype == DNS_TYPE_A && rdlen == 4 && pos + 4 <= len) {
+            addr.octets[0] = buf[pos];
+            addr.octets[1] = buf[pos + 1];
+            addr.octets[2] = buf[pos + 2];
+            addr.octets[3] = buf[pos + 3];
+            ret true;
+        }
+
+        pos = pos + rdlen::usize;
+        i = i + 1;
+    }
+
+    ret false;
+}
+
+test "dns: lookup_hosts localhost" {
+    var addr: ip.IPv4;
+    val found: bool = lookup_hosts("localhost", ?addr);
+    if (!found) { ret 0; }
+    if (addr.octets[0] != 127) { ret 0; }
+    if (addr.octets[1] != 0) { ret 0; }
+    if (addr.octets[2] != 0) { ret 0; }
+    if (addr.octets[3] != 1) { ret 0; }
+    ret 1;
+}
+
+test "dns: lookup_hosts nonexistent" {
+    var addr: ip.IPv4;
+    val found: bool = lookup_hosts("this.host.does.not.exist.local", ?addr);
+    if (found) { ret 0; }
+    ret 1;
+}

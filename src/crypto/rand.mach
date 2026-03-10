@@ -1,20 +1,37 @@
 # cryptographic random number generation.
 #
-# fills buffers with random bytes from the OS entropy pool.
+# fills buffers with random bytes from the OS entropy source.
 
 use std.types.bool;
 use std.types.size;
+use sys: std.system.os;
 
-$if ($mach.build.target.os.id == $mach.os.linux.id) {
-    use impl: std.crypto.rand.linux;
-}
-$or {
-    $error("std.crypto.rand: unsupported target");
+# fill: fill a buffer with cryptographic random bytes.
+# ---
+# buf: destination buffer
+# len: number of bytes to fill
+# ret: true on success
+pub fun fill(buf: *u8, len: usize) bool {
+    ret sys.random_fill(buf, len);
 }
 
-pub fwd impl.fill;
-pub fwd impl.u64;
-pub fwd impl.u32;
+# u64: return a random 64-bit unsigned integer.
+# ---
+# ret: random value
+pub fun u64() u64 {
+    var v: u64 = 0;
+    fill((?v)::*u8, 8);
+    ret v;
+}
+
+# u32: return a random 32-bit unsigned integer.
+# ---
+# ret: random value
+pub fun u32() u32 {
+    var v: u32 = 0;
+    fill((?v)::*u8, 4);
+    ret v;
+}
 
 test "fill: populates buffer with non-zero data" {
     var buf: [32]u8;
