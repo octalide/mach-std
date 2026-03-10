@@ -667,11 +667,7 @@ pub var _envp: usize = 0;
 # code: exit code
 pub fun terminate(code: i64) {
     syscall1(c.SYS_EXIT, code::usize);
-    asm {
-        x86_64 {
-            hlt
-        }
-    }
+    asm { trap }
 }
 
 # abort: abort the process immediately with exit code 255.
@@ -871,9 +867,9 @@ fun thread_trampoline() {
             mov rdi, 0
             mov rax, 60
             syscall
-            hlt
         }
     }
+    asm { trap }
 }
 
 # thread_spawn: create a new thread sharing the current address space.
@@ -902,9 +898,9 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
     var stack_ptr: usize = child_sp;
     var result: i64 = 0;
 
+    asm { fence.seq_cst }
     asm {
         x86_64 {
-            mfence
             mov rdi, [flags]
             mov rsi, [stack_ptr]
             xor rdx, rdx

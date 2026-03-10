@@ -1,29 +1,88 @@
 # atomic operations for lock-free programming.
 #
-# dispatches to the appropriate architecture-specific backend.
-# atomics are CPU instructions, so dispatch is on architecture.
+# all operations use sequential consistency via target-independent
+# MASM atomic instructions. no architecture-specific code.
 
 use std.types.bool;
 use std.types.size;
 
-$if ($mach.build.target.arch.id == $mach.arch.x86_64.id) {
-    use impl: std.sync.atomic.x86_64;
-}
-$or ($mach.build.target.arch.id == $mach.arch.aarch64.id) {
-    use impl: std.sync.atomic.aarch64;
-}
-$or {
-    $error("std.sync.atomic: unsupported architecture");
+# atomic 64-bit load with sequential consistency.
+# ---
+# ptr: address to load from
+# ret: loaded value
+pub fun load(ptr: *i64) i64 {
+    var result: i64 = 0;
+    asm { atomic.load.seq_cst result, ptr }
+    ret result;
 }
 
-pub fwd impl.load;
-pub fwd impl.store;
-pub fwd impl.cas;
-pub fwd impl.fetch_add;
-pub fwd impl.fetch_sub;
-pub fwd impl.exchange;
-pub fwd impl.fence;
-pub fwd impl.spin_hint;
+# atomic 64-bit store with sequential consistency.
+# ---
+# ptr: address to store to
+# v:   value to store
+pub fun store(ptr: *i64, v: i64) {
+    asm { atomic.store.seq_cst ptr, v }
+}
+
+# atomic compare-and-swap.
+# if *ptr == *expected, stores desired and returns true.
+# otherwise, writes actual value to *expected and returns false.
+# ---
+# ptr:      address of the atomic variable
+# expected: pointer to expected value (updated on failure)
+# desired:  value to store on success
+# ret:      true if the swap succeeded
+pub fun cas(ptr: *i64, expected: *i64, desired: i64) bool {
+    var old: i64 = 0;
+    val exp: i64 = @expected;
+    asm { atomic.cas.seq_cst old, ptr, exp, desired }
+    if (old == exp) { ret true; }
+    @expected = old;
+    ret false;
+}
+
+# atomic fetch-and-add. returns the old value.
+# ---
+# ptr: address of the atomic variable
+# v:   value to add
+# ret: previous value
+pub fun fetch_add(ptr: *i64, v: i64) i64 {
+    var old: i64 = 0;
+    asm { atomic.rmw.add.seq_cst old, ptr, v }
+    ret old;
+}
+
+# atomic fetch-and-subtract. returns the old value.
+# ---
+# ptr: address of the atomic variable
+# v:   value to subtract
+# ret: previous value
+pub fun fetch_sub(ptr: *i64, v: i64) i64 {
+    var old: i64 = 0;
+    asm { atomic.rmw.sub.seq_cst old, ptr, v }
+    ret old;
+}
+
+# atomic exchange. returns the old value.
+# ---
+# ptr: address of the atomic variable
+# v:   new value
+# ret: previous value
+pub fun exchange(ptr: *i64, v: i64) i64 {
+    var old: i64 = 0;
+    asm { atomic.rmw.xchg.seq_cst old, ptr, v }
+    ret old;
+}
+
+# full memory barrier.
+pub fun fence() {
+    asm { fence.seq_cst }
+}
+
+# cpu yield hint for spin loops.
+pub fun spin_hint() {
+    asm { hint.pause }
+}
 
 test "atomic: load returns stored value" {
     var x: i64 = 42;
