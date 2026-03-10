@@ -62,6 +62,11 @@ pub val PAGE_EXECUTE:           u32 = 0x10;
 pub val PAGE_EXECUTE_READ:      u32 = 0x20;
 pub val PAGE_EXECUTE_READWRITE: u32 = 0x40;
 
+# file mapping access rights
+pub val FILE_MAP_READ:    u32 = 0x0004;
+pub val FILE_MAP_WRITE:   u32 = 0x0002;
+pub val FILE_MAP_EXECUTE: u32 = 0x0020;
+
 # SetFilePointerEx move methods
 pub val FILE_BEGIN:   u32 = 0;
 pub val FILE_CURRENT: u32 = 1;
