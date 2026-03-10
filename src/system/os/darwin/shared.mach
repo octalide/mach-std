@@ -420,35 +420,14 @@ pub fun wait_pid(pid: i64, wstatus: *i32, options: i32) i64 {
     ret wait(pid, wstatus, options, nil);
 }
 
-# wait status macros (same POSIX encoding across all darwin arches)
-pub fun has_exited(status: i32) bool {
-    ret (status & 0x7f) == 0;
-}
-
-pub fun exit_code(status: i32) i32 {
-    ret (status >> 8) & 0xff;
-}
-
-pub fun was_signaled(status: i32) bool {
-    val sig: i32 = status & 0x7f;
-    ret sig != 0 && sig != 0x7f;
-}
-
-pub fun term_signal(status: i32) i32 {
-    ret status & 0x7f;
-}
-
-pub fun was_stopped(status: i32) bool {
-    ret (status & 0xff) == 0x7f;
-}
-
-pub fun stop_signal(status: i32) i32 {
-    ret (status >> 8) & 0xff;
-}
-
-pub fun was_continued(status: i32) bool {
-    ret status == 0xffff;
-}
+# wait status (POSIX encoding, shared across all targets)
+pub fwd os_shared.has_exited;
+pub fwd os_shared.exit_code;
+pub fwd os_shared.was_signaled;
+pub fwd os_shared.term_signal;
+pub fwd os_shared.was_stopped;
+pub fwd os_shared.stop_signal;
+pub fwd os_shared.was_continued;
 
 # spawn: create a child process running the given program.
 # ---
