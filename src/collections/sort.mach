@@ -122,7 +122,9 @@ pub fun binary_search[T](data: &T, len: usize, target: &T, cmp: fun(&T, &T) i64)
 }
 
 fun cmp_i64(a: &i64, b: &i64) i64 {
-    ret @a - @b;
+    if (@a < @b) { ret -1; }
+    if (@a > @b) { ret 1; }
+    ret 0;
 }
 
 test "sort: empty and single" {
