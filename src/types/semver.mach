@@ -213,8 +213,13 @@ fun parse_number(input: str, pos: *usize) Option[u64] {
         val c: u8 = input[@pos];
         if (!char_is_digit(c)) { brk; }
 
+        val digit: u64 = (c - '0')::u64;
+        if (value > 1844674407370955161 || (value == 1844674407370955161 && digit > 5)) {
+            ret none[u64]();
+        }
+
         found_digit = true;
-        value       = value * 10 + (c - '0')::u64;
+        value       = value * 10 + digit;
         @pos        = @pos + 1;
     }
 
