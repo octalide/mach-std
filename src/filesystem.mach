@@ -228,11 +228,16 @@ pub fun write_file(p: str, data: &u8, len: usize, mode: i32) Result[bool, str] {
     }
     var f: File = unwrap_ok[File, str](cr);
 
-    val wr: Result[usize, str] = write(?f, data, len);
-    close(?f);
-    if (is_err[usize, str](wr)) {
-        ret err[bool, str](unwrap_err[usize, str](wr));
+    var total: usize = 0;
+    for (total < len) {
+        val n: i64 = os.write(f.fd, (data::usize + total)::&u8, len - total);
+        if (n < 0) {
+            close(?f);
+            ret err[bool, str](os.message(n));
+        }
+        total = total + n::usize;
     }
+    close(?f);
     ret ok[bool, str](true);
 }
 
