@@ -10,6 +10,7 @@ use std.types.string;
 use writer: std.io.writer;
 use f:      std.format;
 use os:     std.system.os;
+use atomic: std.sync.atomic;
 
 pub def Level: u8;
 pub val DEBUG: Level = 0;
@@ -18,29 +19,31 @@ pub val WARN:  Level = 2;
 pub val ERROR: Level = 3;
 pub val OFF:   Level = 4;
 
-var min_level:   Level = INFO;
-var out_ctx:     ptr = nil;
-var out_fn:      usize = 0;
-var configured:  bool = false;
+var level_val:  i64 = INFO::i64;
+var out_ctx:    ptr = nil;
+var out_fn:     usize = 0;
+var writer_set: i64 = 0;
 
 # set the minimum log level.
 #
-# messages below this level are silently discarded.
+# messages below this level are silently discarded. safe to call from
+# any thread; takes effect immediately for subsequent log calls.
 # ---
 # level: minimum level to emit (DEBUG, INFO, WARN, ERROR, OFF)
 pub fun set_level(level: Level) {
-    min_level = level;
+    atomic.store(?level_val, level::i64);
 }
 
 # set the output writer for log messages.
 #
 # when set, all output goes through this writer instead of stderr.
+# must be called before spawning threads that log.
 # ---
 # w: writer to use for output
 pub fun set_writer(w: &writer.Writer) {
     out_ctx = w.ctx;
     out_fn = w.fn_write::usize;
-    configured = true;
+    atomic.store(?writer_set, 1);
 }
 
 fun write_stderr(buf: &u8, len: usize) {
@@ -48,7 +51,7 @@ fun write_stderr(buf: &u8, len: usize) {
 }
 
 fun write_piece(buf: &u8, len: usize) {
-    if (configured) {
+    if (atomic.load(?writer_set) != 0) {
         val f: fun(ptr, &u8, usize) Result[usize, str] = out_fn::fun(ptr, &u8, usize) Result[usize, str];
         f(out_ctx, buf, len);
     }
@@ -58,7 +61,7 @@ fun write_piece(buf: &u8, len: usize) {
 }
 
 fun log_msg(level: Level, prefix: str, msg: str) {
-    if (level < min_level) { ret; }
+    if (level::i64 < atomic.load(?level_val)) { ret; }
     write_piece("[", 1);
     write_piece(prefix, str_len(prefix));
     write_piece("] ", 2);
