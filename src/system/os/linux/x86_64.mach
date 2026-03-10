@@ -8,8 +8,9 @@ use std.types.size;
 use std.types.bool;
 use std.types.string;
 
-use c:      std.system.os.linux.x86_64.constants;
-use shared: std.system.os.linux.shared;
+use c:         std.system.os.linux.x86_64.constants;
+use shared:    std.system.os.linux.shared;
+use os_shared: std.system.os.shared;
 
 $if ($mach.build.target.os.id != $mach.os.linux.id) {
     $error("std.system.os.linux.x86_64: requires linux target");
@@ -122,8 +123,6 @@ pub val ENOTEMPTY: i64 = c.ENOTEMPTY;
 pub val ENOTSUP:   i64 = c.ENOTSUP;
 
 pub val EINTR_MAX_RETRIES: usize = c.EINTR_MAX_RETRIES;
-
-val HUGE_2MB: usize = 2097152;
 
 # syscall wrappers
 
@@ -499,7 +498,7 @@ pub fun has_numa() bool {
 # ret: true if MAP_HUGETLB mmap succeeds
 pub fun has_huge_pages() bool {
     val res: i64 = syscall6(
-        c.SYS_MMAP, 0, HUGE_2MB,
+        c.SYS_MMAP, 0, os_shared.HUGE_2MB,
         (c.PROT_READ | c.PROT_WRITE)::u32::usize,
         (c.MAP_PRIVATE | c.MAP_ANONYMOUS | c.MAP_HUGETLB)::u32::usize,
         (-1)::isize::usize, 0
@@ -507,7 +506,7 @@ pub fun has_huge_pages() bool {
     if (res < 0) {
         ret false;
     }
-    syscall2(c.SYS_MUNMAP, res::usize, HUGE_2MB);
+    syscall2(c.SYS_MUNMAP, res::usize, os_shared.HUGE_2MB);
     ret true;
 }
 
