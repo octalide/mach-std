@@ -50,7 +50,6 @@ use std.rand;
 
 use std.process.env;
 use std.process.exec;
-use std.process.args;
 
 use std.net.ip;
 use std.net.tcp;
