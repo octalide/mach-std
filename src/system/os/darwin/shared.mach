@@ -482,9 +482,15 @@ pub fun getpid() i64 {
 # nsec: nanoseconds to sleep
 pub fun sleep(nsec: i64) {
     if (nsec <= 0) { ret; }
+    var sec: i64 = nsec / 1000000000;
+    var usec: i64 = (nsec % 1000000000 + 999) / 1000;
+    if (usec >= 1000000) {
+        sec = sec + 1;
+        usec = usec - 1000000;
+    }
     var tv: timeval;
-    tv.tv_sec = nsec / 1000000000;
-    tv.tv_usec = ((nsec % 1000000000) / 1000)::i32;
+    tv.tv_sec = sec;
+    tv.tv_usec = usec::i32;
     syscall5(c.SYS_SELECT, 0, 0, 0, 0, ?tv::usize);
 }
 
