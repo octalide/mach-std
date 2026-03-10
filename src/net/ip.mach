@@ -7,8 +7,6 @@ use std.types.string;
 use mem: std.memory;
 use os:  std.system.os;
 
-pub val SOCKADDR_IN_SIZE: usize = 16;
-
 # IPv4: an IPv4 address stored as four octets.
 # ---
 # octets: the four octets in network order
@@ -169,17 +167,9 @@ pub fun endpoint(a: u8, b: u8, c: u8, d: u8, port: u16) Endpoint {
 # to_sockaddr: serialize an Endpoint into a sockaddr_in byte buffer.
 # ---
 # ep: the endpoint to serialize
-# sa: pointer to a buffer of at least SOCKADDR_IN_SIZE bytes
+# sa: pointer to a buffer of at least os.SOCKADDR_IN_SIZE bytes
 pub fun to_sockaddr(ep: Endpoint, sa: *u8) {
-    mem.raw_zero(sa::ptr, SOCKADDR_IN_SIZE);
-    sa[0] = os.AF_INET::u8;
-    sa[1] = 0;
-    sa[2] = (ep.port >> 8)::u8;
-    sa[3] = (ep.port & 255)::u8;
-    sa[4] = ep.addr.octets[0];
-    sa[5] = ep.addr.octets[1];
-    sa[6] = ep.addr.octets[2];
-    sa[7] = ep.addr.octets[3];
+    os.sock_addr_init(sa, ep.port, ?ep.addr.octets[0]);
 }
 
 # from_sockaddr: deserialize a sockaddr_in byte buffer into an Endpoint.
@@ -187,11 +177,7 @@ pub fun to_sockaddr(ep: Endpoint, sa: *u8) {
 # sa: pointer to the sockaddr_in buffer
 # ep: pointer to the Endpoint to fill
 pub fun from_sockaddr(sa: &u8, ep: *Endpoint) {
-    ep.port = (sa[2]::u16 << 8) | sa[3]::u16;
-    ep.addr.octets[0] = sa[4];
-    ep.addr.octets[1] = sa[5];
-    ep.addr.octets[2] = sa[6];
-    ep.addr.octets[3] = sa[7];
+    os.sock_addr_read(sa, ?ep.port, ?ep.addr.octets[0]);
 }
 
 fun write_u8_decimal(v: u8, buf: *u8, off: usize, cap: usize) usize {

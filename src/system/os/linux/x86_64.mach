@@ -987,6 +987,66 @@ pub val SHUT_RD:      i32 = c.SHUT_RD;
 pub val SHUT_WR:      i32 = c.SHUT_WR;
 pub val SHUT_RDWR:    i32 = c.SHUT_RDWR;
 
+pub val SOCKADDR_IN_SIZE: usize = 16;
+
+# sock_addr_init: fill a sockaddr_in buffer with the given port and IPv4 address.
+# ---
+# sa:   pointer to a buffer of at least SOCKADDR_IN_SIZE bytes
+# port: port in host byte order
+# addr: pointer to 4 IPv4 address bytes in network order
+pub fun sock_addr_init(sa: *u8, port: u16, addr: &u8) {
+    var i: usize = 0;
+    for (i < SOCKADDR_IN_SIZE) { sa[i] = 0; i = i + 1; }
+    sa[0] = AF_INET::u8;
+    sa[1] = 0;
+    sa[2] = (port >> 8)::u8;
+    sa[3] = (port & 255)::u8;
+    sa[4] = addr[0];
+    sa[5] = addr[1];
+    sa[6] = addr[2];
+    sa[7] = addr[3];
+}
+
+# sock_addr_read: read port and IPv4 address from a sockaddr_in buffer.
+# ---
+# sa:   pointer to the sockaddr_in buffer
+# port: pointer to store port in host byte order
+# addr: pointer to store 4 IPv4 address bytes
+pub fun sock_addr_read(sa: &u8, port: *u16, addr: *u8) {
+    @port = (sa[2]::u16 << 8) | sa[3]::u16;
+    addr[0] = sa[4];
+    addr[1] = sa[5];
+    addr[2] = sa[6];
+    addr[3] = sa[7];
+}
+
+# sock_send: send data on a connected socket.
+# ---
+# fd:  socket fd
+# buf: source buffer
+# len: number of bytes to send
+# ret: bytes sent, or negative errno
+pub fun sock_send(fd: i32, buf: &u8, len: usize) i64 {
+    ret write(fd, buf, len);
+}
+
+# sock_recv: receive data from a connected socket.
+# ---
+# fd:  socket fd
+# buf: destination buffer
+# len: maximum bytes to receive
+# ret: bytes received, or negative errno
+pub fun sock_recv(fd: i32, buf: *u8, len: usize) i64 {
+    ret read(fd, buf, len);
+}
+
+# sock_close: close a socket file descriptor.
+# ---
+# fd: socket fd
+pub fun sock_close(fd: i32) {
+    close(fd);
+}
+
 # sock_create: create a socket file descriptor.
 # ---
 # domain:   address family (AF_INET)

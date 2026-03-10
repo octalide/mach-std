@@ -83,6 +83,10 @@ ext ws2_shutdown: fun(usize, i32) i32;
 $ws2_shutdown.symbol = "shutdown";
 ext ws2_setsockopt: fun(usize, i32, i32, *u8, i32) i32;
 $ws2_setsockopt.symbol = "setsockopt";
+ext ws2_send: fun(usize, &u8, i32, i32) i32;
+$ws2_send.symbol = "send";
+ext ws2_recv: fun(usize, *u8, i32, i32) i32;
+$ws2_recv.symbol = "recv";
 ext closesocket: fun(usize) i32;
 
 # advapi32.dll
@@ -1169,6 +1173,47 @@ pub val SO_REUSEADDR: i32 = c.SO_REUSEADDR;
 pub val SHUT_RD:      i32 = c.SHUT_RD;
 pub val SHUT_WR:      i32 = c.SHUT_WR;
 pub val SHUT_RDWR:    i32 = c.SHUT_RDWR;
+
+pub val SOCKADDR_IN_SIZE: usize = 16;
+
+pub fun sock_addr_init(sa: *u8, port: u16, addr: &u8) {
+    var i: usize = 0;
+    for (i < SOCKADDR_IN_SIZE) { sa[i] = 0; i = i + 1; }
+    sa[0] = AF_INET::u8;
+    sa[1] = 0;
+    sa[2] = (port >> 8)::u8;
+    sa[3] = (port & 255)::u8;
+    sa[4] = addr[0];
+    sa[5] = addr[1];
+    sa[6] = addr[2];
+    sa[7] = addr[3];
+}
+
+pub fun sock_addr_read(sa: &u8, port: *u16, addr: *u8) {
+    @port = (sa[2]::u16 << 8) | sa[3]::u16;
+    addr[0] = sa[4];
+    addr[1] = sa[5];
+    addr[2] = sa[6];
+    addr[3] = sa[7];
+}
+
+pub fun sock_send(fd: i32, buf: &u8, len: usize) i64 {
+    if (!ensure_wsa()) { ret c.EIO; }
+    val res: i32 = ws2_send(fd::usize, buf, len::i32, 0);
+    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    ret res::i64;
+}
+
+pub fun sock_recv(fd: i32, buf: *u8, len: usize) i64 {
+    if (!ensure_wsa()) { ret c.EIO; }
+    val res: i32 = ws2_recv(fd::usize, buf, len::i32, 0);
+    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    ret res::i64;
+}
+
+pub fun sock_close(fd: i32) {
+    closesocket(fd::usize);
+}
 
 var wsa_initialized: i64 = 0;
 

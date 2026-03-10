@@ -657,6 +657,41 @@ pub val SHUT_RD:      i32 = c.SHUT_RD;
 pub val SHUT_WR:      i32 = c.SHUT_WR;
 pub val SHUT_RDWR:    i32 = c.SHUT_RDWR;
 
+pub val SOCKADDR_IN_SIZE: usize = 16;
+
+pub fun sock_addr_init(sa: *u8, port: u16, addr: &u8) {
+    var i: usize = 0;
+    for (i < SOCKADDR_IN_SIZE) { sa[i] = 0; i = i + 1; }
+    sa[0] = SOCKADDR_IN_SIZE::u8;
+    sa[1] = AF_INET::u8;
+    sa[2] = (port >> 8)::u8;
+    sa[3] = (port & 255)::u8;
+    sa[4] = addr[0];
+    sa[5] = addr[1];
+    sa[6] = addr[2];
+    sa[7] = addr[3];
+}
+
+pub fun sock_addr_read(sa: &u8, port: *u16, addr: *u8) {
+    @port = (sa[2]::u16 << 8) | sa[3]::u16;
+    addr[0] = sa[4];
+    addr[1] = sa[5];
+    addr[2] = sa[6];
+    addr[3] = sa[7];
+}
+
+pub fun sock_send(fd: i32, buf: &u8, len: usize) i64 {
+    ret write(fd, buf, len);
+}
+
+pub fun sock_recv(fd: i32, buf: *u8, len: usize) i64 {
+    ret read(fd, buf, len);
+}
+
+pub fun sock_close(fd: i32) {
+    close(fd);
+}
+
 pub fun sock_create(domain: i32, typ: i32, protocol: i32) i64 {
     ret syscall3(c.SYS_SOCKET, domain::u32::usize, typ::u32::usize, protocol::u32::usize);
 }

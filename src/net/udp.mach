@@ -37,9 +37,9 @@ pub fun bind(ep: ip.Endpoint) Result[Socket, str] {
     var sa: [16]u8;
     ip.to_sockaddr(ep, ?sa[0]);
 
-    val br: i64 = os.sock_bind(fd::i32, ?sa[0], ip.SOCKADDR_IN_SIZE);
+    val br: i64 = os.sock_bind(fd::i32, ?sa[0], os.SOCKADDR_IN_SIZE);
     if (br < 0) {
-        os.close(fd::i32);
+        os.sock_close(fd::i32);
         ret err[Socket, str]("bind failed");
     }
 
@@ -56,7 +56,7 @@ pub fun bind(ep: ip.Endpoint) Result[Socket, str] {
 pub fun send_to(s: &Socket, buf: &u8, len: usize, ep: ip.Endpoint) i64 {
     var sa: [16]u8;
     ip.to_sockaddr(ep, ?sa[0]);
-    ret os.sock_sendto(s.fd, buf, len, 0, ?sa[0], ip.SOCKADDR_IN_SIZE);
+    ret os.sock_sendto(s.fd, buf, len, 0, ?sa[0], os.SOCKADDR_IN_SIZE);
 }
 
 # recv_from: receive a datagram and populate the source endpoint.
@@ -68,7 +68,7 @@ pub fun send_to(s: &Socket, buf: &u8, len: usize, ep: ip.Endpoint) i64 {
 # ret: number of bytes received, or negative on error
 pub fun recv_from(s: &Socket, buf: *u8, len: usize, ep: *ip.Endpoint) i64 {
     var sa: [16]u8;
-    var sa_len: u32 = ip.SOCKADDR_IN_SIZE::u32;
+    var sa_len: u32 = os.SOCKADDR_IN_SIZE::u32;
     val n: i64 = os.sock_recvfrom(s.fd, buf, len, 0, ?sa[0], ?sa_len);
     if (n >= 0 && ep != nil) {
         ip.from_sockaddr(?sa[0], ep);
@@ -80,7 +80,7 @@ pub fun recv_from(s: &Socket, buf: *u8, len: usize, ep: *ip.Endpoint) i64 {
 # ---
 # s: the socket to close
 pub fun socket_close(s: *Socket) {
-    os.close(s.fd);
+    os.sock_close(s.fd);
 }
 
 test "udp: create and close socket" {
