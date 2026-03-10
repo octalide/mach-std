@@ -11,6 +11,7 @@ use std.types.string;
 use c:      std.system.os.windows.x86_64.constants;
 use shared:    std.system.os.windows.shared;
 use os_shared: std.system.os.shared;
+use atomic:    std.sync.atomic;
 
 $if ($mach.build.target.os.id != $mach.os.windows.id) {
     $error("std.system.os.windows.x86_64: requires windows target");
@@ -255,6 +256,18 @@ val MAX_FDS: usize = 256;
 var _handles: [256]isize;
 var _find_handles: [256]isize;
 var _initialized: bool = false;
+var _fd_lock: i64 = 0;
+
+fun fd_spin_lock() {
+    var expected: i64 = 0;
+    for (!atomic.cas(?_fd_lock, ?expected, 1)) {
+        expected = 0;
+    }
+}
+
+fun fd_spin_unlock() {
+    atomic.store(?_fd_lock, 0);
+}
 
 fun init_fds() {
     if (_initialized) {
@@ -273,27 +286,35 @@ fun init_fds() {
 }
 
 fun alloc_fd(h: isize) i32 {
+    fd_spin_lock();
     init_fds();
     var fd: usize = 3;
     for (fd < MAX_FDS) {
         if (_handles[fd] == c.INVALID_HANDLE_VALUE) {
             _handles[fd] = h;
+            fd_spin_unlock();
             ret fd::i32;
         }
         fd = fd + 1;
     }
+    fd_spin_unlock();
     ret -1;
 }
 
 fun get_handle(fd: i32) isize {
+    fd_spin_lock();
     init_fds();
     if (fd < 0 || fd::usize >= MAX_FDS) {
+        fd_spin_unlock();
         ret c.INVALID_HANDLE_VALUE;
     }
-    ret _handles[fd::usize];
+    val h: isize = _handles[fd::usize];
+    fd_spin_unlock();
+    ret h;
 }
 
 fun free_fd(fd: i32) {
+    fd_spin_lock();
     if (fd >= 0 && fd::usize < MAX_FDS) {
         if (_find_handles[fd::usize] != c.INVALID_HANDLE_VALUE) {
             FindClose(_find_handles[fd::usize]);
@@ -301,6 +322,7 @@ fun free_fd(fd: i32) {
         }
         _handles[fd::usize] = c.INVALID_HANDLE_VALUE;
     }
+    fd_spin_unlock();
 }
 
 # child process tracking table
@@ -309,6 +331,18 @@ val MAX_PROCS: usize = 64;
 var _proc_handles: [64]isize;
 var _proc_pids: [64]u32;
 var _procs_init: u8 = 0;
+var _proc_lock: i64 = 0;
+
+fun proc_spin_lock() {
+    var expected: i64 = 0;
+    for (!atomic.cas(?_proc_lock, ?expected, 1)) {
+        expected = 0;
+    }
+}
+
+fun proc_spin_unlock() {
+    atomic.store(?_proc_lock, 0);
+}
 
 fun init_procs() {
     if (_procs_init != 0) { ret; }
@@ -322,44 +356,55 @@ fun init_procs() {
 }
 
 fun alloc_proc(pid: u32, handle: isize) bool {
+    proc_spin_lock();
     init_procs();
     var i: usize = 0;
     for (i < MAX_PROCS) {
         if (_proc_handles[i] == c.INVALID_HANDLE_VALUE) {
             _proc_handles[i] = handle;
             _proc_pids[i] = pid;
+            proc_spin_unlock();
             ret true;
         }
         i = i + 1;
     }
+    proc_spin_unlock();
     ret false;
 }
 
 fun get_proc_handle(pid: u32) isize {
+    proc_spin_lock();
     init_procs();
     var i: usize = 0;
     for (i < MAX_PROCS) {
         if (_proc_pids[i] == pid && _proc_handles[i] != c.INVALID_HANDLE_VALUE) {
-            ret _proc_handles[i];
+            val h: isize = _proc_handles[i];
+            proc_spin_unlock();
+            ret h;
         }
         i = i + 1;
     }
+    proc_spin_unlock();
     ret c.INVALID_HANDLE_VALUE;
 }
 
 fun free_proc(pid: u32) {
+    proc_spin_lock();
     var i: usize = 0;
     for (i < MAX_PROCS) {
         if (_proc_pids[i] == pid && _proc_handles[i] != c.INVALID_HANDLE_VALUE) {
             _proc_handles[i] = c.INVALID_HANDLE_VALUE;
             _proc_pids[i] = 0;
+            proc_spin_unlock();
             ret;
         }
         i = i + 1;
     }
+    proc_spin_unlock();
 }
 
 fun count_procs() usize {
+    proc_spin_lock();
     init_procs();
     var n: usize = 0;
     var i: usize = 0;
@@ -369,6 +414,7 @@ fun count_procs() usize {
         }
         i = i + 1;
     }
+    proc_spin_unlock();
     ret n;
 }
 
