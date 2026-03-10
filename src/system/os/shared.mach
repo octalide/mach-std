@@ -34,3 +34,6 @@ pub val ADVISE_DONT_NEED:  u32 = 4;
 # standard huge page sizes
 pub val HUGE_2MB: usize = 2097152;
 pub val HUGE_1GB: usize = 1073741824;
+
+# heap region reserve size (256MB)
+pub val HEAP_RESERVE: usize = 268435456;

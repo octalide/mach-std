@@ -9,7 +9,8 @@ use std.types.bool;
 use std.types.string;
 
 use c:      std.system.os.darwin.aarch64.constants;
-use shared: std.system.os.darwin.shared;
+use shared:    std.system.os.darwin.shared;
+use os_shared: std.system.os.shared;
 
 $if ($mach.build.target.os.id != $mach.os.darwin.id) {
     $error("std.system.os.darwin.aarch64: requires darwin target");
@@ -232,14 +233,13 @@ pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
 # darwin has no brk — simulate with mmap reserve + mprotect commit.
 var _brk_base: usize = 0;
 var _brk_end:  usize = 0;
-val _brk_reserve: usize = 268435456;
 
 pub fun heap_region_base() usize {
     if (_brk_base != 0) {
         ret _brk_end;
     }
     val res: i64 = syscall6(
-        c.SYS_MMAP, 0, _brk_reserve,
+        c.SYS_MMAP, 0, os_shared.HEAP_RESERVE,
         c.PROT_NONE::u32::usize,
         (c.MAP_PRIVATE | c.MAP_ANONYMOUS)::u32::usize,
         (-1)::isize::usize, 0
@@ -262,7 +262,7 @@ pub fun heap_region_extend(addr: usize) usize {
     if (addr <= _brk_end) {
         ret _brk_end;
     }
-    if (addr > _brk_base + _brk_reserve) {
+    if (addr > _brk_base + os_shared.HEAP_RESERVE) {
         ret _brk_end;
     }
     val size: usize = addr - _brk_end;
