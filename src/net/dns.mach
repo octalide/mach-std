@@ -8,6 +8,7 @@ use memory: std.memory;
 use os: std.system.os;
 use ip: std.net.ip;
 use udp: std.net.udp;
+use rand: std.crypto.rand;
 
 val DNS_PORT:       u16   = 53;
 val DNS_HEADER_LEN: usize = 12;
@@ -98,8 +99,9 @@ pub fun query(hostname: str, addr: *ip.IPv4) bool {
     var ns: ip.IPv4;
     if (os.dns_nameserver(?ns.octets[0]) < 0) { ret false; }
 
+    val qid: u16 = (rand.u32() & 0xFFFF)::u16;
     var pkt: [512]u8;
-    val qlen: usize = build_query(hostname, ?pkt[0], 512);
+    val qlen: usize = build_query(hostname, ?pkt[0], 512, qid);
     if (qlen == 0) { ret false; }
 
     val ep: ip.Endpoint = ip.Endpoint{addr: ns, port: DNS_PORT};
@@ -118,7 +120,7 @@ pub fun query(hostname: str, addr: *ip.IPv4) bool {
     udp.socket_close(?sock);
     if (recvd < DNS_HEADER_LEN::i64) { ret false; }
 
-    ret parse_response(?resp[0], recvd::usize, addr);
+    ret parse_response(?resp[0], recvd::usize, addr, qid);
 }
 
 # resolve: resolve a hostname, trying the hosts file first then DNS.
@@ -166,7 +168,7 @@ fun parse_ipv4(buf: &u8, len: usize, addr: *ip.IPv4) bool {
     ret true;
 }
 
-fun build_query(hostname: str, buf: *u8, cap: usize) usize {
+fun build_query(hostname: str, buf: *u8, cap: usize, qid: u16) usize {
     val host_len: usize = str_len(hostname);
     val qname_len: usize = host_len + 2;
     val total: usize = DNS_HEADER_LEN + qname_len + 4;
@@ -174,8 +176,8 @@ fun build_query(hostname: str, buf: *u8, cap: usize) usize {
 
     memory.raw_zero(buf::ptr, total);
 
-    buf[0] = 0xAB;
-    buf[1] = 0xCD;
+    buf[0] = (qid >> 8)::u8;
+    buf[1] = qid::u8;
     buf[2] = 0x01;
     buf[3] = 0x00;
     buf[4] = 0;
@@ -212,8 +214,11 @@ fun build_query(hostname: str, buf: *u8, cap: usize) usize {
     ret pos;
 }
 
-fun parse_response(buf: &u8, len: usize, addr: *ip.IPv4) bool {
+fun parse_response(buf: &u8, len: usize, addr: *ip.IPv4, qid: u16) bool {
     if (len < DNS_HEADER_LEN) { ret false; }
+
+    val resp_id: u16 = (buf[0]::u16 << 8) | buf[1]::u16;
+    if (resp_id != qid) { ret false; }
 
     val flags: u8 = buf[3];
     val rcode: u8 = flags & 0x0F;
