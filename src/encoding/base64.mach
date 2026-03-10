@@ -1,0 +1,338 @@
+# base64 encoding and decoding.
+
+use std.types.bool;
+use std.types.size;
+use std.types.string;
+
+var std_table: [64]u8;
+var url_table: [64]u8;
+var decode_table: [256]u8;
+var tables_ready: u8 = 0;
+
+fun init_tables() {
+    if (tables_ready != 0) { ret; }
+
+    var i: usize = 0;
+
+    for (i < 26) {
+        std_table[i] = 'A' + i::u8;
+        url_table[i] = 'A' + i::u8;
+        i = i + 1;
+    }
+    for (i < 52) {
+        std_table[i] = 'a' + (i - 26)::u8;
+        url_table[i] = 'a' + (i - 26)::u8;
+        i = i + 1;
+    }
+    for (i < 62) {
+        std_table[i] = '0' + (i - 52)::u8;
+        url_table[i] = '0' + (i - 52)::u8;
+        i = i + 1;
+    }
+    std_table[62] = '+';
+    std_table[63] = '/';
+    url_table[62] = '-';
+    url_table[63] = '_';
+
+    i = 0;
+    for (i < 256) {
+        decode_table[i] = 255;
+        i = i + 1;
+    }
+
+    i = 0;
+    for (i < 64) {
+        decode_table[std_table[i]::usize] = i::u8;
+        i = i + 1;
+    }
+    decode_table['-'::usize] = 62;
+    decode_table['_'::usize] = 63;
+
+    tables_ready = 1;
+}
+
+# return the buffer size required to encode src_len bytes (including null terminator).
+# ---
+# src_len: number of source bytes
+# ret:     required destination buffer size
+pub fun encoded_len(src_len: usize) usize {
+    ret (src_len + 2) / 3 * 4 + 1;
+}
+
+# return the maximum number of decoded bytes for a base64 string of src_len chars.
+# ---
+# src_len: length of the base64 string
+# ret:     maximum decoded byte count
+pub fun decoded_len(src_len: usize) usize {
+    ret src_len / 4 * 3;
+}
+
+fun encode_with_table(src: &u8, src_len: usize, dst: *u8, dst_len: usize, table: &u8, pad: bool) usize {
+    init_tables();
+
+    val required: usize = encoded_len(src_len);
+    if (dst_len < required) { ret 0; }
+
+    if (src_len == 0) {
+        dst[0] = 0;
+        ret 0;
+    }
+
+    var i: usize = 0;
+    var j: usize = 0;
+
+    for (i + 2 < src_len) {
+        val b0: u8 = src[i];
+        val b1: u8 = src[i + 1];
+        val b2: u8 = src[i + 2];
+        dst[j]     = table[(b0 >> 2)::usize];
+        dst[j + 1] = table[((b0 & 3) << 4 | b1 >> 4)::usize];
+        dst[j + 2] = table[((b1 & 15) << 2 | b2 >> 6)::usize];
+        dst[j + 3] = table[(b2 & 63)::usize];
+        i = i + 3;
+        j = j + 4;
+    }
+
+    val remaining: usize = src_len - i;
+    if (remaining == 1) {
+        val b0: u8 = src[i];
+        dst[j]     = table[(b0 >> 2)::usize];
+        dst[j + 1] = table[((b0 & 3) << 4)::usize];
+        if (pad) {
+            dst[j + 2] = '=';
+            dst[j + 3] = '=';
+            j = j + 4;
+        }
+        or {
+            j = j + 2;
+        }
+    }
+    or (remaining == 2) {
+        val b0: u8 = src[i];
+        val b1: u8 = src[i + 1];
+        dst[j]     = table[(b0 >> 2)::usize];
+        dst[j + 1] = table[((b0 & 3) << 4 | b1 >> 4)::usize];
+        dst[j + 2] = table[((b1 & 15) << 2)::usize];
+        if (pad) {
+            dst[j + 3] = '=';
+            j = j + 4;
+        }
+        or {
+            j = j + 3;
+        }
+    }
+
+    dst[j] = 0;
+    ret j;
+}
+
+# encode bytes as standard base64 with padding.
+# ---
+# src:     pointer to source bytes
+# src_len: number of source bytes
+# dst:     pointer to destination buffer
+# dst_len: size of destination buffer (must be >= encoded_len(src_len))
+# ret:     number of bytes written (not counting null terminator), 0 if dst too small
+pub fun encode(src: &u8, src_len: usize, dst: *u8, dst_len: usize) usize {
+    ret encode_with_table(src, src_len, dst, dst_len, ?std_table[0], true);
+}
+
+# encode bytes as url-safe base64 without padding.
+# ---
+# src:     pointer to source bytes
+# src_len: number of source bytes
+# dst:     pointer to destination buffer
+# dst_len: size of destination buffer (must be >= encoded_len(src_len))
+# ret:     number of bytes written (not counting null terminator), 0 if dst too small
+pub fun encode_url(src: &u8, src_len: usize, dst: *u8, dst_len: usize) usize {
+    ret encode_with_table(src, src_len, dst, dst_len, ?url_table[0], false);
+}
+
+# decode a base64 string to bytes.
+#
+# handles both standard and url-safe alphabets, and padding characters.
+# ---
+# src:     pointer to base64 string
+# src_len: length of the base64 string
+# dst:     pointer to destination buffer
+# dst_len: size of destination buffer (must be >= decoded_len(src_len))
+# ret:     number of bytes written, 0 on invalid input or dst too small
+pub fun decode(src: &u8, src_len: usize, dst: *u8, dst_len: usize) usize {
+    init_tables();
+
+    if (src_len == 0) { ret 0; }
+
+    var pad: usize = 0;
+    if (src_len >= 1 && src[src_len - 1] == '=') { pad = pad + 1; }
+    if (src_len >= 2 && src[src_len - 2] == '=') { pad = pad + 1; }
+
+    val data_len: usize = src_len - pad;
+    val out_len: usize = data_len / 4 * 3;
+    val extra: usize = data_len % 4;
+    var total_out: usize = out_len;
+    if (extra == 2) { total_out = total_out + 1; }
+    or (extra == 3) { total_out = total_out + 2; }
+    or (extra == 1) { ret 0; }
+
+    if (dst_len < total_out) { ret 0; }
+
+    var i: usize = 0;
+    var j: usize = 0;
+
+    for (i + 3 < data_len) {
+        val a: u8 = decode_table[src[i]::usize];
+        val b: u8 = decode_table[src[i + 1]::usize];
+        val c: u8 = decode_table[src[i + 2]::usize];
+        val d: u8 = decode_table[src[i + 3]::usize];
+        if (a == 255 || b == 255 || c == 255 || d == 255) { ret 0; }
+        dst[j]     = (a << 2) | (b >> 4);
+        dst[j + 1] = (b << 4) | (c >> 2);
+        dst[j + 2] = (c << 6) | d;
+        i = i + 4;
+        j = j + 3;
+    }
+
+    val tail: usize = data_len - i;
+    if (tail == 2) {
+        val a: u8 = decode_table[src[i]::usize];
+        val b: u8 = decode_table[src[i + 1]::usize];
+        if (a == 255 || b == 255) { ret 0; }
+        dst[j] = (a << 2) | (b >> 4);
+        j = j + 1;
+    }
+    or (tail == 3) {
+        val a: u8 = decode_table[src[i]::usize];
+        val b: u8 = decode_table[src[i + 1]::usize];
+        val c: u8 = decode_table[src[i + 2]::usize];
+        if (a == 255 || b == 255 || c == 255) { ret 0; }
+        dst[j]     = (a << 2) | (b >> 4);
+        dst[j + 1] = (b << 4) | (c >> 2);
+        j = j + 2;
+    }
+
+    ret j;
+}
+
+var test_buf: [256]u8;
+
+test "base64: encode Hello" {
+    val src: str = "Hello";
+    val n: usize = encode(src::&u8, 5, ?test_buf[0], 256);
+    if (n != 8) { ret 0; }
+    if (!str_equals((?test_buf[0])::str, "SGVsbG8=")) { ret 0; }
+    ret 1;
+}
+
+test "base64: encode empty" {
+    val src: str = "";
+    val n: usize = encode(src::&u8, 0, ?test_buf[0], 256);
+    if (n != 0) { ret 0; }
+    ret 1;
+}
+
+test "base64: encode f" {
+    val src: str = "f";
+    val n: usize = encode(src::&u8, 1, ?test_buf[0], 256);
+    if (n != 4) { ret 0; }
+    if (!str_equals((?test_buf[0])::str, "Zg==")) { ret 0; }
+    ret 1;
+}
+
+test "base64: encode fo" {
+    val src: str = "fo";
+    val n: usize = encode(src::&u8, 2, ?test_buf[0], 256);
+    if (n != 4) { ret 0; }
+    if (!str_equals((?test_buf[0])::str, "Zm8=")) { ret 0; }
+    ret 1;
+}
+
+test "base64: encode foo" {
+    val src: str = "foo";
+    val n: usize = encode(src::&u8, 3, ?test_buf[0], 256);
+    if (n != 4) { ret 0; }
+    if (!str_equals((?test_buf[0])::str, "Zm9v")) { ret 0; }
+    ret 1;
+}
+
+test "base64: decode SGVsbG8= back to Hello" {
+    val src: str = "SGVsbG8=";
+    val n: usize = decode(src::&u8, 8, ?test_buf[0], 256);
+    if (n != 5) { ret 0; }
+    test_buf[n] = 0;
+    if (!str_equals((?test_buf[0])::str, "Hello")) { ret 0; }
+    ret 1;
+}
+
+test "base64: decode Zg== back to f" {
+    val src: str = "Zg==";
+    val n: usize = decode(src::&u8, 4, ?test_buf[0], 256);
+    if (n != 1) { ret 0; }
+    if (test_buf[0] != 'f') { ret 0; }
+    ret 1;
+}
+
+test "base64: decode Zm8= back to fo" {
+    val src: str = "Zm8=";
+    val n: usize = decode(src::&u8, 4, ?test_buf[0], 256);
+    if (n != 2) { ret 0; }
+    test_buf[n] = 0;
+    if (!str_equals((?test_buf[0])::str, "fo")) { ret 0; }
+    ret 1;
+}
+
+test "base64: decode Zm9v back to foo" {
+    val src: str = "Zm9v";
+    val n: usize = decode(src::&u8, 4, ?test_buf[0], 256);
+    if (n != 3) { ret 0; }
+    test_buf[n] = 0;
+    if (!str_equals((?test_buf[0])::str, "foo")) { ret 0; }
+    ret 1;
+}
+
+test "base64: url-safe encode" {
+    var src: [3]u8 = [3]u8{0xFB, 0xEF, 0xBE};
+    val n: usize = encode_url(?src[0], 3, ?test_buf[0], 256);
+    if (n == 0) { ret 0; }
+    var i: usize = 0;
+    var has_plus: bool = false;
+    var has_slash: bool = false;
+    for (i < n) {
+        if (test_buf[i] == '+') { has_plus = true; }
+        if (test_buf[i] == '/') { has_slash = true; }
+        i = i + 1;
+    }
+    if (has_plus) { ret 0; }
+    if (has_slash) { ret 0; }
+    ret 1;
+}
+
+test "base64: url-safe no padding" {
+    val src: str = "f";
+    val n: usize = encode_url(src::&u8, 1, ?test_buf[0], 256);
+    if (n != 2) { ret 0; }
+    if (test_buf[0] != 'Z') { ret 0; }
+    if (test_buf[1] != 'g') { ret 0; }
+    ret 1;
+}
+
+test "base64: encoded_len" {
+    if (encoded_len(0) != 1) { ret 0; }
+    if (encoded_len(1) != 5) { ret 0; }
+    if (encoded_len(3) != 5) { ret 0; }
+    if (encoded_len(4) != 9) { ret 0; }
+    ret 1;
+}
+
+test "base64: decoded_len" {
+    if (decoded_len(0) != 0) { ret 0; }
+    if (decoded_len(4) != 3) { ret 0; }
+    if (decoded_len(8) != 6) { ret 0; }
+    ret 1;
+}
+
+test "base64: dst too small returns 0" {
+    val src: str = "Hello";
+    val n: usize = encode(src::&u8, 5, ?test_buf[0], 2);
+    if (n != 0) { ret 0; }
+    ret 1;
+}

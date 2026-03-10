@@ -1,0 +1,237 @@
+# formatting primitives.
+#
+# writes formatted data to any io.Writer without allocation.
+
+use std.types.bool;
+use std.types.size;
+use std.types.result;
+use std.types.string;
+use writer: std.io.writer;
+
+# write_bytes: write raw bytes to a writer.
+# ---
+# w:   target writer
+# buf: source buffer
+# len: number of bytes to write
+# ret: bytes written, or an error message
+pub fun write_bytes(w: &writer.Writer, buf: &u8, len: usize) Result[usize, str] {
+    ret writer.write_all(w, buf, len);
+}
+
+# write_str: write a null-terminated string to a writer.
+# ---
+# w:   target writer
+# s:   string to write (nil treated as empty)
+# ret: bytes written, or an error message
+pub fun write_str(w: &writer.Writer, s: str) Result[usize, str] {
+    if (s == nil) { ret ok[usize, str](0); }
+    ret writer.write_all(w, s, str_len(s));
+}
+
+# write_byte: write a single byte to a writer.
+# ---
+# w:   target writer
+# b:   byte to write
+# ret: 1 on success, or an error message
+pub fun write_byte(w: &writer.Writer, b: u8) Result[usize, str] {
+    val x: u8 = b;
+    ret writer.write_all(w, ?x, 1);
+}
+
+# write_newline: write a linefeed to a writer.
+# ---
+# w:   target writer
+# ret: 1 on success, or an error message
+pub fun write_newline(w: &writer.Writer) Result[usize, str] {
+    ret write_byte(w, '\n');
+}
+
+# write_u64: write an unsigned integer in decimal.
+# ---
+# w:   target writer
+# n:   value to format
+# ret: bytes written, or an error message
+pub fun write_u64(w: &writer.Writer, n: u64) Result[usize, str] {
+    var buf: [32]u8;
+    var idx: usize = 32;
+    var x: u64 = n;
+    var len: usize = 0;
+
+    if (x == 0) {
+        idx = idx - 1;
+        buf[idx] = '0';
+        len = 1;
+    }
+    or {
+        for (x > 0) {
+            buf[idx - 1] = (x % 10)::u8 + '0';
+            x = x / 10;
+            idx = idx - 1;
+            len = len + 1;
+        }
+    }
+
+    ret writer.write_all(w, ?buf[idx], len);
+}
+
+# write_i64: write a signed integer in decimal.
+# ---
+# w:   target writer
+# n:   value to format
+# ret: bytes written, or an error message
+pub fun write_i64(w: &writer.Writer, n: i64) Result[usize, str] {
+    if (n >= 0) {
+        ret write_u64(w, n::u64);
+    }
+    if (n == -9223372036854775808) {
+        ret write_str(w, "-9223372036854775808");
+    }
+
+    val r1: Result[usize, str] = write_byte(w, '-');
+    if (is_err[usize, str](r1)) { ret r1; }
+
+    val r2: Result[usize, str] = write_u64(w, (0 - n)::u64);
+    if (is_err[usize, str](r2)) { ret r2; }
+
+    ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
+}
+
+# write_hex_u64: write a 64-bit value in hexadecimal.
+# ---
+# w:     target writer
+# n:     value to format
+# upper: true for uppercase (A-F), false for lowercase (a-f)
+# ret:   bytes written, or an error message
+pub fun write_hex_u64(w: &writer.Writer, n: u64, upper: bool) Result[usize, str] {
+    var buf: [16]u8;
+    var idx: usize = 16;
+    var x: u64 = n;
+    var len: usize = 0;
+
+    var a: u8 = 'a';
+    if (upper) { a = 'A'; }
+
+    if (x == 0) {
+        idx = idx - 1;
+        buf[idx] = '0';
+        len = 1;
+    }
+    or {
+        for (x > 0) {
+            val digit: u8 = (x & 15)::u8;
+            x = x >> 4;
+            idx = idx - 1;
+            if (digit < 10) {
+                buf[idx] = digit + '0';
+            }
+            or {
+                buf[idx] = (digit - 10) + a;
+            }
+            len = len + 1;
+        }
+    }
+
+    ret writer.write_all(w, ?buf[idx], len);
+}
+
+# write_ptr: write a pointer as 0x followed by hex digits.
+# ---
+# w:   target writer
+# p:   pointer to format
+# ret: bytes written, or an error message
+pub fun write_ptr(w: &writer.Writer, p: ptr) Result[usize, str] {
+    val r1: Result[usize, str] = write_str(w, "0x");
+    if (is_err[usize, str](r1)) { ret r1; }
+
+    val r2: Result[usize, str] = write_hex_u64(w, p::usize::u64, false);
+    if (is_err[usize, str](r2)) { ret r2; }
+
+    ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
+}
+
+pub val ERR_BAD_FORMAT: str = "bad format";
+
+# vformat: format variadic arguments into a writer.
+#
+# format specifiers: %% (literal %), %s (string), %d (signed i64),
+# %u (unsigned u64), %x/%X (hex), %c (char), %p (pointer).
+# ---
+# w:      target writer
+# format: format string
+# ap:     pointer to va_list
+# ret:    total bytes written, or an error message
+pub fun vformat(w: &writer.Writer, format: str, ap: *va_list, ...) Result[usize, str] {
+    if (w == nil || ap == nil) {
+        ret err[usize, str](ERR_BAD_FORMAT);
+    }
+
+    var total: usize = 0;
+    var i: usize = 0;
+
+    for (format[i] != 0) {
+        if (format[i] != '%') {
+            val r: Result[usize, str] = write_byte(w, format[i]);
+            if (is_err[usize, str](r)) { ret r; }
+            total = total + unwrap_ok[usize, str](r);
+            i = i + 1;
+            cnt;
+        }
+
+        i = i + 1;
+        val c: u8 = format[i];
+        if (c == 0) {
+            ret err[usize, str](ERR_BAD_FORMAT);
+        }
+
+        var r: Result[usize, str];
+
+        if (c == '%') {
+            r = write_byte(w, '%');
+        }
+        or (c == 's') {
+            r = write_str(w, va_arg[str](ap));
+        }
+        or (c == 'd') {
+            r = write_i64(w, va_arg[i64](ap));
+        }
+        or (c == 'u') {
+            r = write_u64(w, va_arg[u64](ap));
+        }
+        or (c == 'x') {
+            r = write_hex_u64(w, va_arg[u64](ap), false);
+        }
+        or (c == 'X') {
+            r = write_hex_u64(w, va_arg[u64](ap), true);
+        }
+        or (c == 'c') {
+            r = write_byte(w, va_arg[u8](ap));
+        }
+        or (c == 'p') {
+            r = write_ptr(w, va_arg[ptr](ap));
+        }
+        or {
+            ret err[usize, str](ERR_BAD_FORMAT);
+        }
+
+        if (is_err[usize, str](r)) { ret r; }
+        total = total + unwrap_ok[usize, str](r);
+        i = i + 1;
+    }
+
+    ret ok[usize, str](total);
+}
+
+# format: format arguments into a writer.
+#
+# convenience wrapper that manages va_list internally.
+# ---
+# w:      target writer
+# format: format string
+# ret:    total bytes written, or an error message
+pub fun format(w: &writer.Writer, format: str, ...) Result[usize, str] {
+    var ap: va_list;
+    va_start(?ap);
+    val r: Result[usize, str] = vformat(w, format, ?ap);
+    va_end(?ap);
+    ret r;
+}

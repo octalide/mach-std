@@ -1,0 +1,365 @@
+# date and time formatting.
+#
+# provides formatters for standard time representations.
+# intended usage: `use fmt: std.chrono.format;` then `fmt.rfc3339(dt, buf, len)`.
+
+use std.types.size;
+use std.types.string;
+use std.chrono.time;
+use std.chrono.date;
+
+val SECONDS_PER_HOUR:   i64 = 3600;
+val SECONDS_PER_MINUTE: i64 = 60;
+
+# rfc3339: write a Datetime as RFC 3339 into a buffer.
+#
+# output: YYYY-MM-DDTHH:MM:SSZ, YYYY-MM-DDTHH:MM:SS+HH:MM,
+# or with fractional seconds when nsec != 0.
+# ---
+# dt:  datetime to format
+# buf: output buffer (at least 36 bytes)
+# len: buffer length
+# ret: bytes written (excluding null terminator), 0 if buffer too small
+pub fun rfc3339(dt: Datetime, buf: *u8, len: usize) usize {
+    if (buf == nil || len < 36) { ret 0; }
+
+    write_d4(buf, 0, dt.year);
+    buf[4] = '-';
+    write_d2(buf, 5, dt.month);
+    buf[7] = '-';
+    write_d2(buf, 8, dt.day);
+    buf[10] = 'T';
+    write_d2(buf, 11, dt.hour);
+    buf[13] = ':';
+    write_d2(buf, 14, dt.minute);
+    buf[16] = ':';
+    write_d2(buf, 17, dt.second);
+
+    var pos: usize = 19;
+
+    if (dt.nsec != 0) {
+        buf[pos] = '.';
+        write_d9(buf, pos + 1, dt.nsec);
+        pos = pos + 10;
+    }
+
+    if (dt.offset == 0) {
+        buf[pos] = 'Z';
+        pos = pos + 1;
+    }
+    or {
+        var off_sec: i64 = dt.offset;
+        if (off_sec < 0) {
+            buf[pos] = '-';
+            off_sec = 0 - off_sec;
+        }
+        or {
+            buf[pos] = '+';
+        }
+
+        val off_hr: i64 = off_sec / SECONDS_PER_HOUR;
+        val off_min: i64 = off_sec % SECONDS_PER_HOUR / SECONDS_PER_MINUTE;
+        write_d2(buf, pos + 1, off_hr);
+        buf[pos + 3] = ':';
+        write_d2(buf, pos + 4, off_min);
+        pos = pos + 6;
+    }
+
+    buf[pos] = 0;
+    ret pos;
+}
+
+# rfc3339_date: write a Date as RFC 3339 full-date into a buffer.
+#
+# output: YYYY-MM-DD
+# ---
+# d:   date to format
+# buf: output buffer (at least 11 bytes)
+# len: buffer length
+# ret: bytes written (excluding null terminator), 0 if buffer too small
+pub fun rfc3339_date(d: Date, buf: *u8, len: usize) usize {
+    if (buf == nil || len < 11) { ret 0; }
+
+    write_d4(buf, 0, d.year);
+    buf[4] = '-';
+    write_d2(buf, 5, d.month);
+    buf[7] = '-';
+    write_d2(buf, 8, d.day);
+    buf[10] = 0;
+
+    ret 10;
+}
+
+# rfc2822: write a Datetime as RFC 2822 into a buffer.
+#
+# output: Fri, 13 Feb 2009 23:31:30 +0000
+# ---
+# dt:  datetime to format
+# buf: output buffer (at least 32 bytes)
+# len: buffer length
+# ret: bytes written (excluding null terminator), 0 if buffer too small
+pub fun rfc2822(dt: Datetime, buf: *u8, len: usize) usize {
+    if (buf == nil || len < 32) { ret 0; }
+
+    val dow: i64 = day_of_week(dt.year, dt.month, dt.day);
+    write_dow(buf, 0, dow);
+    buf[3] = ',';
+    buf[4] = ' ';
+    write_d2(buf, 5, dt.day);
+    buf[7] = ' ';
+    write_month(buf, 8, dt.month);
+    buf[11] = ' ';
+    write_d4(buf, 12, dt.year);
+    buf[16] = ' ';
+    write_d2(buf, 17, dt.hour);
+    buf[19] = ':';
+    write_d2(buf, 20, dt.minute);
+    buf[22] = ':';
+    write_d2(buf, 23, dt.second);
+    buf[25] = ' ';
+
+    var off_sec: i64 = dt.offset;
+    if (off_sec < 0) {
+        buf[26] = '-';
+        off_sec = 0 - off_sec;
+    }
+    or {
+        buf[26] = '+';
+    }
+
+    val off_hr: i64 = off_sec / SECONDS_PER_HOUR;
+    val off_min: i64 = off_sec % SECONDS_PER_HOUR / SECONDS_PER_MINUTE;
+    write_d2(buf, 27, off_hr);
+    write_d2(buf, 29, off_min);
+    buf[31] = 0;
+
+    ret 31;
+}
+
+# unix_sec: write seconds as decimal Unix timestamp into a buffer.
+# ---
+# sec: seconds since epoch
+# buf: output buffer (at least 21 bytes)
+# len: buffer length
+# ret: bytes written (excluding null terminator), 0 if buffer too small
+pub fun unix_sec(sec: i64, buf: *u8, len: usize) usize {
+    if (buf == nil || len < 21) { ret 0; }
+
+    var v: i64 = sec;
+    var neg: i64 = 0;
+    if (v < 0) {
+        neg = 1;
+        v = 0 - v;
+    }
+
+    var digits: [20]u8;
+    var count: usize = 0;
+
+    if (v == 0) {
+        digits[0] = 48;
+        count = 1;
+    }
+    or {
+        for (v > 0) {
+            digits[count] = (v % 10 + 48)::u8;
+            v = v / 10;
+            count = count + 1;
+        }
+    }
+
+    var pos: usize = 0;
+    if (neg == 1) {
+        buf[0] = '-';
+        pos = 1;
+    }
+
+    var i: usize = 0;
+    for (i < count) {
+        buf[pos] = digits[count - 1 - i];
+        pos = pos + 1;
+        i = i + 1;
+    }
+
+    buf[pos] = 0;
+    ret pos;
+}
+
+fun day_of_week(y: i64, m: i64, d: i64) i64 {
+    var yr: i64 = y;
+    if (m <= 2) { yr = yr - 1; }
+
+    val era: i64 = floor_div(yr, 400);
+    val yoe: i64 = yr - era * 400;
+
+    var adj: i64 = m - 3;
+    if (m <= 2) { adj = m + 9; }
+
+    val doy: i64 = (153 * adj + 2) / 5 + d - 1;
+    val doe: i64 = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    val epoch_days: i64 = era * 146097 + doe - 719468;
+
+    var dow: i64 = (epoch_days + 4) % 7;
+    if (dow < 0) { dow = dow + 7; }
+    ret dow;
+}
+
+fun floor_div(a: i64, b: i64) i64 {
+    val d: i64 = a / b;
+    val r: i64 = a - d * b;
+    if (r != 0 && (r ^ b) < 0) { ret d - 1; }
+    ret d;
+}
+
+fun write_dow(buf: *u8, off: usize, dow: i64) {
+    if (dow == 0) { buf[off] = 'S'; buf[off+1] = 'u'; buf[off+2] = 'n'; }
+    or (dow == 1) { buf[off] = 'M'; buf[off+1] = 'o'; buf[off+2] = 'n'; }
+    or (dow == 2) { buf[off] = 'T'; buf[off+1] = 'u'; buf[off+2] = 'e'; }
+    or (dow == 3) { buf[off] = 'W'; buf[off+1] = 'e'; buf[off+2] = 'd'; }
+    or (dow == 4) { buf[off] = 'T'; buf[off+1] = 'h'; buf[off+2] = 'u'; }
+    or (dow == 5) { buf[off] = 'F'; buf[off+1] = 'r'; buf[off+2] = 'i'; }
+    or (dow == 6) { buf[off] = 'S'; buf[off+1] = 'a'; buf[off+2] = 't'; }
+}
+
+fun write_month(buf: *u8, off: usize, m: i64) {
+    if (m == 1)  { buf[off] = 'J'; buf[off+1] = 'a'; buf[off+2] = 'n'; }
+    or (m == 2)  { buf[off] = 'F'; buf[off+1] = 'e'; buf[off+2] = 'b'; }
+    or (m == 3)  { buf[off] = 'M'; buf[off+1] = 'a'; buf[off+2] = 'r'; }
+    or (m == 4)  { buf[off] = 'A'; buf[off+1] = 'p'; buf[off+2] = 'r'; }
+    or (m == 5)  { buf[off] = 'M'; buf[off+1] = 'a'; buf[off+2] = 'y'; }
+    or (m == 6)  { buf[off] = 'J'; buf[off+1] = 'u'; buf[off+2] = 'n'; }
+    or (m == 7)  { buf[off] = 'J'; buf[off+1] = 'u'; buf[off+2] = 'l'; }
+    or (m == 8)  { buf[off] = 'A'; buf[off+1] = 'u'; buf[off+2] = 'g'; }
+    or (m == 9)  { buf[off] = 'S'; buf[off+1] = 'e'; buf[off+2] = 'p'; }
+    or (m == 10) { buf[off] = 'O'; buf[off+1] = 'c'; buf[off+2] = 't'; }
+    or (m == 11) { buf[off] = 'N'; buf[off+1] = 'o'; buf[off+2] = 'v'; }
+    or (m == 12) { buf[off] = 'D'; buf[off+1] = 'e'; buf[off+2] = 'c'; }
+}
+
+fun write_d2(buf: *u8, off: usize, v: i64) {
+    buf[off]     = (v / 10 % 10 + 48)::u8;
+    buf[off + 1] = (v % 10 + 48)::u8;
+}
+
+fun write_d4(buf: *u8, off: usize, v: i64) {
+    buf[off]     = (v / 1000 % 10 + 48)::u8;
+    buf[off + 1] = (v / 100 % 10 + 48)::u8;
+    buf[off + 2] = (v / 10 % 10 + 48)::u8;
+    buf[off + 3] = (v % 10 + 48)::u8;
+}
+
+fun write_d9(buf: *u8, off: usize, v: i64) {
+    buf[off]     = (v / 100000000 % 10 + 48)::u8;
+    buf[off + 1] = (v / 10000000 % 10 + 48)::u8;
+    buf[off + 2] = (v / 1000000 % 10 + 48)::u8;
+    buf[off + 3] = (v / 100000 % 10 + 48)::u8;
+    buf[off + 4] = (v / 10000 % 10 + 48)::u8;
+    buf[off + 5] = (v / 1000 % 10 + 48)::u8;
+    buf[off + 6] = (v / 100 % 10 + 48)::u8;
+    buf[off + 7] = (v / 10 % 10 + 48)::u8;
+    buf[off + 8] = (v % 10 + 48)::u8;
+}
+
+var fmt_buf: [64]u8;
+
+test "format: rfc3339 utc" {
+    val t: Time = unix(1234567890, 0);
+    val dt: Datetime = datetime_from_time(t);
+    val n: usize = rfc3339(dt, (?fmt_buf)::*u8, 64);
+    if (n == 0) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "2009-02-13T23:31:30Z")) { ret 2; }
+    ret 1;
+}
+
+test "format: rfc3339 with offset" {
+    val t: Time = unix(1234567890, 0);
+    val dt: Datetime = datetime_with_offset(t, 19800);
+    val n: usize = rfc3339(dt, (?fmt_buf)::*u8, 64);
+    if (n == 0) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "2009-02-14T05:01:30+05:30")) { ret 2; }
+    ret 1;
+}
+
+test "format: rfc3339 with nsec" {
+    val t: Time = unix(1234567890, 123456789);
+    val dt: Datetime = datetime_from_time(t);
+    val n: usize = rfc3339(dt, (?fmt_buf)::*u8, 64);
+    if (n == 0) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "2009-02-13T23:31:30.123456789Z")) { ret 2; }
+    ret 1;
+}
+
+test "format: rfc3339 epoch" {
+    val t: Time = unix(0, 0);
+    val dt: Datetime = datetime_from_time(t);
+    val n: usize = rfc3339(dt, (?fmt_buf)::*u8, 64);
+    if (n == 0) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "1970-01-01T00:00:00Z")) { ret 2; }
+    ret 1;
+}
+
+test "format: rfc3339_date" {
+    val d: Date = Date{year: 2025, month: 3, day: 6};
+    val n: usize = rfc3339_date(d, (?fmt_buf)::*u8, 64);
+    if (n != 10) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "2025-03-06")) { ret 2; }
+    ret 1;
+}
+
+test "format: rfc3339 negative offset" {
+    val t: Time = unix(1234567890, 0);
+    val dt: Datetime = datetime_with_offset(t, 0 - 18000);
+    val n: usize = rfc3339(dt, (?fmt_buf)::*u8, 64);
+    if (n == 0) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "2009-02-13T18:31:30-05:00")) { ret 2; }
+    ret 1;
+}
+
+test "format: rfc2822 utc" {
+    val t: Time = unix(1234567890, 0);
+    val dt: Datetime = datetime_from_time(t);
+    val n: usize = rfc2822(dt, (?fmt_buf)::*u8, 64);
+    if (n == 0) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "Fri, 13 Feb 2009 23:31:30 +0000")) { ret 2; }
+    ret 1;
+}
+
+test "format: rfc2822 with offset" {
+    val t: Time = unix(1234567890, 0);
+    val dt: Datetime = datetime_with_offset(t, 0 - 18000);
+    val n: usize = rfc2822(dt, (?fmt_buf)::*u8, 64);
+    if (n == 0) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "Fri, 13 Feb 2009 18:31:30 -0500")) { ret 2; }
+    ret 1;
+}
+
+test "format: unix_sec positive" {
+    val n: usize = unix_sec(1234567890, (?fmt_buf)::*u8, 64);
+    if (n == 0) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "1234567890")) { ret 2; }
+    ret 1;
+}
+
+test "format: unix_sec zero" {
+    val n: usize = unix_sec(0, (?fmt_buf)::*u8, 64);
+    if (n == 0) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "0")) { ret 2; }
+    ret 1;
+}
+
+test "format: unix_sec negative" {
+    val n: usize = unix_sec(0 - 86400, (?fmt_buf)::*u8, 64);
+    if (n == 0) { ret 0; }
+    val s: str = (?fmt_buf)::*u8::str;
+    if (!str_equals(s, "-86400")) { ret 2; }
+    ret 1;
+}

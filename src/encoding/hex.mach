@@ -1,0 +1,221 @@
+# hexadecimal encoding and decoding.
+
+use std.types.bool;
+use std.types.size;
+use std.types.string;
+
+# return the buffer size required to encode src_len bytes (including null terminator).
+# ---
+# src_len: number of source bytes
+# ret:     required destination buffer size
+pub fun encoded_len(src_len: usize) usize {
+    ret src_len * 2 + 1;
+}
+
+# return the maximum number of decoded bytes for a hex string of src_len chars.
+# ---
+# src_len: length of the hex string
+# ret:     maximum decoded byte count
+pub fun decoded_len(src_len: usize) usize {
+    ret src_len / 2;
+}
+
+fun hex_char_lower(v: u8) u8 {
+    if (v < 10) { ret '0' + v; }
+    ret 'a' + (v - 10);
+}
+
+fun hex_char_upper(v: u8) u8 {
+    if (v < 10) { ret '0' + v; }
+    ret 'A' + (v - 10);
+}
+
+fun hex_digit(c: u8) i32 {
+    if (c >= '0' && c <= '9') { ret (c - '0')::u32::i32; }
+    if (c >= 'a' && c <= 'f') { ret (c - 'a' + 10)::u32::i32; }
+    if (c >= 'A' && c <= 'F') { ret (c - 'A' + 10)::u32::i32; }
+    ret -1;
+}
+
+fun encode_with(src: &u8, src_len: usize, dst: *u8, dst_len: usize, upper: bool) usize {
+    val required: usize = encoded_len(src_len);
+    if (dst_len < required) { ret 0; }
+
+    if (src_len == 0) {
+        dst[0] = 0;
+        ret 0;
+    }
+
+    var i: usize = 0;
+    for (i < src_len) {
+        val b: u8 = src[i];
+        val hi: u8 = (b >> 4) & 15;
+        val lo: u8 = b & 15;
+        if (upper) {
+            dst[i * 2]     = hex_char_upper(hi);
+            dst[i * 2 + 1] = hex_char_upper(lo);
+        }
+        or {
+            dst[i * 2]     = hex_char_lower(hi);
+            dst[i * 2 + 1] = hex_char_lower(lo);
+        }
+        i = i + 1;
+    }
+
+    dst[src_len * 2] = 0;
+    ret src_len * 2;
+}
+
+# encode bytes as lowercase hexadecimal.
+# ---
+# src:     pointer to source bytes
+# src_len: number of source bytes
+# dst:     pointer to destination buffer
+# dst_len: size of destination buffer (must be >= encoded_len(src_len))
+# ret:     number of bytes written (not counting null terminator), 0 if dst too small
+pub fun encode(src: &u8, src_len: usize, dst: *u8, dst_len: usize) usize {
+    ret encode_with(src, src_len, dst, dst_len, false);
+}
+
+# encode bytes as uppercase hexadecimal.
+# ---
+# src:     pointer to source bytes
+# src_len: number of source bytes
+# dst:     pointer to destination buffer
+# dst_len: size of destination buffer (must be >= encoded_len(src_len))
+# ret:     number of bytes written (not counting null terminator), 0 if dst too small
+pub fun encode_upper(src: &u8, src_len: usize, dst: *u8, dst_len: usize) usize {
+    ret encode_with(src, src_len, dst, dst_len, true);
+}
+
+# decode a hexadecimal string to bytes.
+#
+# accepts both uppercase and lowercase hex characters.
+# returns 0 if the input has odd length or contains invalid characters.
+# ---
+# src:     pointer to hex string
+# src_len: length of the hex string
+# dst:     pointer to destination buffer
+# dst_len: size of destination buffer (must be >= decoded_len(src_len))
+# ret:     number of bytes written, 0 on invalid input or dst too small
+pub fun decode(src: &u8, src_len: usize, dst: *u8, dst_len: usize) usize {
+    if (src_len == 0) { ret 0; }
+    if (src_len % 2 != 0) { ret 0; }
+
+    val out_len: usize = src_len / 2;
+    if (dst_len < out_len) { ret 0; }
+
+    var i: usize = 0;
+    for (i < src_len) {
+        val hi: i32 = hex_digit(src[i]);
+        val lo: i32 = hex_digit(src[i + 1]);
+        if (hi < 0 || lo < 0) { ret 0; }
+        dst[i / 2] = (hi::u32::u8 << 4) | lo::u32::u8;
+        i = i + 2;
+    }
+
+    ret out_len;
+}
+
+var test_buf: [256]u8;
+
+test "hex: encode deadbeef" {
+    var src: [4]u8 = [4]u8{0xDE, 0xAD, 0xBE, 0xEF};
+    val n: usize = encode(?src[0], 4, ?test_buf[0], 256);
+    if (n != 8) { ret 0; }
+    if (!str_equals((?test_buf[0])::str, "deadbeef")) { ret 0; }
+    ret 1;
+}
+
+test "hex: encode upper DEADBEEF" {
+    var src: [4]u8 = [4]u8{0xDE, 0xAD, 0xBE, 0xEF};
+    val n: usize = encode_upper(?src[0], 4, ?test_buf[0], 256);
+    if (n != 8) { ret 0; }
+    if (!str_equals((?test_buf[0])::str, "DEADBEEF")) { ret 0; }
+    ret 1;
+}
+
+test "hex: decode deadbeef" {
+    val src: str = "deadbeef";
+    val n: usize = decode(src::&u8, 8, ?test_buf[0], 256);
+    if (n != 4) { ret 0; }
+    if (test_buf[0] != 0xDE) { ret 0; }
+    if (test_buf[1] != 0xAD) { ret 0; }
+    if (test_buf[2] != 0xBE) { ret 0; }
+    if (test_buf[3] != 0xEF) { ret 0; }
+    ret 1;
+}
+
+test "hex: decode uppercase" {
+    val src: str = "DEADBEEF";
+    val n: usize = decode(src::&u8, 8, ?test_buf[0], 256);
+    if (n != 4) { ret 0; }
+    if (test_buf[0] != 0xDE) { ret 0; }
+    if (test_buf[1] != 0xAD) { ret 0; }
+    if (test_buf[2] != 0xBE) { ret 0; }
+    if (test_buf[3] != 0xEF) { ret 0; }
+    ret 1;
+}
+
+test "hex: encode empty" {
+    val src: str = "";
+    val n: usize = encode(src::&u8, 0, ?test_buf[0], 256);
+    if (n != 0) { ret 0; }
+    ret 1;
+}
+
+test "hex: decode empty returns 0" {
+    val src: str = "";
+    val n: usize = decode(src::&u8, 0, ?test_buf[0], 256);
+    if (n != 0) { ret 0; }
+    ret 1;
+}
+
+test "hex: decode odd length returns 0" {
+    val src: str = "abc";
+    val n: usize = decode(src::&u8, 3, ?test_buf[0], 256);
+    if (n != 0) { ret 0; }
+    ret 1;
+}
+
+test "hex: decode invalid chars returns 0" {
+    val src: str = "zzzz";
+    val n: usize = decode(src::&u8, 4, ?test_buf[0], 256);
+    if (n != 0) { ret 0; }
+    ret 1;
+}
+
+test "hex: roundtrip" {
+    var src: [4]u8 = [4]u8{0x01, 0x23, 0xAB, 0xFF};
+    var enc_buf: [16]u8;
+    val en: usize = encode(?src[0], 4, ?enc_buf[0], 16);
+    if (en != 8) { ret 0; }
+    val dn: usize = decode(?enc_buf[0], en, ?test_buf[0], 256);
+    if (dn != 4) { ret 0; }
+    if (test_buf[0] != 0x01) { ret 0; }
+    if (test_buf[1] != 0x23) { ret 0; }
+    if (test_buf[2] != 0xAB) { ret 0; }
+    if (test_buf[3] != 0xFF) { ret 0; }
+    ret 1;
+}
+
+test "hex: encoded_len" {
+    if (encoded_len(0) != 1) { ret 0; }
+    if (encoded_len(1) != 3) { ret 0; }
+    if (encoded_len(4) != 9) { ret 0; }
+    ret 1;
+}
+
+test "hex: decoded_len" {
+    if (decoded_len(0) != 0) { ret 0; }
+    if (decoded_len(2) != 1) { ret 0; }
+    if (decoded_len(8) != 4) { ret 0; }
+    ret 1;
+}
+
+test "hex: dst too small returns 0" {
+    var src: [4]u8 = [4]u8{0xDE, 0xAD, 0xBE, 0xEF};
+    val n: usize = encode(?src[0], 4, ?test_buf[0], 2);
+    if (n != 0) { ret 0; }
+    ret 1;
+}

@@ -1,0 +1,277 @@
+# calendar date and datetime types with civil date math.
+#
+# Date represents a calendar date (year, month, day).
+# Datetime extends Date with time-of-day and UTC offset.
+
+use std.types.bool;
+use std.chrono.time;
+
+val SECONDS_PER_DAY:    i64 = 86400;
+val SECONDS_PER_HOUR:   i64 = 3600;
+val SECONDS_PER_MINUTE: i64 = 60;
+
+# Date: a calendar date without time-of-day or timezone.
+# ---
+# year:  year (e.g. 2025)
+# month: month [1, 12]
+# day:   day of month [1, 31]
+pub rec Date {
+    year:  i64;
+    month: i64;
+    day:   i64;
+}
+
+# Datetime: a calendar date with time-of-day and UTC offset.
+# ---
+# year:   year (e.g. 2025)
+# month:  month [1, 12]
+# day:    day of month [1, 31]
+# hour:   hour [0, 23]
+# minute: minute [0, 59]
+# second: second [0, 59]
+# nsec:   nanoseconds within second [0, 999999999]
+# offset: UTC offset in seconds (0 = UTC, 3600 = +01:00, -18000 = -05:00)
+pub rec Datetime {
+    year:   i64;
+    month:  i64;
+    day:    i64;
+    hour:   i64;
+    minute: i64;
+    second: i64;
+    nsec:   i64;
+    offset: i64;
+}
+
+# is_leap_year: report whether year is a leap year.
+# ---
+# year: year to test
+# ret:  true if year is a leap year
+pub fun is_leap_year(year: i64) bool {
+    ret year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+}
+
+# days_in_month: return the number of days in a given month.
+# ---
+# year:  year (needed for February)
+# month: month [1, 12]
+# ret:   number of days in the month
+pub fun days_in_month(year: i64, month: i64) i64 {
+    if (month == 2) {
+        if (is_leap_year(year)) { ret 29; }
+        ret 28;
+    }
+    if (month == 4 || month == 6 || month == 9 || month == 11) {
+        ret 30;
+    }
+    ret 31;
+}
+
+# date_from_time: extract the UTC date from a Time.
+# ---
+# t:   time instant
+# ret: UTC calendar date
+pub fun date_from_time(t: Time) Date {
+    val epoch_days: i64 = floor_div(t.sec, SECONDS_PER_DAY);
+    var y: i64 = 0;
+    var m: i64 = 0;
+    var d: i64 = 0;
+    civil_from_days(epoch_days, ?y, ?m, ?d);
+    ret Date{year: y, month: m, day: d};
+}
+
+# datetime_from_time: extract a UTC Datetime from a Time.
+# ---
+# t:   time instant
+# ret: UTC datetime
+pub fun datetime_from_time(t: Time) Datetime {
+    ret datetime_with_offset(t, 0);
+}
+
+# datetime_with_offset: extract a Datetime from a Time with a UTC offset.
+# ---
+# t:      time instant
+# offset: UTC offset in seconds
+# ret:    datetime adjusted to the given offset
+pub fun datetime_with_offset(t: Time, offset: i64) Datetime {
+    val adj_sec: i64 = t.sec + offset;
+    val epoch_days: i64 = floor_div(adj_sec, SECONDS_PER_DAY);
+    val day_sec: i64 = adj_sec - epoch_days * SECONDS_PER_DAY;
+
+    var y: i64 = 0;
+    var m: i64 = 0;
+    var d: i64 = 0;
+    civil_from_days(epoch_days, ?y, ?m, ?d);
+
+    ret Datetime{
+        year:   y,
+        month:  m,
+        day:    d,
+        hour:   day_sec / SECONDS_PER_HOUR,
+        minute: day_sec % SECONDS_PER_HOUR / SECONDS_PER_MINUTE,
+        second: day_sec % SECONDS_PER_MINUTE,
+        nsec:   t.nsec,
+        offset: offset
+    };
+}
+
+# datetime_to_time: convert a Datetime back to a Time instant.
+# ---
+# dt:  datetime to convert
+# ret: time instant (UTC)
+pub fun datetime_to_time(dt: Datetime) Time {
+    val days: i64 = civil_to_days(dt.year, dt.month, dt.day);
+    val day_total: i64 = days * SECONDS_PER_DAY;
+    val hour_total: i64 = dt.hour * SECONDS_PER_HOUR;
+    val min_total: i64 = dt.minute * SECONDS_PER_MINUTE;
+    val sec: i64 = day_total + hour_total + min_total + dt.second - dt.offset;
+    ret unix(sec, dt.nsec);
+}
+
+# date_to_time: convert a Date to a Time at midnight UTC.
+# ---
+# d:   date to convert
+# ret: time instant at 00:00:00 UTC on the given date
+pub fun date_to_time(d: Date) Time {
+    val days: i64 = civil_to_days(d.year, d.month, d.day);
+    ret unix(days * SECONDS_PER_DAY, 0);
+}
+
+fun floor_div(a: i64, b: i64) i64 {
+    val d: i64 = a / b;
+    val r: i64 = a - d * b;
+    if (r != 0 && (r ^ b) < 0) { ret d - 1; }
+    ret d;
+}
+
+fun civil_from_days(epoch_days: i64, y: *i64, m: *i64, d: *i64) {
+    val z: i64 = epoch_days + 719468;
+    val era: i64 = floor_div(z, 146097);
+    val doe: i64 = z - era * 146097;
+    val yoe: i64 = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    val doy: i64 = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    val mp: i64 = (5 * doy + 2) / 153;
+
+    @d = doy - (153 * mp + 2) / 5 + 1;
+
+    var month: i64 = mp + 3;
+    if (mp >= 10) { month = mp - 9; }
+    @m = month;
+
+    var year: i64 = yoe + era * 400;
+    if (month <= 2) { year = year + 1; }
+    @y = year;
+}
+
+fun civil_to_days(y: i64, m: i64, d: i64) i64 {
+    var yr: i64 = y;
+    if (m <= 2) { yr = yr - 1; }
+
+    val era: i64 = floor_div(yr, 400);
+    val yoe: i64 = yr - era * 400;
+
+    var adj: i64 = m - 3;
+    if (m <= 2) { adj = m + 9; }
+
+    val doy: i64 = (153 * adj + 2) / 5 + d - 1;
+    val doe: i64 = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+
+    ret era * 146097 + doe - 719468;
+}
+
+test "date: is_leap_year" {
+    if (!is_leap_year(2000)) { ret 0; }
+    if (!is_leap_year(2024)) { ret 2; }
+    if (is_leap_year(1900)) { ret 3; }
+    if (is_leap_year(2023)) { ret 4; }
+    ret 1;
+}
+
+test "date: days_in_month" {
+    if (days_in_month(2024, 2) != 29) { ret 0; }
+    if (days_in_month(2023, 2) != 28) { ret 2; }
+    if (days_in_month(2023, 1) != 31) { ret 3; }
+    if (days_in_month(2023, 4) != 30) { ret 4; }
+    ret 1;
+}
+
+test "date: from_time epoch" {
+    val t: Time = unix(0, 0);
+    val d: Date = date_from_time(t);
+    if (d.year != 1970) { ret 0; }
+    if (d.month != 1) { ret 2; }
+    if (d.day != 1) { ret 3; }
+    ret 1;
+}
+
+test "date: from_time known timestamp" {
+    val t: Time = unix(1234567890, 0);
+    val d: Date = date_from_time(t);
+    if (d.year != 2009) { ret 0; }
+    if (d.month != 2) { ret 2; }
+    if (d.day != 13) { ret 3; }
+    ret 1;
+}
+
+test "date: from_time before epoch" {
+    val t: Time = unix(0 - 86400, 0);
+    val d: Date = date_from_time(t);
+    if (d.year != 1969) { ret 0; }
+    if (d.month != 12) { ret 2; }
+    if (d.day != 31) { ret 3; }
+    ret 1;
+}
+
+test "date: datetime_from_time known timestamp" {
+    val t: Time = unix(1234567890, 0);
+    val dt: Datetime = datetime_from_time(t);
+    if (dt.year != 2009) { ret 0; }
+    if (dt.month != 2) { ret 2; }
+    if (dt.day != 13) { ret 3; }
+    if (dt.hour != 23) { ret 4; }
+    if (dt.minute != 31) { ret 5; }
+    if (dt.second != 30) { ret 6; }
+    ret 1;
+}
+
+test "date: datetime_with_offset" {
+    val t: Time = unix(1234567890, 0);
+    val dt: Datetime = datetime_with_offset(t, 3600);
+    if (dt.year != 2009) { ret 0; }
+    if (dt.month != 2) { ret 2; }
+    if (dt.day != 14) { ret 3; }
+    if (dt.hour != 0) { ret 4; }
+    if (dt.minute != 31) { ret 5; }
+    if (dt.offset != 3600) { ret 6; }
+    ret 1;
+}
+
+test "date: datetime_to_time roundtrip" {
+    val t1: Time = unix(1234567890, 500);
+    val dt: Datetime = datetime_from_time(t1);
+    val t2: Time = datetime_to_time(dt);
+    if (t2.sec != t1.sec) { ret 0; }
+    if (t2.nsec != t1.nsec) { ret 2; }
+    ret 1;
+}
+
+test "date: date_to_time roundtrip" {
+    val d: Date = Date{year: 2025, month: 3, day: 6};
+    val t: Time = date_to_time(d);
+    val d2: Date = date_from_time(t);
+    if (d2.year != 2025) { ret 0; }
+    if (d2.month != 3) { ret 2; }
+    if (d2.day != 6) { ret 3; }
+    ret 1;
+}
+
+test "date: civil_to_days roundtrip" {
+    val days: i64 = civil_to_days(2009, 2, 13);
+    var y: i64 = 0;
+    var m: i64 = 0;
+    var d: i64 = 0;
+    civil_from_days(days, ?y, ?m, ?d);
+    if (y != 2009) { ret 0; }
+    if (m != 2) { ret 2; }
+    if (d != 13) { ret 3; }
+    ret 1;
+}
