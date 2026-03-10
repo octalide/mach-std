@@ -108,6 +108,7 @@ fun grow[T](dq: *Deque[T]) Result[usize, str] {
 # value: value to append
 # ret:   the new length, or an error
 pub fun push_back[T](dq: *Deque[T], value: T) Result[usize, str] {
+    if (dq == nil) { ret err[usize, str]("deque is nil"); }
     if (dq.len == dq.cap) {
         val r: Result[usize, str] = grow[T](dq);
         if (is_err[usize, str](r)) {
@@ -126,6 +127,7 @@ pub fun push_back[T](dq: *Deque[T], value: T) Result[usize, str] {
 # value: value to prepend
 # ret:   the new length, or an error
 pub fun push_front[T](dq: *Deque[T], value: T) Result[usize, str] {
+    if (dq == nil) { ret err[usize, str]("deque is nil"); }
     if (dq.len == dq.cap) {
         val r: Result[usize, str] = grow[T](dq);
         if (is_err[usize, str](r)) {
@@ -143,6 +145,7 @@ pub fun push_front[T](dq: *Deque[T], value: T) Result[usize, str] {
 # ---
 # ret: the value, or an error if empty
 pub fun pop_back[T](dq: *Deque[T]) Result[T, str] {
+    if (dq == nil) { ret err[T, str]("deque is nil"); }
     if (dq.len == 0) {
         ret err[T, str]("pop from empty deque");
     }
@@ -156,6 +159,7 @@ pub fun pop_back[T](dq: *Deque[T]) Result[T, str] {
 # ---
 # ret: the value, or an error if empty
 pub fun pop_front[T](dq: *Deque[T]) Result[T, str] {
+    if (dq == nil) { ret err[T, str]("deque is nil"); }
     if (dq.len == 0) {
         ret err[T, str]("pop from empty deque");
     }
@@ -171,6 +175,7 @@ pub fun pop_front[T](dq: *Deque[T]) Result[T, str] {
 # index: logical index (0 = front)
 # ret:   pointer to element, or an error
 pub fun get[T](dq: &Deque[T], index: usize) Result[*T, str] {
+    if (dq == nil) { ret err[*T, str]("deque is nil"); }
     if (index >= dq.len) {
         ret err[*T, str]("index out of bounds");
     }
