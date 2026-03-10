@@ -1076,11 +1076,11 @@ pub fun sock_shutdown(fd: i32, how: i32) i64 {
 # fd:     socket fd
 # level:  option level (SOL_SOCKET, etc.)
 # opt:    option name (SO_REUSEADDR, etc.)
-# val:    pointer to option value
+# value:  pointer to option value
 # vallen: size of option value
 # ret:    0 on success, or negative errno
-pub fun sock_setopt(fd: i32, level: i32, opt: i32, val: *u8, vallen: usize) i64 {
-    ret syscall5(c.SYS_SETSOCKOPT, fd::isize::usize, level::u32::usize, opt::u32::usize, val::usize, vallen);
+pub fun sock_setopt(fd: i32, level: i32, opt: i32, value: *u8, vallen: usize) i64 {
+    ret syscall5(c.SYS_SETSOCKOPT, fd::isize::usize, level::u32::usize, opt::u32::usize, value::usize, vallen);
 }
 
 # random

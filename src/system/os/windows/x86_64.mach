@@ -1214,8 +1214,8 @@ pub fun sock_shutdown(fd: i32, how: i32) i64 {
     ret 0;
 }
 
-pub fun sock_setopt(fd: i32, level: i32, opt: i32, val: *u8, vallen: usize) i64 {
-    val res: i32 = ws2_setsockopt(fd::usize, level, opt, val, vallen::i32);
+pub fun sock_setopt(fd: i32, level: i32, opt: i32, value: *u8, vallen: usize) i64 {
+    val res: i32 = ws2_setsockopt(fd::usize, level, opt, value, vallen::i32);
     if (res == c.SOCKET_ERROR) { ret c.EIO; }
     ret 0;
 }
