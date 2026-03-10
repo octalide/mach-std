@@ -317,18 +317,18 @@ fun init_procs() {
     _procs_init = 1;
 }
 
-fun alloc_proc(pid: u32, handle: isize) {
+fun alloc_proc(pid: u32, handle: isize) bool {
     init_procs();
     var i: usize = 0;
     for (i < MAX_PROCS) {
         if (_proc_handles[i] == c.INVALID_HANDLE_VALUE) {
             _proc_handles[i] = handle;
             _proc_pids[i] = pid;
-            ret;
+            ret true;
         }
         i = i + 1;
     }
-    CloseHandle(handle);
+    ret false;
 }
 
 fun get_proc_handle(pid: u32) isize {
@@ -939,7 +939,10 @@ pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
     }
 
     CloseHandle(pi.hThread);
-    alloc_proc(pi.dwProcessId, pi.hProcess);
+    if (!alloc_proc(pi.dwProcessId, pi.hProcess)) {
+        CloseHandle(pi.hProcess);
+        ret c.EAGAIN;
+    }
     ret pi.dwProcessId::i64;
 }
 
