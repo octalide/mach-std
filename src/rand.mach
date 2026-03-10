@@ -88,7 +88,14 @@ pub fun next_u32(r: *Rng) u32 {
 pub fun range(r: *Rng, lo: i64, hi: i64) i64 {
     if (hi <= lo) { ret lo; }
     val span: u64 = (hi - lo)::u64;
-    ret lo + (next(r) % span)::i64;
+    val threshold: u64 = (0 - span) % span;
+    for (true) {
+        var x: u64 = next(r);
+        if (x >= threshold) {
+            ret lo + (x % span)::i64;
+        }
+    }
+    ret lo;
 }
 
 # generate a random value in the unsigned range [lo, hi).
@@ -102,7 +109,14 @@ pub fun range(r: *Rng, lo: i64, hi: i64) i64 {
 pub fun range_u64(r: *Rng, lo: u64, hi: u64) u64 {
     if (hi <= lo) { ret lo; }
     val span: u64 = hi - lo;
-    ret lo + (next(r) % span);
+    val threshold: u64 = (0 - span) % span;
+    for (true) {
+        var x: u64 = next(r);
+        if (x >= threshold) {
+            ret lo + (x % span);
+        }
+    }
+    ret lo;
 }
 
 # shuffle an array in place using Fisher-Yates.
