@@ -1,8 +1,10 @@
 # mutual exclusion lock.
 #
-# test-and-test-and-set spinlock using atomic operations. spins with a
-# CPU hint to reduce bus contention. fully target-agnostic — uses only
-# compiler builtin atomics.
+# test-and-test-and-set spinlock with exponential backoff using atomic
+# operations. on contention, spins with CPU pause hints for an
+# exponentially increasing number of iterations (32 up to 4096) before
+# retrying the lock. fully target-agnostic — uses only compiler builtin
+# atomics.
 #
 # values: 0 = unlocked, 1 = locked
 
@@ -20,18 +22,36 @@ pub fun make() Mutex {
 
 # acquire the mutex, blocking until it is available.
 #
-# uses test-and-test-and-set: reads the state without a bus lock first,
-# then attempts CAS only when the lock appears free. emits a spin hint
-# between attempts to reduce contention on the cache line.
+# uses test-and-test-and-set with exponential backoff: reads the state
+# without a bus lock first, then attempts CAS only when the lock appears
+# free. on contention, spins with pause hints for an exponentially
+# increasing number of iterations before retrying, capped at a maximum
+# to bound worst-case latency.
 # ---
 # m: pointer to the mutex
 pub fun lock(m: *Mutex) {
+    val INITIAL_BACKOFF: i64 = 32;
+    val MAX_BACKOFF: i64 = 4096;
+    var backoff: i64 = INITIAL_BACKOFF;
+
     for (true) {
         if (atomic.load(m) == 0) {
             var expected: i64 = 0;
             if (atomic.cas(m, ?expected, 1)) { ret; }
         }
-        atomic.spin_hint();
+
+        var i: i64 = 0;
+        for (i < backoff) {
+            atomic.spin_hint();
+            i = i + 1;
+        }
+
+        if (backoff < MAX_BACKOFF) {
+            backoff = backoff + backoff;
+            if (backoff > MAX_BACKOFF) {
+                backoff = MAX_BACKOFF;
+            }
+        }
     }
 }
 
