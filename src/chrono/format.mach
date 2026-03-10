@@ -185,29 +185,10 @@ pub fun unix_sec(sec: i64, buf: *u8, len: usize) usize {
 }
 
 fun day_of_week(y: i64, m: i64, d: i64) i64 {
-    var yr: i64 = y;
-    if (m <= 2) { yr = yr - 1; }
-
-    val era: i64 = floor_div(yr, 400);
-    val yoe: i64 = yr - era * 400;
-
-    var adj: i64 = m - 3;
-    if (m <= 2) { adj = m + 9; }
-
-    val doy: i64 = (153 * adj + 2) / 5 + d - 1;
-    val doe: i64 = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-    val epoch_days: i64 = era * 146097 + doe - 719468;
-
+    val epoch_days: i64 = civil_to_days(y, m, d);
     var dow: i64 = (epoch_days + 4) % 7;
     if (dow < 0) { dow = dow + 7; }
     ret dow;
-}
-
-fun floor_div(a: i64, b: i64) i64 {
-    val d: i64 = a / b;
-    val r: i64 = a - d * b;
-    if (r != 0 && (r ^ b) < 0) { ret d - 1; }
-    ret d;
 }
 
 fun write_dow(buf: *u8, off: usize, dow: i64) {

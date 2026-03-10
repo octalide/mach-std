@@ -145,6 +145,10 @@ pub fwd impl.wait;
 pub fwd impl.wait_pid;
 pub fwd impl.has_exited;
 pub fwd impl.exit_code;
+pub fwd impl.was_signaled;
+pub fwd impl.term_signal;
+pub fwd impl.was_stopped;
+pub fwd impl.stop_signal;
 
 # sockets
 pub fwd impl.AF_INET;
