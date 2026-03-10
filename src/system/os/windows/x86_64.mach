@@ -60,6 +60,33 @@ ext CreateThread: fun(ptr, usize, usize, ptr, u32, *u32) isize;
 ext WaitOnAddress: fun(ptr, ptr, usize, u32) i32;
 ext WakeByAddressSingle: fun(ptr);
 
+# Winsock2 API imports (ws2_32.dll)
+
+ext WSAStartup: fun(u16, *u8) i32;
+ext WSAGetLastError: fun() i32;
+ext ws2_socket: fun(i32, i32, i32) usize;
+$ws2_socket.symbol = "socket";
+ext ws2_bind: fun(usize, *u8, i32) i32;
+$ws2_bind.symbol = "bind";
+ext ws2_listen: fun(usize, i32) i32;
+$ws2_listen.symbol = "listen";
+ext ws2_accept: fun(usize, *u8, *i32) usize;
+$ws2_accept.symbol = "accept";
+ext ws2_connect: fun(usize, *u8, i32) i32;
+$ws2_connect.symbol = "connect";
+ext ws2_sendto: fun(usize, &u8, i32, i32, *u8, i32) i32;
+$ws2_sendto.symbol = "sendto";
+ext ws2_recvfrom: fun(usize, *u8, i32, i32, *u8, *i32) i32;
+$ws2_recvfrom.symbol = "recvfrom";
+ext ws2_shutdown: fun(usize, i32) i32;
+$ws2_shutdown.symbol = "shutdown";
+ext ws2_setsockopt: fun(usize, i32, i32, *u8, i32) i32;
+$ws2_setsockopt.symbol = "setsockopt";
+ext closesocket: fun(usize) i32;
+
+# advapi32.dll
+ext SystemFunction036: fun(*u8, u32) i32;
+
 ext GetCurrentProcessId: fun() u32;
 ext TerminateProcess: fun(isize, u32) i32;
 ext CreateProcessA: fun(&u8, *u8, ptr, ptr, i32, u32, ptr, ptr, *u8, *u8) i32;
@@ -1052,36 +1079,37 @@ pub fun exit_code(status: i32) i32 {
 
 # threads
 
-var thread_fn: usize = 0;
-var thread_done_ptr: usize = 0;
-
-fun thread_trampoline() {
-    val fn_addr: usize = thread_fn;
+# thread callback. receives the pre-allocated stack base as its parameter,
+# where fn_addr and done_addr are stored at offsets 0 and 8.
+fun thread_trampoline(arg: ptr) {
+    val base: usize = arg::usize;
+    val fn_addr: usize = @(base::*usize);
+    val done_addr: usize = @((base + 8)::*usize);
     val fn_ptr: fun() = fn_addr::fun();
     fn_ptr();
-    val done: *i64 = thread_done_ptr::*i64;
+    val done: *i64 = done_addr::*i64;
     @done = 1;
     WakeByAddressSingle(done::ptr);
 }
 
 # thread_spawn: create a new thread via CreateThread.
 #
-# windows manages the thread stack internally. stack_base is unused
-# but stack_size is passed as the initial stack size hint.
-#
-# only one thread may be spawned at a time due to global function pointer.
+# stores fn and done_ptr at the base of the pre-allocated stack region,
+# then passes that address as CreateThread's lpParameter. the trampoline
+# reads both values from the parameter, so no globals are needed and
+# multiple threads may be spawned concurrently.
 # ---
 # f:          function to execute in the new thread
 # done_ptr:   pointer to a completion flag (set to 1 when thread exits)
-# stack_base: base address of the pre-allocated stack region (unused)
+# stack_base: base address of the pre-allocated stack region
 # stack_size: size of the stack in bytes
 # ret:        thread ID on success, or negative errno on failure
 pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: usize) i64 {
-    thread_fn = f::usize;
-    thread_done_ptr = done_ptr::usize;
+    @(stack_base::*usize) = f::usize;
+    @((stack_base + 8)::*usize) = done_ptr::usize;
     var tid: u32 = 0;
-    val tramp: fun() = thread_trampoline;
-    val h: isize = CreateThread(nil, stack_size, tramp::usize, nil, 0, ?tid);
+    val tramp: fun(ptr) = thread_trampoline;
+    val h: isize = CreateThread(nil, stack_size, tramp::usize, stack_base::ptr, 0, ?tid);
     if (h == 0) {
         ret last_error();
     }
@@ -1113,6 +1141,95 @@ pub fun thread_wait(addr: *i64, expected: i64) i64 {
 pub fun thread_wake(addr: *i64) i64 {
     WakeByAddressSingle(addr::ptr);
     ret 0;
+}
+
+# sockets
+
+pub val AF_INET:      i32 = c.AF_INET;
+pub val SOCK_STREAM:  i32 = c.SOCK_STREAM;
+pub val SOCK_DGRAM:   i32 = c.SOCK_DGRAM;
+pub val SOL_SOCKET:   i32 = c.SOL_SOCKET;
+pub val SO_REUSEADDR: i32 = c.SO_REUSEADDR;
+pub val SHUT_RD:      i32 = c.SHUT_RD;
+pub val SHUT_WR:      i32 = c.SHUT_WR;
+pub val SHUT_RDWR:    i32 = c.SHUT_RDWR;
+
+var wsa_initialized: i64 = 0;
+
+fun ensure_wsa() bool {
+    if (wsa_initialized != 0) { ret true; }
+    var wsa_data: [408]u8;
+    val res: i32 = WSAStartup(0x0202, ?wsa_data[0]);
+    if (res != 0) { ret false; }
+    wsa_initialized = 1;
+    ret true;
+}
+
+pub fun sock_create(domain: i32, typ: i32, protocol: i32) i64 {
+    if (!ensure_wsa()) { ret c.EIO; }
+    val s: usize = ws2_socket(domain, typ, protocol);
+    if (s == c.INVALID_SOCKET) { ret c.EIO; }
+    ret s::i64;
+}
+
+pub fun sock_bind(fd: i32, addr: *u8, addrlen: usize) i64 {
+    val res: i32 = ws2_bind(fd::usize, addr, addrlen::i32);
+    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    ret 0;
+}
+
+pub fun sock_listen(fd: i32, backlog: i32) i64 {
+    val res: i32 = ws2_listen(fd::usize, backlog);
+    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    ret 0;
+}
+
+pub fun sock_accept(fd: i32, addr: *u8, addrlen: *u32) i64 {
+    val s: usize = ws2_accept(fd::usize, addr, addrlen::*i32);
+    if (s == c.INVALID_SOCKET) { ret c.EIO; }
+    ret s::i64;
+}
+
+pub fun sock_connect(fd: i32, addr: *u8, addrlen: usize) i64 {
+    val res: i32 = ws2_connect(fd::usize, addr, addrlen::i32);
+    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    ret 0;
+}
+
+pub fun sock_sendto(fd: i32, buf: &u8, len: usize, flags: i32, addr: *u8, addrlen: usize) i64 {
+    val res: i32 = ws2_sendto(fd::usize, buf, len::i32, flags, addr, addrlen::i32);
+    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    ret res::i64;
+}
+
+pub fun sock_recvfrom(fd: i32, buf: *u8, len: usize, flags: i32, addr: *u8, addrlen: *u32) i64 {
+    val res: i32 = ws2_recvfrom(fd::usize, buf, len::i32, flags, addr, addrlen::*i32);
+    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    ret res::i64;
+}
+
+pub fun sock_shutdown(fd: i32, how: i32) i64 {
+    val res: i32 = ws2_shutdown(fd::usize, how);
+    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    ret 0;
+}
+
+pub fun sock_setopt(fd: i32, level: i32, opt: i32, val: *u8, vallen: usize) i64 {
+    val res: i32 = ws2_setsockopt(fd::usize, level, opt, val, vallen::i32);
+    if (res == c.SOCKET_ERROR) { ret c.EIO; }
+    ret 0;
+}
+
+# random
+
+# random_fill: fill a buffer with cryptographic random bytes via RtlGenRandom.
+# ---
+# buf:  destination buffer
+# len:  number of bytes to fill
+# ret:  true on success
+pub fun random_fill(buf: *u8, len: usize) bool {
+    if (len == 0) { ret true; }
+    ret SystemFunction036(buf, len::u32) != 0;
 }
 
 # time

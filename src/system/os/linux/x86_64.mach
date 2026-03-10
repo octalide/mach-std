@@ -892,30 +892,31 @@ pub fun getenv(name: &u8, buf: *u8, cap: usize) i64 {
 
 val THREAD_CLONE_FLAGS: usize = c.CLONE_VM | c.CLONE_FS | c.CLONE_FILES | c.CLONE_SIGHAND | c.CLONE_THREAD | c.CLONE_SYSVSEM;
 
-var thread_fn: usize = 0;
-var thread_done_ptr: usize = 0;
-var thread_entry_stack: usize = 0;
-var thread_clone_result: i64 = 0;
-var thread_trampoline_addr: usize = 0;
-
 fun thread_trampoline() {
-    val fn_addr: usize = thread_fn;
+    var fn_addr: usize = 0;
+    var done_addr: usize = 0;
+    asm {
+        x86_64 {
+            mov rax, [rbp+8]
+            mov [fn_addr], rax
+            mov rax, [rbp+16]
+            mov [done_addr], rax
+        }
+    }
     val fn_ptr: fun() = fn_addr::fun();
     fn_ptr();
-    val done: *i64 = thread_done_ptr::*i64;
+    val done: *i64 = done_addr::*i64;
     @done = 1;
-    syscall6(c.SYS_FUTEX, thread_done_ptr, c.FUTEX_WAKE, 1, 0, 0, 0);
+    syscall6(c.SYS_FUTEX, done_addr, c.FUTEX_WAKE, 1, 0, 0, 0);
     syscall1(c.SYS_EXIT, 0);
 }
 
 # thread_spawn: create a new thread sharing the current address space.
 #
-# allocates the clone syscall with shared VM, FS, files, and signals.
-# the child thread calls the entry function, then sets *done_ptr to 1,
-# wakes one futex waiter, and exits.
-#
-# only one thread may be spawned at a time. the caller must ensure the
-# previous thread has read its function pointer before spawning again.
+# uses clone with shared VM, FS, files, and signals. the child's stack
+# carries the function pointer and done_ptr, so no globals are needed.
+# the child calls the entry function, sets *done_ptr to 1, wakes one
+# futex waiter, and exits.
 # ---
 # f:          function to execute in the new thread
 # done_ptr:   pointer to a completion flag (set to 1 when thread exits)
@@ -923,39 +924,36 @@ fun thread_trampoline() {
 # stack_size: size of the stack in bytes
 # ret:        thread ID on success, or negative errno on failure
 pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: usize) i64 {
-    thread_fn = f::usize;
-    thread_done_ptr = done_ptr::usize;
     val tramp: fun() = thread_trampoline;
-    thread_trampoline_addr = tramp::usize;
+    val stack_top: usize = stack_base + stack_size;
+    val child_sp: usize = stack_top - 32;
+    @(child_sp::*usize) = tramp::usize;
+    @((child_sp + 8)::*usize) = f::usize;
+    @((child_sp + 16)::*usize) = done_ptr::usize;
+
+    var flags: usize = THREAD_CLONE_FLAGS;
+    var stack_ptr: usize = child_sp;
+    var result: i64 = 0;
 
     asm {
         x86_64 {
             mfence
-        }
-    }
-
-    val stack_top: usize = stack_base + stack_size;
-    val child_sp: usize = stack_top - 8;
-    @(child_sp::*usize) = thread_trampoline_addr;
-    thread_entry_stack = child_sp;
-
-    asm {
-        x86_64 {
-            mov rdi, [THREAD_CLONE_FLAGS]
-            mov rsi, [thread_entry_stack]
+            mov rdi, [flags]
+            mov rsi, [stack_ptr]
             xor rdx, rdx
             xor r10, r10
             xor r8, r8
             mov rax, 56
             syscall
-            mov [thread_clone_result], rax
+            mov [result], rax
             test rax, rax
-            .byte 0x75, 0x01
+            jnz 1f
             ret
+        1:
         }
     }
 
-    ret thread_clone_result;
+    ret result;
 }
 
 # thread_wait: block until the value at addr changes from expected.
@@ -976,6 +974,133 @@ pub fun thread_wait(addr: *i64, expected: i64) i64 {
 # ret:  number of threads woken, or negative errno
 pub fun thread_wake(addr: *i64) i64 {
     ret syscall6(c.SYS_FUTEX, addr::usize, c.FUTEX_WAKE, 1, 0, 0, 0);
+}
+
+# sockets
+
+pub val AF_INET:      i32 = c.AF_INET;
+pub val SOCK_STREAM:  i32 = c.SOCK_STREAM;
+pub val SOCK_DGRAM:   i32 = c.SOCK_DGRAM;
+pub val SOL_SOCKET:   i32 = c.SOL_SOCKET;
+pub val SO_REUSEADDR: i32 = c.SO_REUSEADDR;
+pub val SHUT_RD:      i32 = c.SHUT_RD;
+pub val SHUT_WR:      i32 = c.SHUT_WR;
+pub val SHUT_RDWR:    i32 = c.SHUT_RDWR;
+
+# sock_create: create a socket file descriptor.
+# ---
+# domain:   address family (AF_INET)
+# typ:      socket type (SOCK_STREAM, SOCK_DGRAM)
+# protocol: protocol (0 for default)
+# ret:      fd on success, or negative errno
+pub fun sock_create(domain: i32, typ: i32, protocol: i32) i64 {
+    ret syscall3(c.SYS_SOCKET, domain::u32::usize, typ::u32::usize, protocol::u32::usize);
+}
+
+# sock_bind: bind a socket to an address.
+# ---
+# fd:      socket fd
+# addr:    pointer to sockaddr structure
+# addrlen: size of the sockaddr structure
+# ret:     0 on success, or negative errno
+pub fun sock_bind(fd: i32, addr: *u8, addrlen: usize) i64 {
+    ret syscall3(c.SYS_BIND, fd::isize::usize, addr::usize, addrlen);
+}
+
+# sock_listen: mark a socket as a passive listener.
+# ---
+# fd:      socket fd
+# backlog: maximum pending connection queue length
+# ret:     0 on success, or negative errno
+pub fun sock_listen(fd: i32, backlog: i32) i64 {
+    ret syscall2(c.SYS_LISTEN, fd::isize::usize, backlog::u32::usize);
+}
+
+# sock_accept: accept a connection on a listening socket.
+# ---
+# fd:      socket fd
+# addr:    pointer to sockaddr to fill with peer address
+# addrlen: pointer to sockaddr length (in/out)
+# ret:     new fd on success, or negative errno
+pub fun sock_accept(fd: i32, addr: *u8, addrlen: *u32) i64 {
+    ret syscall3(c.SYS_ACCEPT, fd::isize::usize, addr::usize, addrlen::usize);
+}
+
+# sock_connect: connect a socket to a remote address.
+# ---
+# fd:      socket fd
+# addr:    pointer to sockaddr structure
+# addrlen: size of the sockaddr structure
+# ret:     0 on success, or negative errno
+pub fun sock_connect(fd: i32, addr: *u8, addrlen: usize) i64 {
+    ret syscall3(c.SYS_CONNECT, fd::isize::usize, addr::usize, addrlen);
+}
+
+# sock_sendto: send data to a specific address.
+# ---
+# fd:      socket fd
+# buf:     source buffer
+# len:     number of bytes to send
+# flags:   send flags
+# addr:    pointer to destination sockaddr
+# addrlen: size of the sockaddr structure
+# ret:     bytes sent on success, or negative errno
+pub fun sock_sendto(fd: i32, buf: &u8, len: usize, flags: i32, addr: *u8, addrlen: usize) i64 {
+    ret syscall6(c.SYS_SENDTO, fd::isize::usize, buf::usize, len, flags::u32::usize, addr::usize, addrlen);
+}
+
+# sock_recvfrom: receive data and source address.
+# ---
+# fd:      socket fd
+# buf:     destination buffer
+# len:     maximum bytes to receive
+# flags:   recv flags
+# addr:    pointer to sockaddr to fill with source address
+# addrlen: pointer to sockaddr length (in/out)
+# ret:     bytes received on success, or negative errno
+pub fun sock_recvfrom(fd: i32, buf: *u8, len: usize, flags: i32, addr: *u8, addrlen: *u32) i64 {
+    ret syscall6(c.SYS_RECVFROM, fd::isize::usize, buf::usize, len, flags::u32::usize, addr::usize, addrlen::usize);
+}
+
+# sock_shutdown: shut down part or all of a socket connection.
+# ---
+# fd:  socket fd
+# how: SHUT_RD (0), SHUT_WR (1), or SHUT_RDWR (2)
+# ret: 0 on success, or negative errno
+pub fun sock_shutdown(fd: i32, how: i32) i64 {
+    ret syscall2(c.SYS_SHUTDOWN, fd::isize::usize, how::u32::usize);
+}
+
+# sock_setopt: set a socket option.
+# ---
+# fd:     socket fd
+# level:  option level (SOL_SOCKET, etc.)
+# opt:    option name (SO_REUSEADDR, etc.)
+# val:    pointer to option value
+# vallen: size of option value
+# ret:    0 on success, or negative errno
+pub fun sock_setopt(fd: i32, level: i32, opt: i32, val: *u8, vallen: usize) i64 {
+    ret syscall5(c.SYS_SETSOCKOPT, fd::isize::usize, level::u32::usize, opt::u32::usize, val::usize, vallen);
+}
+
+# random
+
+# random_fill: fill a buffer with cryptographic random bytes via getrandom.
+# ---
+# buf:  destination buffer
+# len:  number of bytes to fill
+# ret:  true on success
+pub fun random_fill(buf: *u8, len: usize) bool {
+    if (len == 0) { ret true; }
+    var filled: usize = 0;
+    for (filled < len) {
+        val remaining: usize = len - filled;
+        val dst: usize = buf::usize + filled;
+        val res: i64 = syscall3(c.SYS_GETRANDOM, dst, remaining, 0);
+        if (res < 0) { ret false; }
+        filled = filled + res::usize;
+    }
+    ret true;
 }
 
 # time

@@ -41,6 +41,18 @@ pub val SYS_GETTIMEOFDAY:     usize = 116;
 pub val SYS_GETPID:           usize = 20;
 pub val SYS_KILL:             usize = 37;
 pub val SYS___GETCWD:         usize = 304;
+pub val SYS_GETENTROPY:       usize = 500;
+
+# socket syscalls
+pub val SYS_SOCKET:           usize = 97;
+pub val SYS_CONNECT:          usize = 98;
+pub val SYS_ACCEPT:           usize = 30;
+pub val SYS_SENDTO:           usize = 133;
+pub val SYS_RECVFROM:         usize = 29;
+pub val SYS_SHUTDOWN:         usize = 134;
+pub val SYS_BIND:             usize = 104;
+pub val SYS_LISTEN:           usize = 106;
+pub val SYS_SETSOCKOPT:       usize = 105;
 
 # signals
 pub val SIGABRT: i32 = 6;
@@ -131,6 +143,16 @@ pub val EPIPE:     i64 = -32;
 pub val ENOSYS:    i64 = -78;
 pub val ENOTEMPTY: i64 = -66;
 pub val ENOTSUP:   i64 = -45;
+
+# socket constants
+pub val AF_INET:      i32 = 2;
+pub val SOCK_STREAM:  i32 = 1;
+pub val SOCK_DGRAM:   i32 = 2;
+pub val SOL_SOCKET:   i32 = 0xFFFF;
+pub val SO_REUSEADDR: i32 = 4;
+pub val SHUT_RD:      i32 = 0;
+pub val SHUT_WR:      i32 = 1;
+pub val SHUT_RDWR:    i32 = 2;
 
 # thread creation (bsdthread)
 pub val SYS_BSDTHREAD_CREATE:    usize = 360;

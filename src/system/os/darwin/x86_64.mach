@@ -489,8 +489,8 @@ pub fun getpid() i64 {
 # ---
 # fds: pointer to two i32s; fds[0] = read end, fds[1] = write end
 # ret: 0 on success, or negative errno
-var _pipe_res: i64 = 0;
 pub fun pipe(fds: *i32) i64 {
+    var result: i64 = 0;
     asm {
         x86_64 {
             mov r8, rdi
@@ -504,10 +504,10 @@ pub fun pipe(fds: *i32) i64 {
         1:
             neg rax
         2:
-            mov [_pipe_res], rax
+            mov [result], rax
         }
     }
-    ret _pipe_res;
+    ret result;
 }
 
 # sleep: suspend execution for the given number of nanoseconds.
@@ -644,6 +644,74 @@ pub fun thread_wait(addr: *i64, expected: i64) i64 {
 # ret:  number of threads woken, or negative errno
 pub fun thread_wake(addr: *i64) i64 {
     ret syscall3(c.SYS_ULOCK_WAKE, c.UL_COMPARE_AND_WAIT64, addr::usize, 0);
+}
+
+# sockets
+
+pub val AF_INET:      i32 = c.AF_INET;
+pub val SOCK_STREAM:  i32 = c.SOCK_STREAM;
+pub val SOCK_DGRAM:   i32 = c.SOCK_DGRAM;
+pub val SOL_SOCKET:   i32 = c.SOL_SOCKET;
+pub val SO_REUSEADDR: i32 = c.SO_REUSEADDR;
+pub val SHUT_RD:      i32 = c.SHUT_RD;
+pub val SHUT_WR:      i32 = c.SHUT_WR;
+pub val SHUT_RDWR:    i32 = c.SHUT_RDWR;
+
+pub fun sock_create(domain: i32, typ: i32, protocol: i32) i64 {
+    ret syscall3(c.SYS_SOCKET, domain::u32::usize, typ::u32::usize, protocol::u32::usize);
+}
+
+pub fun sock_bind(fd: i32, addr: *u8, addrlen: usize) i64 {
+    ret syscall3(c.SYS_BIND, fd::isize::usize, addr::usize, addrlen);
+}
+
+pub fun sock_listen(fd: i32, backlog: i32) i64 {
+    ret syscall2(c.SYS_LISTEN, fd::isize::usize, backlog::u32::usize);
+}
+
+pub fun sock_accept(fd: i32, addr: *u8, addrlen: *u32) i64 {
+    ret syscall3(c.SYS_ACCEPT, fd::isize::usize, addr::usize, addrlen::usize);
+}
+
+pub fun sock_connect(fd: i32, addr: *u8, addrlen: usize) i64 {
+    ret syscall3(c.SYS_CONNECT, fd::isize::usize, addr::usize, addrlen);
+}
+
+pub fun sock_sendto(fd: i32, buf: &u8, len: usize, flags: i32, addr: *u8, addrlen: usize) i64 {
+    ret syscall6(c.SYS_SENDTO, fd::isize::usize, buf::usize, len, flags::u32::usize, addr::usize, addrlen);
+}
+
+pub fun sock_recvfrom(fd: i32, buf: *u8, len: usize, flags: i32, addr: *u8, addrlen: *u32) i64 {
+    ret syscall6(c.SYS_RECVFROM, fd::isize::usize, buf::usize, len, flags::u32::usize, addr::usize, addrlen::usize);
+}
+
+pub fun sock_shutdown(fd: i32, how: i32) i64 {
+    ret syscall2(c.SYS_SHUTDOWN, fd::isize::usize, how::u32::usize);
+}
+
+pub fun sock_setopt(fd: i32, level: i32, opt: i32, val: *u8, vallen: usize) i64 {
+    ret syscall5(c.SYS_SETSOCKOPT, fd::isize::usize, level::u32::usize, opt::u32::usize, val::usize, vallen);
+}
+
+# random
+
+# random_fill: fill a buffer with cryptographic random bytes via getentropy.
+# ---
+# buf:  destination buffer
+# len:  number of bytes to fill
+# ret:  true on success
+pub fun random_fill(buf: *u8, len: usize) bool {
+    if (len == 0) { ret true; }
+    var filled: usize = 0;
+    for (filled < len) {
+        var chunk: usize = len - filled;
+        if (chunk > 256) { chunk = 256; }
+        val dst: usize = buf::usize + filled;
+        val res: i64 = syscall2(c.SYS_GETENTROPY, dst, chunk);
+        if (res < 0) { ret false; }
+        filled = filled + chunk;
+    }
+    ret true;
 }
 
 # time

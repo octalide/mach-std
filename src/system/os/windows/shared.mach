@@ -1,0 +1,8 @@
+# std.system.os.windows.shared: items shared across all windows ISA implementations.
+
+$if ($mach.build.target.os.id != $mach.os.windows.id) {
+    $error("std.system.os.windows.shared: requires windows target");
+}
+
+# path separator
+pub val separator: u8 = '\\';

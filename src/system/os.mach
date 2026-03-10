@@ -75,15 +75,6 @@ pub fwd ADVISE_SEQUENTIAL: shared.ADVISE_SEQUENTIAL;
 pub fwd ADVISE_WILL_NEED:  shared.ADVISE_WILL_NEED;
 pub fwd ADVISE_DONT_NEED:  shared.ADVISE_DONT_NEED;
 
-# huge page sizes
-pub fwd HUGE_2MB: shared.HUGE_2MB;
-pub fwd HUGE_1GB: shared.HUGE_1GB;
-
-# wait options
-pub fwd impl.WNOHANG;
-pub fwd impl.WUNTRACED;
-pub fwd impl.WCONTINUED;
-
 # errno values
 pub fwd impl.EPERM;
 pub fwd impl.ENOENT;
@@ -112,18 +103,6 @@ pub fwd impl.EROFS;
 pub fwd impl.EPIPE;
 pub fwd impl.ENOTEMPTY;
 pub fwd impl.ENOTSUP;
-
-# retry policy
-pub fwd impl.EINTR_MAX_RETRIES;
-
-# syscall wrappers
-pub fwd impl.syscall0;
-pub fwd impl.syscall1;
-pub fwd impl.syscall2;
-pub fwd impl.syscall3;
-pub fwd impl.syscall4;
-pub fwd impl.syscall5;
-pub fwd impl.syscall6;
 
 # memory
 pub fwd impl.allocate;
@@ -167,18 +146,38 @@ pub fwd impl.wait_pid;
 pub fwd impl.has_exited;
 pub fwd impl.exit_code;
 
+# sockets
+pub fwd impl.AF_INET;
+pub fwd impl.SOCK_STREAM;
+pub fwd impl.SOCK_DGRAM;
+pub fwd impl.SOL_SOCKET;
+pub fwd impl.SO_REUSEADDR;
+pub fwd impl.SHUT_RD;
+pub fwd impl.SHUT_WR;
+pub fwd impl.SHUT_RDWR;
+pub fwd impl.sock_create;
+pub fwd impl.sock_bind;
+pub fwd impl.sock_listen;
+pub fwd impl.sock_accept;
+pub fwd impl.sock_connect;
+pub fwd impl.sock_sendto;
+pub fwd impl.sock_recvfrom;
+pub fwd impl.sock_shutdown;
+pub fwd impl.sock_setopt;
+
+# random
+pub fwd impl.random_fill;
+
 # threads
 pub fwd impl.thread_spawn;
 pub fwd impl.thread_wait;
 pub fwd impl.thread_wake;
 
 # time
-pub fwd CLOCK_REALTIME:  impl.CLOCK_REALTIME;
-pub fwd CLOCK_MONOTONIC: impl.CLOCK_MONOTONIC;
 
 pub fun realtime() Timespec {
     var ts: impl.timespec;
-    val r: i64 = impl.clock_gettime(CLOCK_REALTIME, ?ts);
+    val r: i64 = impl.clock_gettime(impl.CLOCK_REALTIME, ?ts);
     if (r < 0) {
         ret Timespec{sec: 0, nsec: 0};
     }
@@ -187,7 +186,7 @@ pub fun realtime() Timespec {
 
 pub fun monotonic() Timespec {
     var ts: impl.timespec;
-    val r: i64 = impl.clock_gettime(CLOCK_MONOTONIC, ?ts);
+    val r: i64 = impl.clock_gettime(impl.CLOCK_MONOTONIC, ?ts);
     if (r < 0) {
         ret Timespec{sec: 0, nsec: 0};
     }

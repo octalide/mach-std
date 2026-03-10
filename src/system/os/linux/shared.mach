@@ -1,0 +1,8 @@
+# std.system.os.linux.shared: items shared across all linux ISA implementations.
+
+$if ($mach.build.target.os.id != $mach.os.linux.id) {
+    $error("std.system.os.linux.shared: requires linux target");
+}
+
+# path separator (same across all linux arches)
+pub val separator: u8 = '/';

@@ -151,6 +151,28 @@ pub fwd impl.was_stopped;
 pub fwd impl.stop_signal;
 pub fwd impl.was_continued;
 
+# sockets
+pub fwd impl.AF_INET;
+pub fwd impl.SOCK_STREAM;
+pub fwd impl.SOCK_DGRAM;
+pub fwd impl.SOL_SOCKET;
+pub fwd impl.SO_REUSEADDR;
+pub fwd impl.SHUT_RD;
+pub fwd impl.SHUT_WR;
+pub fwd impl.SHUT_RDWR;
+pub fwd impl.sock_create;
+pub fwd impl.sock_bind;
+pub fwd impl.sock_listen;
+pub fwd impl.sock_accept;
+pub fwd impl.sock_connect;
+pub fwd impl.sock_sendto;
+pub fwd impl.sock_recvfrom;
+pub fwd impl.sock_shutdown;
+pub fwd impl.sock_setopt;
+
+# random
+pub fwd impl.random_fill;
+
 # threads
 pub fwd impl.thread_spawn;
 pub fwd impl.thread_wait;

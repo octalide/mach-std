@@ -1,0 +1,8 @@
+# std.system.os.darwin.shared: items shared across all darwin ISA implementations.
+
+$if ($mach.build.target.os.id != $mach.os.darwin.id) {
+    $error("std.system.os.darwin.shared: requires darwin target");
+}
+
+# path separator (same across all darwin arches)
+pub val separator: u8 = '/';
