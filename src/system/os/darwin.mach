@@ -170,6 +170,10 @@ pub fwd impl.sock_recvfrom;
 pub fwd impl.sock_shutdown;
 pub fwd impl.sock_setopt;
 
+# dns
+pub fwd impl.DNS_HOSTS_PATH;
+pub fwd impl.dns_nameserver;
+
 # random
 pub fwd impl.random_fill;
 

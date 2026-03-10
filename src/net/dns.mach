@@ -15,16 +15,16 @@ val DNS_MAX_PACKET: usize = 512;
 val DNS_TYPE_A:     u16   = 1;
 val DNS_CLASS_IN:   u16   = 1;
 
-# lookup_hosts: resolve a hostname via /etc/hosts.
+# lookup_hosts: resolve a hostname via the system hosts file.
 #
-# searches /etc/hosts for a matching hostname and writes the first
-# IPv4 address found into addr.
+# searches the platform hosts file for a matching hostname and writes
+# the first IPv4 address found into addr.
 # ---
 # hostname: null-terminated hostname to look up
 # addr:     pointer to an IPv4 to fill on success
 # ret:      true if a match was found
 pub fun lookup_hosts(hostname: str, addr: *ip.IPv4) bool {
-    val fd: i64 = os.open(os.AT_FDCWD, "/etc/hosts", os.O_RDONLY, 0);
+    val fd: i64 = os.open(os.AT_FDCWD, os.DNS_HOSTS_PATH, os.O_RDONLY, 0);
     if (fd < 0) { ret false; }
 
     var buf: [4096]u8;
@@ -88,16 +88,15 @@ pub fun lookup_hosts(hostname: str, addr: *ip.IPv4) bool {
 
 # query: resolve a hostname via DNS A record query.
 #
-# reads the first nameserver from /etc/resolv.conf and sends a DNS
-# A record query over UDP. writes the first address from the response
-# into addr.
+# queries the platform nameserver with a DNS A record request over UDP.
+# writes the first address from the response into addr.
 # ---
 # hostname: null-terminated hostname to resolve
 # addr:     pointer to an IPv4 to fill on success
 # ret:      true if resolution succeeded
 pub fun query(hostname: str, addr: *ip.IPv4) bool {
     var ns: ip.IPv4;
-    if (!read_nameserver(?ns)) { ret false; }
+    if (!os.dns_nameserver(?ns.octets[0])) { ret false; }
 
     var pkt: [512]u8;
     val qlen: usize = build_query(hostname, ?pkt[0], 512);
@@ -122,7 +121,7 @@ pub fun query(hostname: str, addr: *ip.IPv4) bool {
     ret parse_response(?resp[0], recvd::usize, addr);
 }
 
-# resolve: resolve a hostname, trying /etc/hosts first then DNS.
+# resolve: resolve a hostname, trying the hosts file first then DNS.
 # ---
 # hostname: null-terminated hostname to resolve
 # addr:     pointer to an IPv4 to fill on success
@@ -165,42 +164,6 @@ fun parse_ipv4(buf: &u8, len: usize, addr: *ip.IPv4) bool {
     if (idx != 3 || octet > 255) { ret false; }
     addr.octets[3] = octet::u8;
     ret true;
-}
-
-fun read_nameserver(ns: *ip.IPv4) bool {
-    val fd: i64 = os.open(os.AT_FDCWD, "/etc/resolv.conf", os.O_RDONLY, 0);
-    if (fd < 0) { ret false; }
-
-    var buf: [2048]u8;
-    val n: i64 = os.read(fd::i32, ?buf[0], 2048);
-    os.close(fd::i32);
-    if (n <= 0) { ret false; }
-
-    val len: usize = n::usize;
-    val prefix: str = "nameserver";
-    val plen: usize = 10;
-    var pos: usize = 0;
-
-    for (pos < len) {
-        for (pos < len && (buf[pos] == ' ' || buf[pos] == 9)) { pos = pos + 1; }
-
-        if (pos + plen < len && region_eq(?buf[pos], prefix, plen)) {
-            pos = pos + plen;
-            for (pos < len && (buf[pos] == ' ' || buf[pos] == 9)) { pos = pos + 1; }
-            var start: usize = pos;
-            for (pos < len && buf[pos] != ' ' && buf[pos] != 9 && buf[pos] != 10) {
-                pos = pos + 1;
-            }
-            if (pos > start) {
-                if (parse_ipv4(?buf[start], pos - start, ns)) { ret true; }
-            }
-        }
-
-        for (pos < len && buf[pos] != 10) { pos = pos + 1; }
-        if (pos < len) { pos = pos + 1; }
-    }
-
-    ret false;
 }
 
 fun build_query(hostname: str, buf: *u8, cap: usize) usize {
