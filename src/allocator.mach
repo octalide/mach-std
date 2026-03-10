@@ -16,12 +16,12 @@ use mem:    std.memory;
 # ctx:           opaque context passed to callbacks.
 # fn_allocate:   allocate (ctx, size, align) -> ptr (nil on OOM).
 # fn_reallocate: reallocate (ctx, p, old_size, new_size, align) -> ptr (nil on OOM).
-# fn_deallocate: deallocate (ctx, p, size, align) -> bool.
+# fn_deallocate: deallocate (ctx, p, size, align) -> i64 (0 on success, negative errno on failure).
 pub rec Allocator {
     ctx:           ptr;
     fn_allocate:   fun(ptr, usize, usize)             Option[ptr];
     fn_reallocate: fun(ptr, ptr, usize, usize, usize) Option[ptr];
-    fn_deallocate: fun(ptr, ptr, usize, usize)        bool;
+    fn_deallocate: fun(ptr, ptr, usize, usize)        i64;
 }
 
 # allocate_raw: allocate raw bytes using this allocator
@@ -53,8 +53,8 @@ pub fun allocate_raw(a: &Allocator, size: usize, align: usize) Result[ptr, str] 
 # ret:      ptr to reallocated memory (same as p if in-place) or error on OOM
 pub fun reallocate_raw(a: &Allocator, p: ptr, old_size: usize, new_size: usize, align: usize) Result[ptr, str] {
     if (new_size == 0) {
-        val ok_deallocate: bool = deallocate_raw(a, p, old_size, align);
-        if (ok_deallocate) {
+        val res_deallocate: i64 = deallocate_raw(a, p, old_size, align);
+        if (res_deallocate == 0) {
             ret ok[ptr, str](nil);
         }
 
@@ -75,8 +75,8 @@ pub fun reallocate_raw(a: &Allocator, p: ptr, old_size: usize, new_size: usize, 
 # p:     pointer previously returned by allocate_raw or reallocate_raw
 # size:  size in bytes that was allocated
 # align: alignment in bytes
-# ret:   true on success
-pub fun deallocate_raw(a: &Allocator, p: ptr, size: usize, align: usize) bool {
+# ret:   0 on success, or negative errno
+pub fun deallocate_raw(a: &Allocator, p: ptr, size: usize, align: usize) i64 {
     ret a.fn_deallocate(a.ctx, p, size, align);
 }
 
@@ -150,12 +150,12 @@ pub fun reallocate[T](a: &Allocator, p: &T, old_count: usize, new_count: usize) 
 
 # deallocate: deallocate memory previously returned by alloc/zalloc for count elements.
 # ---
-# p: pointer returned by alloc/zalloc (may be nil)
+# p:     pointer returned by alloc/zalloc (may be nil)
 # count: number of elements to deallocate
-# ret: true on success; no-op for nil pointer or count == 0.
-pub fun deallocate[T](a: &Allocator, p: &T, count: usize) bool {
+# ret:   0 on success, or negative errno; no-op for nil pointer or count == 0.
+pub fun deallocate[T](a: &Allocator, p: &T, count: usize) i64 {
     if (p == nil || count == 0) {
-        ret true;
+        ret 0;
     }
 
     ret deallocate_raw(a, p::ptr, $size_of(T) * count, $align_of(T));

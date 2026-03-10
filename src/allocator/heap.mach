@@ -142,10 +142,10 @@ fun reallocate(ctx: ptr, p: ptr, old_size: usize, new_size: usize, align: usize)
 # p:     pointer to deallocate
 # size:  size of allocation in bytes
 # align: alignment (unused)
-# ret:   true on success
-fun deallocate(ctx: ptr, p: ptr, size: usize, align: usize) bool {
+# ret:   0 on success, or negative errno
+fun deallocate(ctx: ptr, p: ptr, size: usize, align: usize) i64 {
     if (p == nil || size == 0) {
-        ret true;
+        ret 0;
     }
 
     if (size >= MMAP_THRESHOLD) {
@@ -153,5 +153,5 @@ fun deallocate(ctx: ptr, p: ptr, size: usize, align: usize) bool {
     }
 
     # brk-backed allocations cannot be individually freed
-    ret true;
+    ret 0;
 }

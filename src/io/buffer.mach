@@ -50,13 +50,13 @@ pub fun wbuf_dnit(buf: *WriteBuf) bool {
         ret true;
     }
 
-    val freed: bool = allocator.deallocate[u8](buf.alloc, buf.data, buf.cap);
-    if (freed) {
+    val res: i64 = allocator.deallocate[u8](buf.alloc, buf.data, buf.cap);
+    if (res == 0) {
         buf.data = nil;
         buf.len = 0;
         buf.cap = 0;
     }
-    ret freed;
+    ret res == 0;
 }
 
 # wbuf_reserve: ensure capacity for additional bytes.

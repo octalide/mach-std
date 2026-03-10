@@ -96,7 +96,7 @@ pub fun lookup_hosts(hostname: str, addr: *ip.IPv4) bool {
 # ret:      true if resolution succeeded
 pub fun query(hostname: str, addr: *ip.IPv4) bool {
     var ns: ip.IPv4;
-    if (!os.dns_nameserver(?ns.octets[0])) { ret false; }
+    if (os.dns_nameserver(?ns.octets[0]) < 0) { ret false; }
 
     var pkt: [512]u8;
     val qlen: usize = build_query(hostname, ?pkt[0], 512);

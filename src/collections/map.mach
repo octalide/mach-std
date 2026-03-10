@@ -77,9 +77,9 @@ pub fun dnit[K, V](m: *Map[K, V]) bool {
     }
 
     var ok: bool = true;
-    ok = allocator.deallocate[K](m.alloc, m.keys, m.cap) && ok;
-    ok = allocator.deallocate[V](m.alloc, m.values, m.cap) && ok;
-    ok = allocator.deallocate[u8](m.alloc, m.states, m.cap) && ok;
+    if (allocator.deallocate[K](m.alloc, m.keys, m.cap) < 0) { ok = false; }
+    if (allocator.deallocate[V](m.alloc, m.values, m.cap) < 0) { ok = false; }
+    if (allocator.deallocate[u8](m.alloc, m.states, m.cap) < 0) { ok = false; }
 
     m.keys       = nil;
     m.values     = nil;

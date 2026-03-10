@@ -42,15 +42,15 @@ pub fun dnit[T](dq: *Deque[T]) bool {
         ret true;
     }
 
-    val ok_free: bool = allo.deallocate[T](dq.alloc, dq.data, dq.cap);
-    if (ok_free) {
+    val res: i64 = allo.deallocate[T](dq.alloc, dq.data, dq.cap);
+    if (res == 0) {
         dq.data = nil;
         dq.len = 0;
         dq.head = 0;
         dq.cap = 0;
     }
 
-    ret ok_free;
+    ret res == 0;
 }
 
 # check if the deque is empty.

@@ -255,14 +255,14 @@ pub fun allocate(size: usize) ptr {
 
 # deallocate: free memory via munmap.
 # ---
-# p:    pointer to memory; if nil, returns true
-# size: allocation size in bytes; if 0, returns true
-# ret:  true on success
-pub fun deallocate(p: ptr, size: usize) bool {
+# p:    pointer to memory; if nil, returns 0
+# size: allocation size in bytes; if 0, returns 0
+# ret:  0 on success, or negative errno
+pub fun deallocate(p: ptr, size: usize) i64 {
     if (p == nil || size == 0) {
-        ret true;
+        ret 0;
     }
-    ret syscall2(c.SYS_MUNMAP, p::usize, size) == 0;
+    ret syscall2(c.SYS_MUNMAP, p::usize, size);
 }
 
 # reallocate: resize a memory region via mremap.
@@ -306,27 +306,27 @@ pub fun heap_region_extend(addr: usize) usize {
 # p:    page-aligned pointer to the region
 # size: size of the region in bytes
 # prot: protection flags (PROT_READ, PROT_WRITE, PROT_EXEC, PROT_NONE)
-# ret:  true on success
-pub fun protect(p: ptr, size: usize, prot: u32) bool {
-    ret syscall3(c.SYS_MPROTECT, p::usize, size, prot::usize) == 0;
+# ret:  0 on success, or negative errno
+pub fun protect(p: ptr, size: usize, prot: u32) i64 {
+    ret syscall3(c.SYS_MPROTECT, p::usize, size, prot::usize);
 }
 
 # lock: lock a memory region into physical RAM via mlock.
 # ---
 # p:    pointer to the region
 # size: size of the region in bytes
-# ret:  true on success
-pub fun lock(p: ptr, size: usize) bool {
-    ret syscall2(c.SYS_MLOCK, p::usize, size) == 0;
+# ret:  0 on success, or negative errno
+pub fun lock(p: ptr, size: usize) i64 {
+    ret syscall2(c.SYS_MLOCK, p::usize, size);
 }
 
 # unlock: unlock a previously locked memory region via munlock.
 # ---
 # p:    pointer to the region
 # size: size of the region in bytes
-# ret:  true on success
-pub fun unlock(p: ptr, size: usize) bool {
-    ret syscall2(c.SYS_MUNLOCK, p::usize, size) == 0;
+# ret:  0 on success, or negative errno
+pub fun unlock(p: ptr, size: usize) i64 {
+    ret syscall2(c.SYS_MUNLOCK, p::usize, size);
 }
 
 # advise: advise the kernel on expected access patterns via madvise.
@@ -334,9 +334,9 @@ pub fun unlock(p: ptr, size: usize) bool {
 # p:      pointer to the region
 # size:   size of the region in bytes
 # advice: advisory hint (MADV_NORMAL, MADV_RANDOM, etc.)
-# ret:    true on success
-pub fun advise(p: ptr, size: usize, advice: u32) bool {
-    ret syscall3(c.SYS_MADVISE, p::usize, size, advice::usize) == 0;
+# ret:    0 on success, or negative errno
+pub fun advise(p: ptr, size: usize, advice: u32) i64 {
+    ret syscall3(c.SYS_MADVISE, p::usize, size, advice::usize);
 }
 
 # page_size: return the system page size (4096 on x86_64 linux).
@@ -436,16 +436,16 @@ pub fun numa_allocate(size: usize, node: usize) ptr {
 # p:    pointer to the region
 # size: size of the region in bytes
 # node: target NUMA node id
-# ret:  true on success
-pub fun numa_move(p: ptr, size: usize, node: usize) bool {
+# ret:  0 on success, or negative errno
+pub fun numa_move(p: ptr, size: usize, node: usize) i64 {
     if (p == nil || size == 0) {
-        ret true;
+        ret 0;
     }
     if (node >= 64) {
-        ret false;
+        ret c.EINVAL;
     }
     var mask: usize = 1 << node;
-    ret syscall6(c.SYS_MBIND, p::usize, size, c.MPOL_BIND, (?mask)::usize, 64, c.MPOL_MF_MOVE) == 0;
+    ret syscall6(c.SYS_MBIND, p::usize, size, c.MPOL_BIND, (?mask)::usize, 64, c.MPOL_MF_MOVE);
 }
 
 # map_file: map a file descriptor into memory via mmap.
@@ -474,12 +474,12 @@ pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
 # ---
 # p:    pointer to the mapped region
 # size: size of the region in bytes
-# ret:  true on success
-pub fun sync_file(p: ptr, size: usize) bool {
+# ret:  0 on success, or negative errno
+pub fun sync_file(p: ptr, size: usize) i64 {
     if (p == nil || size == 0) {
-        ret true;
+        ret 0;
     }
-    ret syscall3(c.SYS_MSYNC, p::usize, size, c.MS_SYNC::u32::usize) == 0;
+    ret syscall3(c.SYS_MSYNC, p::usize, size, c.MS_SYNC::u32::usize);
 }
 
 # feature detection
@@ -1115,15 +1115,16 @@ pub val DNS_HOSTS_PATH: str = "/etc/hosts";
 # dns_nameserver: read the first nameserver from /etc/resolv.conf.
 # ---
 # ns:  pointer to 4 bytes to fill with the IPv4 address
-# ret: true if a nameserver was found
-pub fun dns_nameserver(ns: *u8) bool {
+# ret: 0 on success, or NOT_FOUND / negative errno
+pub fun dns_nameserver(ns: *u8) i64 {
     val fd: i64 = open(AT_FDCWD, "/etc/resolv.conf", O_RDONLY, 0);
-    if (fd < 0) { ret false; }
+    if (fd < 0) { ret fd; }
 
     var buf: [2048]u8;
     val n: i64 = read(fd::i32, ?buf[0], 2048);
     close(fd::i32);
-    if (n <= 0) { ret false; }
+    if (n < 0) { ret n; }
+    if (n == 0) { ret os_shared.NOT_FOUND; }
 
     val len: usize = n::usize;
     var pos: usize = 0;
@@ -1139,7 +1140,7 @@ pub fun dns_nameserver(ns: *u8) bool {
                 pos = pos + 1;
             }
             if (pos > start && dns_parse_ns_addr(?buf[start], pos - start, ns)) {
-                ret true;
+                ret 0;
             }
         }
 
@@ -1147,7 +1148,7 @@ pub fun dns_nameserver(ns: *u8) bool {
         if (pos < len) { pos = pos + 1; }
     }
 
-    ret false;
+    ret os_shared.NOT_FOUND;
 }
 
 fun dns_prefix_match(a: &u8, b: &u8, len: usize) bool {
@@ -1187,18 +1188,18 @@ fun dns_parse_ns_addr(buf: &u8, len: usize, addr: *u8) bool {
 # ---
 # buf:  destination buffer
 # len:  number of bytes to fill
-# ret:  true on success
-pub fun random_fill(buf: *u8, len: usize) bool {
-    if (len == 0) { ret true; }
+# ret:  0 on success, or negative errno
+pub fun random_fill(buf: *u8, len: usize) i64 {
+    if (len == 0) { ret 0; }
     var filled: usize = 0;
     for (filled < len) {
         val remaining: usize = len - filled;
         val dst: usize = buf::usize + filled;
         val res: i64 = syscall3(c.SYS_GETRANDOM, dst, remaining, 0);
-        if (res < 0) { ret false; }
+        if (res < 0) { ret res; }
         filled = filled + res::usize;
     }
-    ret true;
+    ret 0;
 }
 
 # time
