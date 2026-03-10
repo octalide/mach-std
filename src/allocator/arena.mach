@@ -106,6 +106,9 @@ fun grow(ar: *Arena, min_size: usize) bool {
     ar.off       = 0;
     ar.last_off  = 0;
     ar.last_size = 0;
+    if (ar.first_chunk == nil) {
+        ar.first_chunk = c;
+    }
     ret true;
 }
 
