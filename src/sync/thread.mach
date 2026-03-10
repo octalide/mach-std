@@ -1,8 +1,9 @@
 # thread creation and management.
 #
 # spawns OS-level threads via the OS layer primitives. each thread gets
-# a dedicated stack allocated via the OS allocator. join blocks on a
-# completion flag using the OS wait/wake primitives.
+# a dedicated stack allocated via the OS allocator. the thread's
+# trampoline frees the stack before exiting, so stacks are reclaimed
+# even if join is never called.
 #
 # limitations:
 #   - no thread-local storage support.
@@ -61,20 +62,17 @@ pub fun spawn(f: fun()) Thread {
     ret t;
 }
 
-# wait for a thread to finish and release its resources.
+# wait for a thread to finish.
 #
-# blocks on the done flag using OS wait primitives, then frees the
-# thread's stack. after join returns, the Thread handle is invalidated.
+# blocks on the done flag using OS wait primitives. the thread's stack
+# is freed by the trampoline before the thread exits.
 # ---
 # t: pointer to the thread handle
 pub fun join(t: *Thread) {
     for (atomic.load(?t.done) == 0) {
         sys.thread_wait(?t.done, 0);
     }
-    if (t.stack != 0) {
-        sys.deallocate(t.stack::ptr, STACK_SIZE);
-        t.stack = 0;
-    }
+    t.stack = 0;
 }
 
 # check whether a thread has finished executing.

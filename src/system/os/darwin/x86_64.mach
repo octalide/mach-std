@@ -587,12 +587,16 @@ var thread_registered: i64 = 0;
 # called by the kernel for each new thread created via bsdthread_create.
 # the kernel passes the func and arg values from the bsdthread_create call.
 fun thread_start(self: usize, kport: usize, func: usize, arg: usize, stacksize: usize, pflags: usize) {
+    val ctx: &usize = arg::&usize;
+    val done_addr: usize = ctx[0];
+    val stack_base: usize = ctx[1];
+    val stack_size: usize = ctx[2];
     val fn_ptr: fun() = func::fun();
     fn_ptr();
-    val done: *i64 = arg::*i64;
+    val done: *i64 = done_addr::*i64;
     @done = 1;
-    syscall3(c.SYS_ULOCK_WAKE, c.UL_COMPARE_AND_WAIT64, arg, 0);
-    syscall4(c.SYS_BSDTHREAD_TERMINATE, 0, 0, 0, 0);
+    syscall3(c.SYS_ULOCK_WAKE, c.UL_COMPARE_AND_WAIT64, done_addr, 0);
+    syscall4(c.SYS_BSDTHREAD_TERMINATE, stack_base, stack_size, kport, 0);
 }
 
 # workqueue thread callback (unused, required by bsdthread_register).
@@ -622,8 +626,12 @@ fun ensure_thread_registered() {
 # ret:        thread ID on success, or negative errno on failure
 pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: usize) i64 {
     ensure_thread_registered();
+    val ctx: *usize = stack_base::*usize;
+    ctx[0] = done_ptr::usize;
+    ctx[1] = stack_base;
+    ctx[2] = stack_size;
     val stack_top: usize = stack_base + stack_size;
-    ret syscall5(c.SYS_BSDTHREAD_CREATE, f::usize, done_ptr::usize, stack_top, 0, 0);
+    ret syscall5(c.SYS_BSDTHREAD_CREATE, f::usize, ctx::usize, stack_top, 0, 0);
 }
 
 # thread_wait: block until the value at addr changes from expected.

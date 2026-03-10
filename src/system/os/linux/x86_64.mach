@@ -897,12 +897,18 @@ val THREAD_CLONE_FLAGS: usize = c.CLONE_VM | c.CLONE_FS | c.CLONE_FILES | c.CLON
 fun thread_trampoline() {
     var fn_addr: usize = 0;
     var done_addr: usize = 0;
+    var stack_base: usize = 0;
+    var stack_size: usize = 0;
     asm {
         x86_64 {
             mov rax, [rbp+8]
             mov [fn_addr], rax
             mov rax, [rbp+16]
             mov [done_addr], rax
+            mov rax, [rbp+24]
+            mov [stack_base], rax
+            mov rax, [rbp+32]
+            mov [stack_size], rax
         }
     }
     val fn_ptr: fun() = fn_addr::fun();
@@ -910,7 +916,18 @@ fun thread_trampoline() {
     val done: *i64 = done_addr::*i64;
     @done = 1;
     syscall6(c.SYS_FUTEX, done_addr, c.FUTEX_WAKE, 1, 0, 0, 0);
-    syscall1(c.SYS_EXIT, 0);
+    asm {
+        x86_64 {
+            mov rdi, [stack_base]
+            mov rsi, [stack_size]
+            mov rax, 11
+            syscall
+            mov rdi, 0
+            mov rax, 60
+            syscall
+            hlt
+        }
+    }
 }
 
 # thread_spawn: create a new thread sharing the current address space.
@@ -928,10 +945,12 @@ fun thread_trampoline() {
 pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: usize) i64 {
     val tramp: fun() = thread_trampoline;
     val stack_top: usize = stack_base + stack_size;
-    val child_sp: usize = stack_top - 32;
+    val child_sp: usize = stack_top - 48;
     @(child_sp::*usize) = tramp::usize;
     @((child_sp + 8)::*usize) = f::usize;
     @((child_sp + 16)::*usize) = done_ptr::usize;
+    @((child_sp + 24)::*usize) = stack_base;
+    @((child_sp + 32)::*usize) = stack_size;
 
     var flags: usize = THREAD_CLONE_FLAGS;
     var stack_ptr: usize = child_sp;
