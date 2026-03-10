@@ -361,6 +361,9 @@ fun parse_string(p: *Parser) Result[Value, str] {
     for (p.pos < p.len) {
         val c: u8 = p.src[p.pos];
         if (c == '\\') {
+            if (p.pos + 1 >= p.len) {
+                ret err[Value, str]("backslash at end of string");
+            }
             p.pos = p.pos + 2;
             cnt;
         }
