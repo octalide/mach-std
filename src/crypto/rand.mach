@@ -16,20 +16,24 @@ pub fun fill(buf: *u8, len: usize) i64 {
 }
 
 # u64: return a random 64-bit unsigned integer.
+#
+# aborts if the OS entropy source fails.
 # ---
 # ret: random value
 pub fun u64() u64 {
     var v: u64 = 0;
-    fill((?v)::*u8, 8);
+    if (fill((?v)::*u8, 8) < 0) { sys.abort(); }
     ret v;
 }
 
 # u32: return a random 32-bit unsigned integer.
+#
+# aborts if the OS entropy source fails.
 # ---
 # ret: random value
 pub fun u32() u32 {
     var v: u32 = 0;
-    fill((?v)::*u8, 4);
+    if (fill((?v)::*u8, 4) < 0) { sys.abort(); }
     ret v;
 }
 
