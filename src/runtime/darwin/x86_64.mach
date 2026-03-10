@@ -1,0 +1,54 @@
+# std.runtime.darwin.x86_64: x86_64 SysV ABI darwin entrypoint
+#
+# provides `_start` (via `start`), the Mach-O entry point for x86_64 darwin executables.
+#
+# on entry, the kernel places the following on the stack:
+#   [rsp]     = argc
+#   [rsp+8]   = argv[0]
+#   [rsp+16]  = argv[1]
+#   ...
+#
+# this entrypoint:
+#   1. extracts argc and argv from the initial stack
+#   2. aligns the stack to 16 bytes (required by SysV ABI before CALL)
+#   3. calls user-supplied `main(argc, argv)`
+#   4. exits via sys_exit with the return code from main
+#
+# user code must define:
+#   $main.symbol = "main";
+#   fun main(argc: i64, argv: &&u8) i64 { ... }
+
+$if ($mach.build.target.os.id != $mach.os.darwin.id) {
+    $error("std.runtime.darwin.x86_64: requires darwin target");
+}
+
+$if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
+    $error("std.runtime.darwin.x86_64: requires x86_64 target");
+}
+
+var envp: usize = 0;
+
+$_start.symbol = "start";
+pub fun _start() {
+    asm {
+        x86_64 {
+            mov rax, rsp      # rax = initial stack pointer
+            mov rdi, [rax]    # argc -> rdi (1st argument)
+            lea rsi, [rax+8]  # argv -> rsi (2nd argument)
+
+            # envp = argv + (argc + 1) * 8
+            mov rcx, rdi
+            inc rcx
+            lea rcx, [rsi + rcx*8]
+            mov [envp], rcx
+
+            and rsp, -16      # align stack to 16 bytes
+            sub rsp, 8        # adjust for CALL (pushes 8-byte return address)
+            call main
+
+            mov rdi, rax      # exit code from main -> rdi (1st syscall arg)
+            mov rax, 0x2000001 # SYS_exit (BSD syscall class 2 + exit=1)
+            syscall
+        }
+    }
+}

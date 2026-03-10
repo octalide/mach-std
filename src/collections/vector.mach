@@ -1,25 +1,26 @@
+# resizable dynamic array backed by an allocator
+
 use std.types.bool;
 use std.types.size;
 use std.types.result;
 use std.types.string;
 
-use allocator: std.allocator;
+use allo: std.allocator;
+use page: std.allocator.page;
 
-# Resizable vector backed by an allocator
-# ---
-# T: Element type stored in the vector
+# Vector: resizable vector backed by an allo.
 pub rec Vector[T] {
-    alloc: *allocator.Allocator;
-    data: *T;
-    len: usize;
-    cap: usize;
+    alloc: &allo.Allocator;
+    data:  *T;
+    len:   usize;
+    cap:   usize;
 }
 
-# Create an empty vector using the provided allocator
+# init: create an empty vector using the provided allocator
 # ---
-# alloc: Allocator to use for allocations
-# ret: A new empty Vector[T]
-pub fun init[T](alloc: *allocator.Allocator) Vector[T] {
+# alloc: allocator to use for allocations
+# ret:   a new empty Vector[T]
+pub fun init[T](alloc: &allo.Allocator) Vector[T] {
     var v: Vector[T];
     v.alloc = alloc;
     v.data = nil;
@@ -28,77 +29,77 @@ pub fun init[T](alloc: *allocator.Allocator) Vector[T] {
     ret v;
 }
 
-# Free the backing buffer and reset the vector fields
+# dnit: free the backing buffer and reset the vector fields.
 # ---
-# ret: true if memory was freed successfully, false otherwise
-pub fun dnit[T](this: *Vector[T]) bool {
-    if (this == nil) { ret true; }
-    if (this.cap == 0) {
-        this.data = nil;
-        this.len = 0;
+# ret: true if memory was freed successfully
+pub fun dnit[T](vec: *Vector[T]) bool {
+    if (vec == nil) { ret true; }
+    if (vec.cap == 0) {
+        vec.data = nil;
+        vec.len = 0;
         ret true;
     }
 
-    val ok_free: bool = allocator.allocator_free[T](this.alloc, this.data, this.cap);
+    val ok_free: bool = allo.deallocate[T](vec.alloc, vec.data, vec.cap);
     if (ok_free) {
-        this.data = nil;
-        this.len = 0;
-        this.cap = 0;
+        vec.data = nil;
+        vec.len = 0;
+        vec.cap = 0;
     }
 
     ret ok_free;
 }
 
-# Check if the vector is empty
+# is_empty: check if the vector is empty.
 # ---
-# ret: true if the vector has no elements, false otherwise
-pub fun is_empty[T](this: Vector[T]) bool {
-    ret this.len == 0;
+# ret: true if the vector has no elements
+pub fun is_empty[T](vec: Vector[T]) bool {
+    ret vec.len == 0;
 }
 
-# Return the current number of elements in the vector
+# length: return the number of elements in the vector.
 # ---
-# ret: Number of elements (usize)
-pub fun length[T](this: Vector[T]) usize {
-    ret this.len;
+# vec: vector to query
+# ret: number of elements
+pub fun length[T](vec: Vector[T]) usize {
+    ret vec.len;
 }
 
-# Return the current capacity in elements
+# capacity: return the current capacity of the vector.
 # ---
-# ret: Capacity in elements (usize)
-pub fun capacity[T](this: Vector[T]) usize {
-    ret this.cap;
+# vec: vector to query
+# ret: number of elements the vector can hold before reallocating
+pub fun capacity[T](vec: Vector[T]) usize {
+    ret vec.cap;
 }
 
-# Clear the vector contents but keep allocated capacity
-# ---
-# ret: None
-pub fun clear[T](this: *Vector[T]) {
-    if (this == nil) { ret; }
-    this.len = 0;
+# clear: clear the vector contents but keep allocated capacity.
+pub fun clear[T](vec: *Vector[T]) {
+    if (vec == nil) { ret; }
+    vec.len = 0;
 }
 
-# Ensure there is room for additional elements
+# reserve: ensure there is room for additional elements.
 # ---
-# additional: Number of extra elements to reserve space for
-# ret: Ok(new capacity) or Err(error message)
-pub fun reserve[T](this: *Vector[T], additional: usize) Result[usize, str] {
-    if (this == nil) { ret err[usize, str]("vector is nil"); }
+# additional: number of extra elements to reserve space for
+# ret:        the new capacity, or an error message
+pub fun reserve[T](vec: *Vector[T], additional: usize) Result[usize, str] {
+    if (vec == nil) { ret err[usize, str]("vector is nil"); }
 
-    val required: usize = this.len + additional;
-    if (required < this.len) { # overflow
+    val required: usize = vec.len + additional;
+    if (required < vec.len) { # overflow
         ret err[usize, str]("capacity overflow");
     }
 
-    if (this.cap >= required) {
-        ret ok[usize, str](this.cap);
+    if (vec.cap >= required) {
+        ret ok[usize, str](vec.cap);
     }
 
     var new_cap: usize;
-    if (this.cap == 0) {
+    if (vec.cap == 0) {
         new_cap = 8;
     } or {
-        new_cap = this.cap * 2;
+        new_cap = vec.cap * 2;
     }
 
     for (new_cap < required) {
@@ -110,70 +111,69 @@ pub fun reserve[T](this: *Vector[T], additional: usize) Result[usize, str] {
         }
     }
 
-    val r: Result[*T, allocator.AllocError] = allocator.allocator_resize[T](this.alloc, this.data, this.cap, new_cap);
-    if (result_is_err[*T, allocator.AllocError](r)) {
-        ret err[usize, str](result_unwrap_err[*T, allocator.AllocError](r));
+    val r: Result[*T, str] = allo.reallocate[T](vec.alloc, vec.data, vec.cap, new_cap);
+    if (is_err[*T, str](r)) {
+        ret err[usize, str](unwrap_err[*T, str](r));
     }
 
-    this.data = result_unwrap_ok[*T, allocator.AllocError](r);
-    this.cap = new_cap;
+    vec.data = unwrap_ok[*T, str](r);
+    vec.cap = new_cap;
 
-    ret ok[usize, str](this.cap);
+    ret ok[usize, str](vec.cap);
 }
 
-# Append a value to the vector and return the new length
+# push: append a value to the vector.
 # ---
-# value: Value to append
-# ret: Ok(new length) or Err(error message)
-pub fun push[T](this: *Vector[T], value: T) Result[usize, str] {
-    val r: Result[usize, str] = reserve[T](this, 1);
-    if (result_is_err[usize, str](r)) {
-        ret err[usize, str](result_unwrap_err[usize, str](r));
+# value: value to append
+# ret:   the new length, or an error message
+pub fun push[T](vec: *Vector[T], value: T) Result[usize, str] {
+    val r: Result[usize, str] = reserve[T](vec, 1);
+    if (is_err[usize, str](r)) {
+        ret err[usize, str](unwrap_err[usize, str](r));
     }
 
-    this.data[this.len] = value;
-    this.len = this.len + 1;
-    ret ok[usize, str](this.len);
+    vec.data[vec.len] = value;
+    vec.len = vec.len + 1;
+    ret ok[usize, str](vec.len);
 }
 
-# Pop the last element from the vector
+# pop: remove and return the last element.
 # ---
-# ret: Ok(value) or Err(error message if vector is empty)
-pub fun pop[T](this: *Vector[T]) Result[T, str] {
-    if (this.len == 0) {
+# ret: the value, or an error message if empty
+pub fun pop[T](vec: *Vector[T]) Result[T, str] {
+    if (vec.len == 0) {
         ret err[T, str]("pop from empty vector");
     }
 
-    this.len = this.len - 1;
-    ret ok[T, str](this.data[this.len]);
+    vec.len = vec.len - 1;
+    ret ok[T, str](vec.data[vec.len]);
 }
 
-# Get a mutable pointer to the element at the given index
+# get: get a mutable pointer to the element at the given index.
 # ---
-# index: Element index
-# ret: Ok(pointer) or Err("index out of bounds")
-pub fun get[T](this: &Vector[T], index: usize) Result[*T, str] {
-    if (index >= this.len) {
+# index: element index
+# ret:   pointer to the element, or an error message
+pub fun get[T](vec: &Vector[T], index: usize) Result[*T, str] {
+    if (index >= vec.len) {
         ret err[*T, str]("index out of bounds");
     }
-    ret ok[*T, str](?this.data[index]);
+    ret ok[*T, str](?vec.data[index]);
 }
 
-# Get an immutable reference to the element at the given index
+# get_ref: get an immutable reference to the element at the given index.
 # ---
-# index: Element index
-# ret: Ok(reference) or Err("index out of bounds")
-pub fun get_ref[T](this: Vector[T], index: usize) Result[&T, str] {
-    if (index >= this.len) {
+# index: element index
+# ret:   reference to the element, or an error message
+pub fun get_ref[T](vec: Vector[T], index: usize) Result[&T, str] {
+    if (index >= vec.len) {
         ret err[&T, str]("index out of bounds");
     }
-    ret ok[&T, str](?this.data[index]);
+    ret ok[&T, str](?vec.data[index]);
 }
 
-# --- tests ---
-
 test "vector: init creates empty vector" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     val v: Vector[i64] = init[i64](?a);
     if (!is_empty[i64](v)) { ret 0; }
     if (length[i64](v) != 0) { ret 0; }
@@ -182,11 +182,12 @@ test "vector: init creates empty vector" {
 }
 
 test "vector: push adds element" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     val r: Result[usize, str] = push[i64](?v, 42);
-    if (result_is_err[usize, str](r)) { ret 0; }
+    if (is_err[usize, str](r)) { ret 0; }
     if (length[i64](v) != 1) { ret 0; }
     if (is_empty[i64](v)) { ret 0; }
 
@@ -196,16 +197,17 @@ test "vector: push adds element" {
 }
 
 test "vector: push multiple elements" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     var r: Result[usize, str];
     r = push[i64](?v, 10);
-    if (result_is_err[usize, str](r)) { ret 0; }
+    if (is_err[usize, str](r)) { ret 0; }
     r = push[i64](?v, 20);
-    if (result_is_err[usize, str](r)) { ret 0; }
+    if (is_err[usize, str](r)) { ret 0; }
     r = push[i64](?v, 30);
-    if (result_is_err[usize, str](r)) { ret 0; }
+    if (is_err[usize, str](r)) { ret 0; }
 
     if (length[i64](v) != 3) { ret 0; }
 
@@ -215,7 +217,8 @@ test "vector: push multiple elements" {
 }
 
 test "vector: pop returns last element" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     push[i64](?v, 100);
@@ -223,8 +226,8 @@ test "vector: pop returns last element" {
     push[i64](?v, 300);
 
     val r: Result[i64, str] = pop[i64](?v);
-    if (result_is_err[i64, str](r)) { ret 0; }
-    if (result_unwrap_ok[i64, str](r) != 300) { ret 0; }
+    if (is_err[i64, str](r)) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 300) { ret 0; }
     if (length[i64](v) != 2) { ret 0; }
 
     val ok: bool = dnit[i64](?v);
@@ -233,11 +236,12 @@ test "vector: pop returns last element" {
 }
 
 test "vector: pop from empty returns error" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     val r: Result[i64, str] = pop[i64](?v);
-    if (result_is_ok[i64, str](r)) { ret 0; }
+    if (is_ok[i64, str](r)) { ret 0; }
 
     val ok: bool = dnit[i64](?v);
     if (!ok) { ret 0; }
@@ -245,7 +249,8 @@ test "vector: pop from empty returns error" {
 }
 
 test "vector: get returns pointer to element" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     push[i64](?v, 111);
@@ -253,8 +258,8 @@ test "vector: get returns pointer to element" {
     push[i64](?v, 333);
 
     val r: Result[*i64, str] = get[i64](?v, 1);
-    if (result_is_err[*i64, str](r)) { ret 0; }
-    val p: *i64 = result_unwrap_ok[*i64, str](r);
+    if (is_err[*i64, str](r)) { ret 0; }
+    val p: *i64 = unwrap_ok[*i64, str](r);
     if (@p != 222) { ret 0; }
 
     val ok: bool = dnit[i64](?v);
@@ -263,13 +268,14 @@ test "vector: get returns pointer to element" {
 }
 
 test "vector: get out of bounds returns error" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     push[i64](?v, 42);
 
     val r: Result[*i64, str] = get[i64](?v, 5);
-    if (result_is_ok[*i64, str](r)) { ret 0; }
+    if (is_ok[*i64, str](r)) { ret 0; }
 
     val ok: bool = dnit[i64](?v);
     if (!ok) { ret 0; }
@@ -277,19 +283,20 @@ test "vector: get out of bounds returns error" {
 }
 
 test "vector: get allows mutation" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     push[i64](?v, 100);
 
     val r: Result[*i64, str] = get[i64](?v, 0);
-    if (result_is_err[*i64, str](r)) { ret 0; }
-    val p: *i64 = result_unwrap_ok[*i64, str](r);
+    if (is_err[*i64, str](r)) { ret 0; }
+    val p: *i64 = unwrap_ok[*i64, str](r);
     @p = 999;
 
     val r2: Result[*i64, str] = get[i64](?v, 0);
-    if (result_is_err[*i64, str](r2)) { ret 0; }
-    if (@result_unwrap_ok[*i64, str](r2) != 999) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 0; }
+    if (@unwrap_ok[*i64, str](r2) != 999) { ret 0; }
 
     val ok: bool = dnit[i64](?v);
     if (!ok) { ret 0; }
@@ -297,15 +304,16 @@ test "vector: get allows mutation" {
 }
 
 test "vector: get_ref returns immutable reference" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     push[i64](?v, 555);
     push[i64](?v, 666);
 
     val r: Result[&i64, str] = get_ref[i64](v, 1);
-    if (result_is_err[&i64, str](r)) { ret 0; }
-    val ref: &i64 = result_unwrap_ok[&i64, str](r);
+    if (is_err[&i64, str](r)) { ret 0; }
+    val ref: &i64 = unwrap_ok[&i64, str](r);
     if (@ref != 666) { ret 0; }
 
     val ok: bool = dnit[i64](?v);
@@ -314,13 +322,14 @@ test "vector: get_ref returns immutable reference" {
 }
 
 test "vector: get_ref out of bounds returns error" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     push[i64](?v, 42);
 
     val r: Result[&i64, str] = get_ref[i64](v, 10);
-    if (result_is_ok[&i64, str](r)) { ret 0; }
+    if (is_ok[&i64, str](r)) { ret 0; }
 
     val ok: bool = dnit[i64](?v);
     if (!ok) { ret 0; }
@@ -328,11 +337,12 @@ test "vector: get_ref out of bounds returns error" {
 }
 
 test "vector: reserve increases capacity" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     val r: Result[usize, str] = reserve[i64](?v, 100);
-    if (result_is_err[usize, str](r)) { ret 0; }
+    if (is_err[usize, str](r)) { ret 0; }
     if (capacity[i64](v) < 100) { ret 0; }
     if (length[i64](v) != 0) { ret 0; }
 
@@ -342,7 +352,8 @@ test "vector: reserve increases capacity" {
 }
 
 test "vector: reserve when already sufficient is noop" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     reserve[i64](?v, 50);
@@ -359,7 +370,8 @@ test "vector: reserve when already sufficient is noop" {
 }
 
 test "vector: clear resets length but keeps capacity" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     push[i64](?v, 1);
@@ -379,7 +391,8 @@ test "vector: clear resets length but keeps capacity" {
 }
 
 test "vector: dnit on empty vector succeeds" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
     val ok: bool = dnit[i64](?v);
     if (!ok) { ret 0; }
@@ -387,14 +400,15 @@ test "vector: dnit on empty vector succeeds" {
 }
 
 test "vector: push triggers capacity growth" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     # push many elements to trigger growth
     var i: i64 = 0;
     for (i < 100) {
         val r: Result[usize, str] = push[i64](?v, i);
-        if (result_is_err[usize, str](r)) { ret 0; }
+        if (is_err[usize, str](r)) { ret 0; }
         i = i + 1;
     }
 
@@ -405,8 +419,8 @@ test "vector: push triggers capacity growth" {
     var j: usize = 0;
     for (j < 100) {
         val r: Result[&i64, str] = get_ref[i64](v, j);
-        if (result_is_err[&i64, str](r)) { ret 0; }
-        if (@result_unwrap_ok[&i64, str](r) != j::i64) { ret 0; }
+        if (is_err[&i64, str](r)) { ret 0; }
+        if (@unwrap_ok[&i64, str](r) != j::i64) { ret 0; }
         j = j + 1;
     }
 
@@ -416,7 +430,8 @@ test "vector: push triggers capacity growth" {
 }
 
 test "vector: push and pop sequence" {
-    var a: allocator.Allocator = allocator.page_allocator();
+    var a: allo.Allocator;
+    page.make(?a);
     var v: Vector[i64] = init[i64](?a);
 
     push[i64](?v, 1);
@@ -426,22 +441,22 @@ test "vector: push and pop sequence" {
     var r: Result[i64, str];
 
     r = pop[i64](?v);
-    if (result_unwrap_ok[i64, str](r) != 3) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 3) { ret 0; }
 
     push[i64](?v, 4);
     push[i64](?v, 5);
 
     r = pop[i64](?v);
-    if (result_unwrap_ok[i64, str](r) != 5) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 5) { ret 0; }
 
     r = pop[i64](?v);
-    if (result_unwrap_ok[i64, str](r) != 4) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 4) { ret 0; }
 
     r = pop[i64](?v);
-    if (result_unwrap_ok[i64, str](r) != 2) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 2) { ret 0; }
 
     r = pop[i64](?v);
-    if (result_unwrap_ok[i64, str](r) != 1) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 1) { ret 0; }
 
     if (!is_empty[i64](v)) { ret 0; }
 

@@ -1,0 +1,13 @@
+$if ($mach.build.target.os.id != $mach.os.darwin.id) {
+    $error("std.runtime.darwin: requires darwin target");
+}
+
+$if ($mach.build.target.arch.id == $mach.arch.aarch64.id) {
+    use std.runtime.darwin.aarch64;
+}
+$or ($mach.build.target.arch.id == $mach.arch.x86_64.id) {
+    use std.runtime.darwin.x86_64;
+}
+$or {
+    $error("std.runtime.darwin: unsupported architecture");
+}

@@ -1,59 +1,63 @@
+# null-terminated string primitives
+
 use std.types.bool;
 use std.types.size;
 use std.types.option;
 use std.types.result;
+use std.types.char;
 
-# A single byte representing a character in a null-terminated string.
-pub def char: u8;
 
-# A pointer to a null-terminated sequence of `char` (C-style string).
-pub def str:  &char;
+# str: a pointer to a null-terminated sequence of char.
+pub def str: &char;
 
-# Calculate the length of a null-terminated string
+# str_len: calculate the length of a null-terminated string.
 # ---
-# ret: Length of the string (not including null terminator)
-pub fun str_len(this: str) usize {
+# ret: length of the string (not including null terminator)
+pub fun str_len(s: str) usize {
     var len: usize = 0;
-    for (this[len] != 0) {
+    for (s[len] != 0) {
         len = len + 1;
     }
     ret len;
 }
 
-# Return true if the string is empty
+# str_empty: check if the string is empty or nil.
 # ---
-# ret: true if the string has zero length, false otherwise
-pub fun str_empty(this: str) bool {
-    if (this == nil) { ret true; }
-    ret this[0] == 0;
+# ret: true if the string has zero length or is nil
+pub fun str_empty(s: str) bool {
+    if (s == nil) { ret true; }
+    ret s[0] == 0;
 }
 
-# Compare two null-terminated strings for equality
+# str_equals: compare two null-terminated strings for equality.
 # ---
-# other: The other string to compare against
-# ret:   true if the strings are equal, false otherwise
-pub fun str_equals(this: str, other: str) bool {
-    if (this == nil && other == nil) { ret true; }
-    if (this == nil || other == nil) { ret false; }
-    if (this == other) { ret true; }
+# other: the other string to compare against
+# ret:   true if the strings are equal
+pub fun str_equals(s: str, other: str) bool {
+    if (s == nil && other == nil) { ret true; }
+    if (s == nil || other == nil) { ret false; }
+    if (s == other) { ret true; }
     var i: usize = 0;
-    for (this[i] != 0 && other[i] != 0) {
-        if (this[i] != other[i]) {
+    for (s[i] != 0 && other[i] != 0) {
+        if (s[i] != other[i]) {
             ret false;
         }
         i = i + 1;
     }
-    ret this[i] == other[i];
+    ret s[i] == other[i];
 }
 
-# Compare two null-terminated strings lexically (like strcmp)
+# str_compare: compare two null-terminated strings lexically.
 # ---
-# other: The other string to compare against
-# ret:   <0 if this < other, 0 if equal, >0 if this > other
-pub fun str_compare(this: str, other: str) i64 {
+# other: the other string to compare against
+# ret:   <0 if s < other, 0 if equal, >0 if s > other
+pub fun str_compare(s: str, other: str) i64 {
+    if (s == nil && other == nil) { ret 0; }
+    if (s == nil) { ret -1; }
+    if (other == nil) { ret 1; }
     var i: usize = 0;
     for {
-        val a: u8 = this[i];
+        val a: u8 = s[i];
         val b: u8 = other[i];
 
         if (a == 0 && b == 0) { ret 0; }
@@ -65,18 +69,17 @@ pub fun str_compare(this: str, other: str) i64 {
 
         i = i + 1;
     }
-
-    ret 1;
 }
 
-# Check if the string starts with the given prefix
+# str_starts_with: check if the string starts with the given prefix.
 # ---
-# prefix: The prefix to check
-# ret:    true if the string starts with the prefix, false otherwise
-pub fun str_starts_with(this: str, prefix: str) bool {
+# prefix: the prefix to check
+# ret:    true if the string starts with prefix
+pub fun str_starts_with(s: str, prefix: str) bool {
     var i: usize = 0;
     for (prefix[i] != 0) {
-        if (this[i] != prefix[i]) {
+        if (s[i] == 0) { ret false; }
+        if (s[i] != prefix[i]) {
             ret false;
         }
         i = i + 1;
@@ -84,21 +87,19 @@ pub fun str_starts_with(this: str, prefix: str) bool {
     ret true;
 }
 
-# Check if the string ends with the given suffix
+# str_ends_with: check if the string ends with the given suffix.
 # ---
-# suffix: The suffix to check
-# ret:    true if the string ends with the suffix, false otherwise
-pub fun str_ends_with(this: str, suffix: str) bool {
-    val this_len: usize = str_len(this);
+# suffix: the suffix to check
+# ret:    true if the string ends with suffix
+pub fun str_ends_with(s: str, suffix: str) bool {
+    val s_len:   usize = str_len(s);
     val suffix_len: usize = str_len(suffix);
 
-    if (suffix_len > this_len) {
-        ret false;
-    }
+    if (suffix_len > s_len) { ret false; }
 
     var i: usize = 0;
     for (i < suffix_len) {
-        if (this[this_len - suffix_len + i] != suffix[i]) {
+        if (s[s_len - suffix_len + i] != suffix[i]) {
             ret false;
         }
         i = i + 1;
@@ -107,25 +108,25 @@ pub fun str_ends_with(this: str, suffix: str) bool {
     ret true;
 }
 
-# Find the index of a substring within the string
+# str_index_of: find the first index of a substring.
 # ---
-# sub: The substring to find
-# ret: The index of the substring if found, or an error if not found
-pub fun str_index_of(this: str, sub: str) Result[usize, str] {
-    val this_len: usize = str_len(this);
+# sub: the substring to find
+# ret: the index of the first occurrence, or an error message
+pub fun str_index_of(s: str, sub: str) Result[usize, str] {
+    val s_len: usize = str_len(s);
     val sub_len:  usize = str_len(sub);
 
-    if (sub_len == 0 || sub_len > this_len) {
+    if (sub_len == 0 || sub_len > s_len) {
         ret err[usize, str]("invalid substring length");
     }
 
     var i: usize = 0;
-    for (i <= this_len - sub_len) {
-        var j: usize = 0;
-        var found: bool = true;
+    for (i <= s_len - sub_len) {
+        var j:     usize = 0;
+        var found: bool  = true;
 
         for (j < sub_len) {
-            if (this[i + j] != sub[j]) {
+            if (s[i + j] != sub[j]) {
                 found = false;
                 brk;
             }
@@ -142,27 +143,26 @@ pub fun str_index_of(this: str, sub: str) Result[usize, str] {
     ret err[usize, str]("substring not found");
 }
 
-# Find the last index of a substring within the string
+# str_last_index_of: find the last index of a substring.
 # ---
-# sub: The substring to find
-# ret: The last index of the substring if found, or an error if not found
-pub fun str_last_index_of(this: str, sub: str) Result[usize, str] {
-    val this_len: usize = str_len(this);
+# sub: the substring to find
+# ret: the index of the last occurrence, or an error message
+pub fun str_last_index_of(s: str, sub: str) Result[usize, str] {
+    val s_len: usize = str_len(s);
     val sub_len:  usize = str_len(sub);
 
-    if (sub_len == 0 || sub_len > this_len) {
+    if (sub_len == 0 || sub_len > s_len) {
         ret err[usize, str]("invalid substring length");
     }
 
-    # iterate backwards safely using a countdown variable (avoids usize underflow)
-    var i: usize = (this_len - sub_len) + 1;
+    var i: usize = (s_len - sub_len) + 1;
     for (i > 0) {
         i = i - 1;
         var j:     usize = 0;
-        var found: bool = true;
+        var found: bool  = true;
 
         for (j < sub_len) {
-            if (this[i + j] != sub[j]) {
+            if (s[i + j] != sub[j]) {
                 found = false;
                 brk;
             }
@@ -177,37 +177,84 @@ pub fun str_last_index_of(this: str, sub: str) Result[usize, str] {
     ret err[usize, str]("substring not found");
 }
 
-# Check if the string contains the given substring
+# str_contains: check if the string contains the given substring.
 # ---
-# sub: The substring to check
-# ret: true if the string contains the substring, false otherwise
-pub fun str_contains(this: str, sub: str) bool {
-    val index_res: Result[usize, str] = str_index_of(this, sub);
-    ret result_is_ok[usize, str](index_res);
+# sub: the substring to check
+# ret: true if the string contains sub
+pub fun str_contains(s: str, sub: str) bool {
+    val r: Result[usize, str] = str_index_of(s, sub);
+    ret is_ok[usize, str](r);
 }
 
-# Compare a region of a string against a null-terminated pattern
+# str_region_equals: compare a region of a string against a pattern.
 # ---
-# start: byte offset into this string
+# start: byte offset into s
 # len:   number of bytes to compare
 # other: null-terminated string to compare against
-# ret:   true if this[start..start+len] equals other exactly
-pub fun str_region_equals(this: str, start: usize, len: usize, other: str) bool {
-    if (this == nil || other == nil) { ret false; }
+# ret:   true if s[start..start+len] equals other exactly
+pub fun str_region_equals(s: str, start: usize, len: usize, other: str) bool {
+    if (s == nil || other == nil) { ret false; }
 
-    # check that other has exactly len bytes
     val other_len: usize = str_len(other);
     if (other_len != len) { ret false; }
 
     var i: usize = 0;
     for (i < len) {
-        if (this[start + i] != other[i]) { ret false; }
+        if (s[start + i] != other[i]) { ret false; }
         i = i + 1;
     }
     ret true;
 }
 
-# --- tests ---
+# str_trim_left: return a pointer past leading whitespace.
+# ---
+# ret: pointer to first non-whitespace character
+pub fun str_trim_left(s: str) str {
+    if (s == nil) { ret nil; }
+    var i: usize = 0;
+    for (char_is_space(s[i])) {
+        i = i + 1;
+    }
+    ret (s::usize + i)::str;
+}
+
+# str_index_char: find the first occurrence of a character in a string.
+# ---
+# c:   character to find
+# ret: byte offset, or -1 if not found
+pub fun str_index_char(s: str, c: char) i64 {
+    if (s == nil) { ret -1; }
+    var i: usize = 0;
+    for (s[i] != 0) {
+        if (s[i] == c) { ret i::u64::i64; }
+        i = i + 1;
+    }
+    ret -1;
+}
+
+# str_last_index_char: find the last occurrence of a character in a string.
+# ---
+# c:   character to find
+# ret: byte offset, or -1 if not found
+pub fun str_last_index_char(s: str, c: char) i64 {
+    if (s == nil) { ret -1; }
+    val len: usize = str_len(s);
+    if (len == 0) { ret -1; }
+    var i: usize = len;
+    for (i > 0) {
+        i = i - 1;
+        if (s[i] == c) { ret i::u64::i64; }
+    }
+    ret -1;
+}
+
+# str_contains_char: check if a string contains a character.
+# ---
+# c:   character to find
+# ret: true if c appears in s
+pub fun str_contains_char(s: str, c: char) bool {
+    ret str_index_char(s, c) >= 0;
+}
 
 test "string: len of empty string" {
     val s: str = "";
@@ -346,39 +393,39 @@ test "string: ends_with full string" {
 test "string: index_of finds substring at start" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_index_of(s, "hello");
-    if (result_is_err[usize, str](r)) { ret 0; }
-    if (result_unwrap_ok[usize, str](r) != 0) { ret 0; }
+    if (is_err[usize, str](r)) { ret 0; }
+    if (unwrap_ok[usize, str](r) != 0) { ret 0; }
     ret 1;
 }
 
 test "string: index_of finds substring in middle" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_index_of(s, "wor");
-    if (result_is_err[usize, str](r)) { ret 0; }
-    if (result_unwrap_ok[usize, str](r) != 6) { ret 0; }
+    if (is_err[usize, str](r)) { ret 0; }
+    if (unwrap_ok[usize, str](r) != 6) { ret 0; }
     ret 1;
 }
 
 test "string: index_of not found" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_index_of(s, "xyz");
-    if (result_is_ok[usize, str](r)) { ret 0; }
+    if (is_ok[usize, str](r)) { ret 0; }
     ret 1;
 }
 
 test "string: last_index_of finds last occurrence" {
     val s: str = "abcabc";
     val r: Result[usize, str] = str_last_index_of(s, "abc");
-    if (result_is_err[usize, str](r)) { ret 0; }
-    if (result_unwrap_ok[usize, str](r) != 3) { ret 0; }
+    if (is_err[usize, str](r)) { ret 0; }
+    if (unwrap_ok[usize, str](r) != 3) { ret 0; }
     ret 1;
 }
 
 test "string: last_index_of single occurrence" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_last_index_of(s, "world");
-    if (result_is_err[usize, str](r)) { ret 0; }
-    if (result_unwrap_ok[usize, str](r) != 6) { ret 0; }
+    if (is_err[usize, str](r)) { ret 0; }
+    if (unwrap_ok[usize, str](r) != 6) { ret 0; }
     ret 1;
 }
 
@@ -396,7 +443,6 @@ test "string: contains not found" {
 
 test "string: contains empty substring" {
     val s: str = "hello";
-    # empty substring should not be found (per current implementation)
     if (str_contains(s, "")) { ret 0; }
     ret 1;
 }
@@ -428,5 +474,32 @@ test "string: region_equals wrong length" {
 
 test "string: region_equals mismatch" {
     if (str_region_equals("hello world", 0, 5, "world")) { ret 0; }
+    ret 1;
+}
+
+test "string: trim_left" {
+    if (!str_equals(str_trim_left("  hello"), "hello")) { ret 0; }
+    if (!str_equals(str_trim_left("hello"), "hello")) { ret 0; }
+    ret 1;
+}
+
+test "string: index_char" {
+    if (str_index_char("hello", 'l') != 2) { ret 0; }
+    if (str_index_char("hello", 'h') != 0) { ret 0; }
+    if (str_index_char("hello", 'o') != 4) { ret 0; }
+    if (str_index_char("hello", 'x') != -1) { ret 0; }
+    ret 1;
+}
+
+test "string: last_index_char" {
+    if (str_last_index_char("hello", 'l') != 3) { ret 0; }
+    if (str_last_index_char("hello", 'h') != 0) { ret 0; }
+    if (str_last_index_char("hello", 'x') != -1) { ret 0; }
+    ret 1;
+}
+
+test "string: contains_char" {
+    if (!str_contains_char("hello", 'e')) { ret 0; }
+    if (str_contains_char("hello", 'x')) { ret 0; }
     ret 1;
 }

@@ -1,699 +1,593 @@
+# file and directory operations
+#
+# provides File handles, FileInfo metadata, temp files, and path-based
+# queries. all syscall interaction goes through std.system.os — this
+# module contains no platform-specific logic.
+
 use std.types.bool;
+use std.types.option;
 use std.types.result;
 use std.types.size;
 use std.types.string;
 
-use int: std.types.int;
-use mem: std.memory;
-use time: std.time;
 use allocator: std.allocator;
-use path: std.types.path;
+use mem:       std.memory;
+use os:        std.system.os;
+use page:      std.allocator.page;
+use path:      std.types.path;
+use writer:    std.io.writer;
+use reader:    std.io.reader;
 
-use pfs: std.system.platform.filesystem;
-use errno: std.system.platform.errno;
-
-# std.filesystem: higher-level filesystem helpers.
-# ---
-# Higher-level file helpers that operate on File handles and return Result[T, str].
-# Low-level syscall bindings live under std.system.platform.
-
-$if ($mach.build.target.os.id == $mach.os.linux.id) {
-    use c: std.system.platform.linux.constants;
-    use types: std.system.platform.linux.types;
-}
-$or {
-    $error("std.filesystem: unsupported target");
-}
-
-# temp directory path
-pub val TEMP_DIR: str = "/tmp";
-
-# max attempts for temp file creation
-val TEMP_MAX_ATTEMPTS: usize = 100;
-
-# static counter for unique temp file names
-var temp_counter: u64 = 0;
-
-# Stat: platform file metadata structure.
-# ---
-# Underlying type alias for types.stat_t returned by File.stat.
-pub def Stat: types.stat_t;
-
-# File: wrapper for a file descriptor used for IO.
+# File: wrapper around a file descriptor.
 # ---
 # fd: underlying file descriptor
 pub rec File {
     fd: i32;
 }
 
-# open: open file at path for read-only.
+# FileInfo: portable file metadata.
 # ---
-# path: file path to open
-# ret: Ok(File) on success or Err(str) with errno message on failure.
-pub fun open(path: str) Result[File, str] {
-    var retries: usize = 0;
-    var raw: i64 = 0;
-    for {
-        raw = pfs.openat(c.AT_FDCWD, path, c.O_RDONLY, 0);
-        if (raw < 0) {
-            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
-                retries = retries + 1;
-                cnt;
-            }
-            brk;
-        }
-        ret ok[File, str](File{fd: int.trunc_i64_to_i32(raw)});
-    }
-
-    ret err[File, str](errno.message(raw));
+# size:     file size in bytes
+# mode:     raw permission/type bits
+# modified: last modification time (unix seconds)
+# accessed: last access time (unix seconds)
+# created:  creation time (unix seconds, 0 if unavailable)
+pub rec FileInfo {
+    size:     usize;
+    mode:     u32;
+    modified: i64;
+    accessed: i64;
+    created:  i64;
 }
 
-# create: create/truncate file at path and open for writing.
+# TempFile: temporary file with an allocated path for cleanup.
 # ---
-# path: file path to create
-# mode: file mode bits
-# ret: Ok(File) on success or Err(str) with errno message on failure.
-pub fun create(path: str, mode: i32) Result[File, str] {
-    val flags: i32 = c.O_CREAT | c.O_TRUNC | c.O_WRONLY;
-
-    var retries: usize = 0;
-    var raw: i64 = 0;
-    for {
-        raw = pfs.openat(c.AT_FDCWD, path, flags, mode);
-        if (raw < 0) {
-            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
-                retries = retries + 1;
-                cnt;
-            }
-            brk;
-        }
-        ret ok[File, str](File{fd: int.trunc_i64_to_i32(raw)});
-    }
-
-    ret err[File, str](errno.message(raw));
+# file: underlying File handle
+# path: allocated path string (caller must free)
+pub rec TempFile {
+    file: File;
+    path: path.Path;
 }
 
-# close: close the underlying file descriptor.
+pub val stdin:  File = File{fd: 0};
+pub val stdout: File = File{fd: 1};
+pub val stderr: File = File{fd: 2};
+
+val TEMP_DIR:          str   = "/tmp";
+val TEMP_MAX_ATTEMPTS: usize = 100;
+var temp_counter:      u64   = 0;
+
+# open: open a file for reading.
 # ---
-# ret: Ok(true) on success or Err(str) with errno message on failure.
-pub fun file_close(this: *File) Result[bool, str] {
-    if (this == nil) {
-        ret ok[bool, str](true);
-    }
+# p:   file path
+# ret: the opened File, or an error message
+pub fun open(p: str) Result[File, str] {
+    val raw: i64 = os.open(os.AT_FDCWD, p, os.O_RDONLY, 0);
+    if (raw < 0) { ret err[File, str](os.message(raw)); }
+    ret ok[File, str](File{fd: raw::i32});
+}
 
-    var retries: usize = 0;
-    var raw: i64 = 0;
-    for {
-        raw = pfs.close(this.fd);
-        if (raw < 0) {
-            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
-                retries = retries + 1;
-                cnt;
-            }
-            brk;
-        }
-        ret ok[bool, str](true);
-    }
+# open_with: open a file with explicit flags and mode.
+# ---
+# p:     file path
+# flags: open flags (O_RDONLY, O_WRONLY, O_CREAT, etc.)
+# mode:  permission bits for creation
+# ret:   the opened File, or an error message
+pub fun open_with(p: str, flags: i32, mode: i32) Result[File, str] {
+    val raw: i64 = os.open(os.AT_FDCWD, p, flags, mode);
+    if (raw < 0) { ret err[File, str](os.message(raw)); }
+    ret ok[File, str](File{fd: raw::i32});
+}
 
-    ret err[bool, str](errno.message(raw));
+# create: create or truncate a file for writing.
+# ---
+# p:    file path
+# mode: permission bits
+# ret:  the created File, or an error message
+pub fun create(p: str, mode: i32) Result[File, str] {
+    val flags: i32 = os.O_CREAT | os.O_TRUNC | os.O_WRONLY;
+    val raw: i64 = os.open(os.AT_FDCWD, p, flags, mode);
+    if (raw < 0) { ret err[File, str](os.message(raw)); }
+    ret ok[File, str](File{fd: raw::i32});
+}
+
+# close: close a file descriptor.
+# ---
+# f:   file to close
+# ret: true on success, or an error message
+pub fun close(f: *File) Result[bool, str] {
+    if (f == nil) { ret ok[bool, str](true); }
+    val raw: i64 = os.close(f.fd);
+    if (raw < 0) { ret err[bool, str](os.message(raw)); }
+    ret ok[bool, str](true);
 }
 
 # read: read up to len bytes into buf.
 # ---
-# buf: buffer to read into
-# len: maximum number of bytes to read
-# ret: Ok(bytes_read) on success or Err(str) with errno message on failure.
-pub fun file_read(this: *File, buf: *u8, len: usize) Result[usize, str] {
-    if (this == nil) {
-        ret err[usize, str]("io error");
-    }
-
-    var retries: usize = 0;
-    var raw: i64 = 0;
-    for {
-        raw = pfs.read(this.fd, buf, len);
-        if (raw < 0) {
-            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
-                retries = retries + 1;
-                cnt;
-            }
-            brk;
-        }
-        ret ok[usize, str](raw::usize);
-    }
-
-    ret err[usize, str](errno.message(raw));
+# f:   file to read from
+# buf: destination buffer
+# len: maximum bytes to read
+# ret: number of bytes read, or an error message
+pub fun read(f: *File, buf: *u8, len: usize) Result[usize, str] {
+    if (f == nil) { ret err[usize, str]("file is nil"); }
+    val raw: i64 = os.read(f.fd, buf, len);
+    if (raw < 0) { ret err[usize, str](os.message(raw)); }
+    ret ok[usize, str](raw::usize);
 }
 
-# write: write up to len bytes from buf to the file.
+# write: write up to len bytes from buf.
 # ---
-# buf: buffer to write from
-# len: number of bytes to write
-# ret: Ok(bytes_written) on success or Err(str) with errno message on failure.
-pub fun file_write(this: *File, buf: &u8, len: usize) Result[usize, str] {
-    if (this == nil) {
-        ret err[usize, str]("io error");
-    }
-
-    var retries: usize = 0;
-    var raw: i64 = 0;
-    for {
-        raw = pfs.write(this.fd, buf, len);
-        if (raw < 0) {
-            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
-                retries = retries + 1;
-                cnt;
-            }
-            brk;
-        }
-        ret ok[usize, str](raw::usize);
-    }
-
-    ret err[usize, str](errno.message(raw));
+# f:   file to write to
+# buf: source buffer
+# len: bytes to write
+# ret: number of bytes written, or an error message
+pub fun write(f: *File, buf: &u8, len: usize) Result[usize, str] {
+    if (f == nil) { ret err[usize, str]("file is nil"); }
+    val raw: i64 = os.write(f.fd, buf, len);
+    if (raw < 0) { ret err[usize, str](os.message(raw)); }
+    ret ok[usize, str](raw::usize);
 }
 
-# stat: get file metadata.
+# seek: reposition file offset.
 # ---
-# ret: Ok(Stat) on success or Err(str) with errno message on failure.
-pub fun file_stat(this: &File) Result[Stat, str] {
-    if (this == nil) {
-        ret err[Stat, str]("io error");
-    }
-
-    var st: Stat;
-    val raw: i64 = pfs.fstat(this.fd, ?st);
-    if (raw < 0) {
-        ret err[Stat, str](errno.message(raw));
-    }
-    ret ok[Stat, str](st);
-}
-
-# seek: reposition file offset using lseek semantics.
-# ---
-# offset: offset to seek to
-# whence: seek mode (e.g., SEEK_SET, SEEK_CUR, SEEK_END)
-# ret: Ok(new_offset) on success or Err(str) with errno message on failure.
-pub fun file_seek(this: &File, offset: i64, whence: i32) Result[i64, str] {
-    if (this == nil) {
-        ret err[i64, str]("io error");
-    }
-
-    val raw: i64 = pfs.lseek(this.fd, offset, whence);
-    if (raw < 0) {
-        ret err[i64, str](errno.message(raw));
-    }
-
+# f:       file to seek
+# offset:  byte offset
+# whence:  SEEK_SET, SEEK_CUR, or SEEK_END
+# ret:     the new offset, or an error message
+pub fun seek(f: &File, offset: i64, whence: i32) Result[i64, str] {
+    if (f == nil) { ret err[i64, str]("file is nil"); }
+    val raw: i64 = os.seek(f.fd, offset, whence);
+    if (raw < 0) { ret err[i64, str](os.message(raw)); }
     ret ok[i64, str](raw);
 }
 
-# unlink: remove a file at the given path.
+# info: get metadata for an open file.
 # ---
-# path: file path to remove
-# ret: Ok(true) on success or Err(str) with errno message on failure.
-pub fun unlink(path: str) Result[bool, str] {
-    var retries: usize = 0;
-    var raw: i64 = 0;
-    for {
-        raw = pfs.unlinkat(c.AT_FDCWD, path, 0);
-        if (raw < 0) {
-            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
-                retries = retries + 1;
-                cnt;
-            }
-            brk;
-        }
-        ret ok[bool, str](true);
-    }
-
-    ret err[bool, str](errno.message(raw));
+# f:   file to query
+# ret: file metadata, or an error message
+pub fun info(f: &File) Result[FileInfo, str] {
+    if (f == nil) { ret err[FileInfo, str]("file is nil"); }
+    var st: os.stat_t;
+    val raw: i64 = os.stat(f.fd, ?st);
+    if (raw < 0) { ret err[FileInfo, str](os.message(raw)); }
+    ret ok[FileInfo, str](info_from_stat(?st));
 }
 
-# stat_path: get file metadata for a path.
+# get_writer: initialize a Writer backed by a file.
 # ---
-# path: path to stat
-# ret: Ok(stat) on success or Err(str) with errno message on failure.
-pub fun stat_path(path: str) Result[Stat, str] {
-    if (path == nil) {
-        ret err[Stat, str]("path is nil");
-    }
-
-    var st: Stat;
-    val raw: i64 = pfs.newfstatat(c.AT_FDCWD, path, ?st, 0);
-    if (raw < 0) {
-        ret err[Stat, str](errno.message(raw));
-    }
-
-    ret ok[Stat, str](st);
+# f: file to write to (must outlive the Writer)
+# w: Writer to initialize
+pub fun get_writer(f: &File, w: *writer.Writer) {
+    w.ctx      = f::ptr;
+    w.fn_write = file_write_cb;
 }
 
-# is_dir: check if a path exists and is a directory.
+# get_reader: initialize a Reader backed by a file.
 # ---
-# path: path to check
-# ret: true if directory, false otherwise
-pub fun is_dir(path: str) bool {
-    val st_res: Result[Stat, str] = stat_path(path);
-    if (result_is_err[Stat, str](st_res)) {
-        ret false;
-    }
-
-    val st: Stat = result_unwrap_ok[Stat, str](st_res);
-    ret (st.st_mode & c.S_IFMT) == c.S_IFDIR;
+# f: file to read from (must outlive the Reader)
+# r: Reader to initialize
+pub fun get_reader(f: &File, r: *reader.Reader) {
+    r.ctx     = f::ptr;
+    r.fn_read = file_read_cb;
 }
 
-# is_file: check if a path exists and is a regular file.
+# read_all: read an entire file into an allocated string.
 # ---
-# path: path to check
-# ret: true if regular file, false otherwise
-pub fun is_file(path: str) bool {
-    val st_res: Result[Stat, str] = stat_path(path);
-    if (result_is_err[Stat, str](st_res)) {
-        ret false;
+# a:   allocator for the result buffer
+# p:   file path
+# ret: file contents as a string, or an error message
+pub fun read_all(a: &allocator.Allocator, p: str) Result[str, str] {
+    val open_res: Result[File, str] = open(p);
+    if (is_err[File, str](open_res)) {
+        ret err[str, str](unwrap_err[File, str](open_res));
     }
+    var f: File = unwrap_ok[File, str](open_res);
 
-    val st: Stat = result_unwrap_ok[Stat, str](st_res);
-    ret (st.st_mode & c.S_IFMT) == c.S_IFREG;
+    val info_res: Result[FileInfo, str] = info(?f);
+    if (is_err[FileInfo, str](info_res)) {
+        close(?f);
+        ret err[str, str](unwrap_err[FileInfo, str](info_res));
+    }
+    val fi: FileInfo = unwrap_ok[FileInfo, str](info_res);
+
+    val alloc_res: Result[*u8, str] = allocator.allocate[u8](a, fi.size + 1);
+    if (is_err[*u8, str](alloc_res)) {
+        close(?f);
+        ret err[str, str](unwrap_err[*u8, str](alloc_res));
+    }
+    val buf: *u8 = unwrap_ok[*u8, str](alloc_res);
+
+    val size: usize = fi.size;
+    var total: usize = 0;
+    for (total < size) {
+        val n: i64 = os.read(f.fd, (buf::usize + total)::*u8, size - total);
+        if (n <= 0) { brk; }
+        total = total + n::usize;
+    }
+    close(?f);
+
+    buf[total] = 0;
+    ret ok[str, str](buf::str);
 }
 
-# create_dir: create a new directory.
+# write_file: write data to a file at path, creating or truncating it.
 # ---
-# path: path to create
-# mode: directory permissions
-# ret: Ok(true) on success or Err(str) on failure.
-pub fun create_dir(path: str, mode: i32) Result[bool, str] {
-    if (path == nil) {
-        ret err[bool, str]("path is nil");
+# p:    file path
+# data: bytes to write
+# len:  number of bytes
+# mode: permission bits
+# ret:  true on success, or an error message
+pub fun write_file(p: str, data: &u8, len: usize, mode: i32) Result[bool, str] {
+    val cr: Result[File, str] = create(p, mode);
+    if (is_err[File, str](cr)) {
+        ret err[bool, str](unwrap_err[File, str](cr));
     }
+    var f: File = unwrap_ok[File, str](cr);
 
-    var retries: usize = 0;
-    var raw: i64 = 0;
-    for {
-        raw = pfs.mkdirat(c.AT_FDCWD, path, mode);
-        if (raw < 0) {
-            if (raw == c.EINTR && retries < c.EINTR_MAX_RETRIES) {
-                retries = retries + 1;
-                cnt;
-            }
-            brk;
-        }
-        ret ok[bool, str](true);
+    val wr: Result[usize, str] = write(?f, data, len);
+    close(?f);
+    if (is_err[usize, str](wr)) {
+        ret err[bool, str](unwrap_err[usize, str](wr));
     }
-
-    ret err[bool, str](errno.message(raw));
+    ret ok[bool, str](true);
 }
 
-# create_dir_all: create a directory and all parents (mkdir -p).
+# info_is_dir: check whether FileInfo describes a directory.
+pub fun info_is_dir(fi: &FileInfo) bool {
+    ret (fi.mode::i32 & os.S_IFMT) == os.S_IFDIR;
+}
+
+# info_is_file: check whether FileInfo describes a regular file.
+pub fun info_is_file(fi: &FileInfo) bool {
+    ret (fi.mode::i32 & os.S_IFMT) == os.S_IFREG;
+}
+
+# info_is_symlink: check whether FileInfo describes a symbolic link.
+pub fun info_is_symlink(fi: &FileInfo) bool {
+    ret (fi.mode::i32 & os.S_IFMT) == os.S_IFLNK;
+}
+
+# info_path: get metadata for a path.
 # ---
-# path: path to create
-# mode: directory permissions
-# ret: Ok(true) on success or Err(str) on failure.
-pub fun create_dir_all(path_str: str, mode: i32) Result[bool, str] {
-    if (path_str == nil) {
-        ret err[bool, str]("path is nil");
+# p:   path to query
+# ret: file metadata, or an error message
+pub fun info_path(p: str) Result[FileInfo, str] {
+    if (p == nil) { ret err[FileInfo, str]("path is nil"); }
+    var st: os.stat_t;
+    val raw: i64 = os.stat_path(os.AT_FDCWD, p, ?st, 0);
+    if (raw < 0) { ret err[FileInfo, str](os.message(raw)); }
+    ret ok[FileInfo, str](info_from_stat(?st));
+}
+
+# is_dir: check whether a path is an existing directory.
+pub fun is_dir(p: str) bool {
+    val r: Result[FileInfo, str] = info_path(p);
+    if (is_err[FileInfo, str](r)) { ret false; }
+    val fi: FileInfo = unwrap_ok[FileInfo, str](r);
+    ret info_is_dir(?fi);
+}
+
+# is_file: check whether a path is an existing regular file.
+pub fun is_file(p: str) bool {
+    val r: Result[FileInfo, str] = info_path(p);
+    if (is_err[FileInfo, str](r)) { ret false; }
+    val fi: FileInfo = unwrap_ok[FileInfo, str](r);
+    ret info_is_file(?fi);
+}
+
+# exists: check whether a path exists.
+pub fun exists(p: str) bool {
+    ret is_ok[FileInfo, str](info_path(p));
+}
+
+# unlink: remove a file.
+# ---
+# p:   path to remove
+# ret: true on success, or an error message
+pub fun unlink(p: str) Result[bool, str] {
+    val raw: i64 = os.unlink(os.AT_FDCWD, p, 0);
+    if (raw < 0) { ret err[bool, str](os.message(raw)); }
+    ret ok[bool, str](true);
+}
+
+# rename: rename a file or directory.
+# ---
+# from: source path
+# to:   destination path
+# ret:  true on success, or an error message
+pub fun rename(from: str, to: str) Result[bool, str] {
+    val raw: i64 = os.rename(os.AT_FDCWD, from, os.AT_FDCWD, to);
+    if (raw < 0) { ret err[bool, str](os.message(raw)); }
+    ret ok[bool, str](true);
+}
+
+# create_dir: create a directory.
+# ---
+# p:    directory path
+# mode: permission bits
+# ret:  true on success, or an error message
+pub fun create_dir(p: str, mode: i32) Result[bool, str] {
+    if (p == nil) { ret err[bool, str]("path is nil"); }
+    val raw: i64 = os.make_dir(os.AT_FDCWD, p, mode);
+    if (raw < 0) { ret err[bool, str](os.message(raw)); }
+    ret ok[bool, str](true);
+}
+
+# create_dir_all: create a directory and all missing parents.
+# ---
+# a:    allocator for intermediate path operations
+# p:    directory path
+# mode: permission bits
+# ret:  true on success, or an error message
+pub fun create_dir_all(a: &allocator.Allocator, p: str, mode: i32) Result[bool, str] {
+    if (p == nil)         { ret err[bool, str]("path is nil"); }
+    if (path.is_empty(p)) { ret err[bool, str]("path is empty"); }
+    if (path.is_root(p))  { ret ok[bool, str](true); }
+    if (is_dir(p))        { ret ok[bool, str](true); }
+
+    val first: Result[bool, str] = create_dir(p, mode);
+    if (is_ok[bool, str](first)) { ret first; }
+
+    val parent_res: Result[path.Path, str] = path.parent(a, p);
+    if (is_err[path.Path, str](parent_res)) {
+        ret err[bool, str](unwrap_err[path.Path, str](parent_res));
     }
 
-    if (path.is_empty(path_str)) {
-        ret err[bool, str]("path is empty");
-    }
-
-    if (path.is_root(path_str)) {
-        ret ok[bool, str](true);
-    }
-
-    if (is_dir(path_str)) {
-        ret ok[bool, str](true);
-    }
-
-    if (is_file(path_str)) {
-        ret err[bool, str]("path exists and is not a directory");
-    }
-
-    val create_res: Result[bool, str] = create_dir(path_str, mode);
-    if (result_is_ok[bool, str](create_res)) {
-        ret create_res;
-    }
-
-    var a: allocator.Allocator = allocator.default();
-    val parent_res: Result[path.Path, allocator.AllocError] = path.parent(?a, path_str);
-    if (result_is_err[path.Path, allocator.AllocError](parent_res)) {
-        ret err[bool, str](result_unwrap_err[path.Path, allocator.AllocError](parent_res));
-    }
-
-    val parent_path: path.Path = result_unwrap_ok[path.Path, allocator.AllocError](parent_res);
-    val parent_create_res: Result[bool, str] = create_dir_all(parent_path, mode);
+    val parent_path: path.Path = unwrap_ok[path.Path, str](parent_res);
+    val parent_create: Result[bool, str] = create_dir_all(a, parent_path, mode);
 
     val parent_len: usize = str_len(parent_path);
-    allocator.allocator_free[u8](?a, parent_path::ptr::*u8, parent_len + 1);
+    allocator.deallocate[u8](a, parent_path::ptr::*u8, parent_len + 1);
 
-    if (result_is_err[bool, str](parent_create_res)) {
-        ret parent_create_res;
-    }
+    if (is_err[bool, str](parent_create)) { ret parent_create; }
 
-    val final_res: Result[bool, str] = create_dir(path_str, mode);
-    if (result_is_ok[bool, str](final_res)) {
-        ret final_res;
-    }
-
-    if (is_dir(path_str)) {
-        ret ok[bool, str](true);
-    }
-
+    val final_res: Result[bool, str] = create_dir(p, mode);
+    if (is_ok[bool, str](final_res)) { ret final_res; }
+    if (is_dir(p)) { ret ok[bool, str](true); }
     ret final_res;
 }
 
-# TempFile: a temporary file that stores its path for cleanup.
+# temp_create: create a temporary file with a unique name.
 # ---
-# file: underlying File handle
-# path_buf: stored path for cleanup
-# path_len: length of stored path
-pub rec TempFile {
-    file:     File;
-    path_buf: [256]u8;
-    path_len: usize;
-}
-
-# temp_create: create a temporary file with the given prefix.
-# ---
-# prefix: prefix for the temp file name (e.g., "test" -> "/tmp/test_<timestamp>_<counter>")
-# ret: Ok(TempFile) on success or Err(str) on failure.
-pub fun temp_create(prefix: str) Result[TempFile, str] {
+# a:      allocator for the path
+# prefix: name prefix (e.g. "test" → "/tmp/test_<n>")
+# ret:    the created TempFile, or an error message
+pub fun temp_create(a: &allocator.Allocator, prefix: str) Result[TempFile, str] {
     var attempt: usize = 0;
-
     for (attempt < TEMP_MAX_ATTEMPTS) {
-        # get current time for uniqueness
-        val t: time.Time = time.now();
-        val ns: i64 = time.time_unix_nano(t);
-
-        # increment counter
         temp_counter = temp_counter + 1;
 
-        # build path: /tmp/{prefix}_{ns}_{counter}
-        var tf: TempFile;
-        tf.path_len = 0;
-
-        # copy "/tmp/"
-        val dir_len: usize = str_len(TEMP_DIR);
-        mem.raw_copy(?tf.path_buf[0], TEMP_DIR, dir_len);
-        tf.path_len = dir_len;
-
-        # add "/"
-        tf.path_buf[tf.path_len] = 47; # '/'
-        tf.path_len = tf.path_len + 1;
-
-        # copy prefix
-        if (prefix != nil) {
-            val prefix_len: usize = str_len(prefix);
-            mem.raw_copy(?tf.path_buf[tf.path_len], prefix, prefix_len);
-            tf.path_len = tf.path_len + prefix_len;
+        val name_res: Result[path.Path, str] = temp_build_path(a, prefix, temp_counter);
+        if (is_err[path.Path, str](name_res)) {
+            ret err[TempFile, str](unwrap_err[path.Path, str](name_res));
         }
+        val p: path.Path = unwrap_ok[path.Path, str](name_res);
 
-        # add "_"
-        tf.path_buf[tf.path_len] = 95; # '_'
-        tf.path_len = tf.path_len + 1;
-
-        # add timestamp as decimal
-        tf.path_len = write_u64_to_buf(?tf.path_buf[0], tf.path_len, 256, ns::u64);
-
-        # add "_"
-        tf.path_buf[tf.path_len] = 95; # '_'
-        tf.path_len = tf.path_len + 1;
-
-        # add counter as decimal
-        tf.path_len = write_u64_to_buf(?tf.path_buf[0], tf.path_len, 256, temp_counter);
-
-        # null terminate
-        tf.path_buf[tf.path_len] = 0;
-
-        # try to create with O_CREAT | O_EXCL | O_RDWR
-        val flags: i32 = c.O_CREAT | c.O_EXCL | c.O_RDWR;
-        val mode: i32 = 384; # 0600
-
-        val raw: i64 = pfs.openat(c.AT_FDCWD, ?tf.path_buf[0], flags, mode);
+        val flags: i32 = os.O_CREAT | os.O_EXCL | os.O_RDWR;
+        val raw: i64 = os.open(os.AT_FDCWD, p, flags, 384);
         if (raw >= 0) {
-            tf.file.fd = int.trunc_i64_to_i32(raw);
-            ret ok[TempFile, str](tf);
+            ret ok[TempFile, str](TempFile{file: File{fd: raw::i32}, path: p});
         }
 
-        # if EEXIST, retry with new name
-        if (raw == c.EEXIST) {
-            attempt = attempt + 1;
-            cnt;
-        }
+        val p_len: usize = str_len(p);
+        allocator.deallocate[u8](a, p::ptr::*u8, p_len + 1);
 
-        # other error, fail
-        ret err[TempFile, str](errno.message(raw));
+        if (raw != os.EEXIST) {
+            ret err[TempFile, str](os.message(raw));
+        }
+        attempt = attempt + 1;
     }
-
     ret err[TempFile, str]("temp file: max attempts exceeded");
 }
 
-# helper: write u64 as decimal to buffer, return new offset
-fun write_u64_to_buf(buf: *u8, offset: usize, cap: usize, n: u64) usize {
+# temp_path: get the path of a temp file.
+pub fun temp_path(tf: &TempFile) str {
+    ret tf.path;
+}
+
+# temp_close: close the temp file (does not remove it).
+pub fun temp_close(tf: *TempFile) Result[bool, str] {
+    ret close(?tf.file);
+}
+
+# temp_remove: remove the temp file from disk.
+pub fun temp_remove(tf: *TempFile) Result[bool, str] {
+    ret unlink(tf.path);
+}
+
+# temp_close_and_remove: close and remove.
+pub fun temp_close_and_remove(tf: *TempFile) Result[bool, str] {
+    val cr: Result[bool, str] = close(?tf.file);
+    val rr: Result[bool, str] = unlink(tf.path);
+    if (is_err[bool, str](cr)) { ret cr; }
+    ret rr;
+}
+
+fun info_from_stat(st: &os.stat_t) FileInfo {
+    ret FileInfo{
+        size:     st.st_size::usize,
+        mode:     st.st_mode::u32,
+        modified: st.st_mtime,
+        accessed: st.st_atime,
+        created:  st.st_ctime
+    };
+}
+
+fun file_write_cb(ctx: ptr, buf: &u8, len: usize) Result[usize, str] {
+    ret write(ctx::*File, buf, len);
+}
+
+fun file_read_cb(ctx: ptr, buf: *u8, len: usize) Result[usize, str] {
+    ret read(ctx::*File, buf, len);
+}
+
+fun temp_build_path(a: &allocator.Allocator, prefix: str, counter: u64) Result[path.Path, str] {
+    var buf: [256]u8;
+    var off: usize = 0;
+
+    val dir_len: usize = str_len(TEMP_DIR);
+    mem.raw_copy(?buf[0], TEMP_DIR, dir_len);
+    off = dir_len;
+
+    buf[off] = 47;
+    off = off + 1;
+
+    if (prefix != nil) {
+        val plen: usize = str_len(prefix);
+        mem.raw_copy(?buf[off], prefix, plen);
+        off = off + plen;
+    }
+
+    buf[off] = 95;
+    off = off + 1;
+    off = write_u64(off, ?buf[0], 256, counter);
+
+    buf[off] = 0;
+
+    val r: Result[*u8, str] = allocator.allocate[u8](a, off + 1);
+    if (is_err[*u8, str](r)) {
+        ret err[path.Path, str](unwrap_err[*u8, str](r));
+    }
+    val out: *u8 = unwrap_ok[*u8, str](r);
+    mem.raw_copy(out::ptr, ?buf[0], off);
+    out[off] = 0;
+    ret ok[path.Path, str](out::str);
+}
+
+fun write_u64(off: usize, buf: *u8, cap: usize, n: u64) usize {
     var digits: [20]u8;
     var idx: usize = 20;
     var x: u64 = n;
 
     if (x == 0) {
         idx = idx - 1;
-        digits[idx] = 48; # '0'
+        digits[idx] = 48;
     } or {
         for (x > 0) {
             idx = idx - 1;
-            digits[idx] = int.trunc_u64_to_u8(x % 10) + 48;
+            digits[idx] = (x % 10)::u8 + 48;
             x = x / 10;
         }
     }
 
     val len: usize = 20 - idx;
-    if (offset + len >= cap) {
-        ret offset; # overflow, don't write
-    }
+    if (off + len >= cap) { ret off; }
 
-    mem.raw_copy((buf::usize + offset)::*u8, ?digits[idx], len);
-    ret offset + len;
-}
-
-# path: returns the path of the temp file as a string.
-# ---
-# ret: null-terminated path string
-pub fun temp_file_path(this: &TempFile) str {
-    ret ?this.path_buf[0];
-}
-
-# as_file: return a pointer to the underlying file.
-# ---
-# ret: pointer to File
-pub fun temp_file_as_file(this: *TempFile) *File {
-    ret ?this.file;
-}
-
-# close: close the temp file (does not remove it).
-# ---
-# ret: Ok(true) on success or Err(str) on failure.
-pub fun temp_file_close(this: *TempFile) Result[bool, str] {
-    ret (file_close(?this.file));
-}
-
-# remove: remove the temp file from disk (should close first).
-# ---
-# ret: Ok(true) on success or Err(str) on failure.
-pub fun temp_file_remove(this: *TempFile) Result[bool, str] {
-    ret unlink(?this.path_buf[0]);
-}
-
-# close_and_remove: close the file and remove it from disk.
-# ---
-# ret: Ok(true) on success or Err(str) on failure (returns first error).
-pub fun temp_file_close_and_remove(this: *TempFile) Result[bool, str] {
-    val close_res: Result[bool, str] = file_close(?this.file);
-    val remove_res: Result[bool, str] = temp_file_remove(this);
-
-    if (result_is_err[bool, str](close_res)) {
-        ret close_res;
-    }
-    ret remove_res;
-}
-
-# --- tests ---
-
-test "filesystem: temp_create creates file" {
-    val r: Result[TempFile, str] = temp_create("test");
-    if (result_is_err[TempFile, str](r)) { ret 0; }
-    var tf: TempFile = result_unwrap_ok[TempFile, str](r);
-
-    # file should have valid fd
-    if (tf.file.fd < 0) { ret 2; }
-
-    # path should not be empty
-    if (tf.path_len == 0) { ret 3; }
-
-    # clean up
-    val cr: Result[bool, str] = temp_file_close_and_remove(?tf);
-    if (result_is_err[bool, str](cr)) { ret 4; }
-    ret 1;
-}
-
-test "filesystem: temp_create path is valid" {
-    val r: Result[TempFile, str] = temp_create("myprefix");
-    if (result_is_err[TempFile, str](r)) { ret 0; }
-    var tf: TempFile = result_unwrap_ok[TempFile, str](r);
-
-    val p: str = temp_file_path(?tf);
-    if (p == nil) { ret 2; }
-
-    # path should start with /tmp/
-    if (!str_starts_with(p, "/tmp/")) { ret 3; }
-
-    # path should contain prefix
-    if (!str_contains(p, "myprefix")) { ret 4; }
-
-    temp_file_close_and_remove(?tf);
-    ret 1;
-}
-
-test "filesystem: temp file write and read" {
-    val r: Result[TempFile, str] = temp_create("rw");
-    if (result_is_err[TempFile, str](r)) { ret 0; }
-    var tf: TempFile = result_unwrap_ok[TempFile, str](r);
-
-    # write some data
-    val data: str = "hello temp file";
-    val wr: Result[usize, str] = file_write(?tf.file, data, str_len(data));
-    if (result_is_err[usize, str](wr)) { ret 2; }
-    if (result_unwrap_ok[usize, str](wr) != str_len(data)) { ret 3; }
-
-    # seek back to start
-    val sr: Result[i64, str] = file_seek(?tf.file, 0, c.SEEK_SET);
-    if (result_is_err[i64, str](sr)) { ret 4; }
-
-    # read back
-    var buf: [64]u8;
-    val rr: Result[usize, str] = file_read(?tf.file, ?buf[0], 64);
-    if (result_is_err[usize, str](rr)) { ret 5; }
-    if (result_unwrap_ok[usize, str](rr) != str_len(data)) { ret 6; }
-
-    # verify content
-    val read_str: str = ?buf[0];
-    if (!str_starts_with(read_str, "hello temp file")) { ret 7; }
-
-    temp_file_close_and_remove(?tf);
-    ret 1;
-}
-
-test "filesystem: temp file close then remove" {
-    val r: Result[TempFile, str] = temp_create("closeremove");
-    if (result_is_err[TempFile, str](r)) { ret 0; }
-    var tf: TempFile = result_unwrap_ok[TempFile, str](r);
-
-    val cr: Result[bool, str] = file_close(?tf);
-    if (result_is_err[bool, str](cr)) { ret 2; }
-
-    val rr: Result[bool, str] = temp_file_remove(?tf);
-    if (result_is_err[bool, str](rr)) { ret 3; }
-
-    ret 1;
+    mem.raw_copy((buf::usize + off)::*u8, ?digits[idx], len);
+    ret off + len;
 }
 
 test "filesystem: open non-existent file returns error" {
     val r: Result[File, str] = open("/tmp/this_file_should_not_exist_12345");
-    if (result_is_ok[File, str](r)) { ret 0; }
+    if (is_ok[File, str](r)) { ret 0; }
+    ret 1;
+}
+
+test "filesystem: temp_create creates file" {
+    var a: allocator.Allocator;
+    page.make(?a);
+
+    val r: Result[TempFile, str] = temp_create(?a, "test");
+    if (is_err[TempFile, str](r)) { ret 0; }
+    var tf: TempFile = unwrap_ok[TempFile, str](r);
+    if (tf.file.fd < 0) { ret 2; }
+    if (tf.path == nil) { ret 3; }
+    val cr: Result[bool, str] = temp_close_and_remove(?tf);
+    if (is_err[bool, str](cr)) { ret 4; }
+    ret 1;
+}
+
+test "filesystem: temp file write and read" {
+    var a: allocator.Allocator;
+    page.make(?a);
+
+    val r: Result[TempFile, str] = temp_create(?a, "rw");
+    if (is_err[TempFile, str](r)) { ret 0; }
+    var tf: TempFile = unwrap_ok[TempFile, str](r);
+
+    val data: str = "hello temp file";
+    val wr: Result[usize, str] = write(?tf.file, data, str_len(data));
+    if (is_err[usize, str](wr)) { ret 2; }
+    if (unwrap_ok[usize, str](wr) != str_len(data)) { ret 3; }
+
+    val sr: Result[i64, str] = seek(?tf.file, 0, os.SEEK_SET);
+    if (is_err[i64, str](sr)) { ret 4; }
+
+    var buf: [64]u8;
+    val rr: Result[usize, str] = read(?tf.file, ?buf[0], 64);
+    if (is_err[usize, str](rr)) { ret 5; }
+    if (unwrap_ok[usize, str](rr) != str_len(data)) { ret 6; }
+
+    if (!str_starts_with(?buf[0], "hello temp file")) { ret 7; }
+
+    temp_close_and_remove(?tf);
+    ret 1;
+}
+
+test "filesystem: info returns valid metadata" {
+    var a: allocator.Allocator;
+    page.make(?a);
+
+    val cr: Result[TempFile, str] = temp_create(?a, "info");
+    if (is_err[TempFile, str](cr)) { ret 0; }
+    var tf: TempFile = unwrap_ok[TempFile, str](cr);
+
+    val data: str = "some content";
+    write(?tf.file, data, str_len(data));
+
+    val ir: Result[FileInfo, str] = info(?tf.file);
+    if (is_err[FileInfo, str](ir)) { ret 2; }
+    val fi: FileInfo = unwrap_ok[FileInfo, str](ir);
+    if (fi.size != str_len(data)) { ret 3; }
+
+    temp_close_and_remove(?tf);
     ret 1;
 }
 
 test "filesystem: create write close open read" {
-    # create a temp file
-    val cr: Result[TempFile, str] = temp_create("fullcycle");
-    if (result_is_err[TempFile, str](cr)) { ret 0; }
-    var tf: TempFile = result_unwrap_ok[TempFile, str](cr);
+    var a: allocator.Allocator;
+    page.make(?a);
 
-    # write data
+    val cr: Result[TempFile, str] = temp_create(?a, "fullcycle");
+    if (is_err[TempFile, str](cr)) { ret 0; }
+    var tf: TempFile = unwrap_ok[TempFile, str](cr);
+
     val data: str = "test data 12345";
-    val wr: Result[usize, str] = file_write(?tf.file, data, str_len(data));
-    if (result_is_err[usize, str](wr)) { ret 2; }
+    val wr: Result[usize, str] = write(?tf.file, data, str_len(data));
+    if (is_err[usize, str](wr)) { ret 2; }
 
-    # close
-    val clr: Result[bool, str] = file_close(?tf);
-    if (result_is_err[bool, str](clr)) { ret 3; }
+    val clr: Result[bool, str] = temp_close(?tf);
+    if (is_err[bool, str](clr)) { ret 3; }
 
-    # open again for reading
-    val open_res: Result[File, str] = open(temp_file_path(?tf));
-    if (result_is_err[File, str](open_res)) { ret 4; }
-    var f: File = result_unwrap_ok[File, str](open_res);
+    val open_res: Result[File, str] = open(temp_path(?tf));
+    if (is_err[File, str](open_res)) { ret 4; }
+    var f: File = unwrap_ok[File, str](open_res);
 
-    # read
     var buf: [64]u8;
-    val rr: Result[usize, str] = file_read(?f, ?buf[0], 64);
-    if (result_is_err[usize, str](rr)) { ret 5; }
-    if (result_unwrap_ok[usize, str](rr) != str_len(data)) { ret 6; }
+    val rr: Result[usize, str] = read(?f, ?buf[0], 64);
+    if (is_err[usize, str](rr)) { ret 5; }
+    if (unwrap_ok[usize, str](rr) != str_len(data)) { ret 6; }
 
-    # close and cleanup
-    file_close(?f);
-    temp_file_remove(?tf);
-    ret 1;
-}
-
-test "filesystem: stat returns valid metadata" {
-    val cr: Result[TempFile, str] = temp_create("stat");
-    if (result_is_err[TempFile, str](cr)) { ret 0; }
-    var tf: TempFile = result_unwrap_ok[TempFile, str](cr);
-
-    # write some data
-    val data: str = "some content";
-    file_write(?tf.file, data, str_len(data));
-
-    # get stat
-    val sr: Result[Stat, str] = file_stat(?tf.file);
-    if (result_is_err[Stat, str](sr)) { ret 2; }
-    val st: Stat = result_unwrap_ok[Stat, str](sr);
-
-    # size should match what we wrote
-    if (st.st_size != str_len(data)::i64) { ret 3; }
-
-    temp_file_close_and_remove(?tf);
-    ret 1;
-}
-
-test "filesystem: seek repositions file offset" {
-    val cr: Result[TempFile, str] = temp_create("seek");
-    if (result_is_err[TempFile, str](cr)) { ret 0; }
-    var tf: TempFile = result_unwrap_ok[TempFile, str](cr);
-
-    # write data
-    val data: str = "0123456789";
-    file_write(?tf.file, data, str_len(data));
-
-    # seek to position 5
-    val sr: Result[i64, str] = file_seek(?tf.file, 5, c.SEEK_SET);
-    if (result_is_err[i64, str](sr)) { ret 2; }
-    if (result_unwrap_ok[i64, str](sr) != 5) { ret 3; }
-
-    # read from position 5
-    var buf: [10]u8;
-    val rr: Result[usize, str] = file_read(?tf.file, ?buf[0], 10);
-    if (result_is_err[usize, str](rr)) { ret 4; }
-    if (result_unwrap_ok[usize, str](rr) != 5) { ret 5; } # should read "56789"
-
-    if (buf[0] != 53) { ret 6; } # '5'
-    if (buf[4] != 57) { ret 7; } # '9'
-
-    temp_file_close_and_remove(?tf);
+    close(?f);
+    temp_remove(?tf);
     ret 1;
 }
 
 test "filesystem: unlink removes file" {
-    val cr: Result[TempFile, str] = temp_create("unlink");
-    if (result_is_err[TempFile, str](cr)) { ret 0; }
-    var tf: TempFile = result_unwrap_ok[TempFile, str](cr);
-    val p: str = temp_file_path(?tf);
+    var a: allocator.Allocator;
+    page.make(?a);
 
-    file_close(?tf);
+    val cr: Result[TempFile, str] = temp_create(?a, "unlink");
+    if (is_err[TempFile, str](cr)) { ret 0; }
+    var tf: TempFile = unwrap_ok[TempFile, str](cr);
+    val p: str = temp_path(?tf);
 
-    # unlink the file
+    temp_close(?tf);
+
     val ur: Result[bool, str] = unlink(p);
-    if (result_is_err[bool, str](ur)) { ret 2; }
+    if (is_err[bool, str](ur)) { ret 2; }
 
-    # try to open - should fail
     val open_res: Result[File, str] = open(p);
-    if (result_is_ok[File, str](open_res)) { ret 3; }
-
+    if (is_ok[File, str](open_res)) { ret 3; }
     ret 1;
 }

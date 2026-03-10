@@ -1,11 +1,13 @@
 use std.types.bool;
 use std.types.size;
 
-# Fill a block of raw memory with a byte value.
+# low-level memory operations for raw and typed buffers.
+
+# raw_fill: fill a block of raw memory with a byte value.
 # ---
-# p: Pointer to the start of the memory block.
-# value: Byte value to fill the memory with.
-# size: Number of bytes to fill.
+# p:     pointer to the start of the memory block
+# value: byte value to fill with
+# size:  number of bytes to fill
 pub fun raw_fill(p: ptr, value: u8, size: usize) {
     if (p == nil || size == 0) {
         ret;
@@ -16,15 +18,15 @@ pub fun raw_fill(p: ptr, value: u8, size: usize) {
     var i: usize = 0;
     for (i < size) {
         bytes[i] = value;
-        i = i + 1;
+        i        = i + 1;
     }
 }
 
-# Copy a block of raw memory from source to destination.
+# raw_copy: copy a block of raw memory from source to destination.
 # ---
-# dst: Pointer to the destination memory block.
-# src: Pointer to the source memory block.
-# size: Number of bytes to copy.
+# dst:  pointer to the destination memory block
+# src:  pointer to the source memory block
+# size: number of bytes to copy
 pub fun raw_copy(dst: ptr, src: ptr, size: usize) {
     if (dst == nil || src == nil || size == 0) {
         ret;
@@ -36,24 +38,50 @@ pub fun raw_copy(dst: ptr, src: ptr, size: usize) {
     var i: usize = 0;
     for (i < size) {
         dst_bytes[i] = src_bytes[i];
-        i = i + 1;
+        i            = i + 1;
     }
 }
 
-# Zero out a block of raw memory.
+# copy a block of raw memory, correctly handling overlapping regions.
+#
+# copies backward when dst > src to avoid corruption from overlap.
+# for non-overlapping regions, raw_copy is preferred.
 # ---
-# p: Pointer to the start of the memory block.
-# size: Number of bytes to zero out.
+# dst:  pointer to the destination memory block
+# src:  pointer to the source memory block
+# size: number of bytes to copy
+pub fun raw_move(dst: ptr, src: ptr, size: usize) {
+    if (dst == nil || src == nil || size == 0) { ret; }
+    val d: *u8 = dst::*u8;
+    val s: *u8 = src::*u8;
+    if (dst::usize > src::usize) {
+        var i: usize = size;
+        for (i > 0) {
+            i = i - 1;
+            d[i] = s[i];
+        }
+    } or {
+        var i: usize = 0;
+        for (i < size) {
+            d[i] = s[i];
+            i = i + 1;
+        }
+    }
+}
+
+# raw_zero: zero out a block of raw memory.
+# ---
+# p:    pointer to the start of the memory block
+# size: number of bytes to zero out
 pub fun raw_zero(p: ptr, size: usize) {
     raw_fill(p, 0, size);
 }
 
-# Fill a block of memory with a value for type T.
+# fill: fill a block of memory with a value for type T.
 # ---
-# T: The type of elements in the memory block.
-# p: Pointer to the start of the memory block.
-# value: Value to fill the memory with.
-# count: Number of elements to fill.
+# p:     pointer to the start of the memory block
+# value: value to fill with
+# count: number of elements to fill
 pub fun fill[T](p: *T, value: T, count: usize) {
     if (p == nil || count == 0) {
         ret;
@@ -66,12 +94,11 @@ pub fun fill[T](p: *T, value: T, count: usize) {
     }
 }
 
-# Copy a block of memory from a source to a destination.
+# copy: copy a block of memory from a source to a destination.
 # ---
-# T: The type of elements in the memory block.
-# dst: Pointer to the destination memory block.
-# src: Pointer to the source memory block.
-# count: Number of elements to copy.
+# dst:   pointer to the destination memory block
+# src:   pointer to the source memory block
+# count: number of elements to copy
 pub fun copy[T](dst: *T, src: &T, count: usize) {
     if (dst == nil || src == nil || count == 0) {
         ret;
@@ -84,16 +111,13 @@ pub fun copy[T](dst: *T, src: &T, count: usize) {
     }
 }
 
-# Zero out a block of memory for a number of elements of type T.
+# zero: zero out a block of memory for a number of elements of type T.
 # ---
-# T: The type of elements in the memory block.
-# p: Pointer to the start of the memory block.
-# count: Number of elements to zero out.
+# p:     pointer to the start of the memory block
+# count: number of elements to zero out
 pub fun zero[T](p: *T, count: usize) {
     raw_zero(p::ptr, $size_of(T) * count);
 }
-
-# --- tests ---
 
 test "memory: raw_fill with non-zero value" {
     var buf: [8]u8;

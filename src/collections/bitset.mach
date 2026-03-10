@@ -1,0 +1,292 @@
+# dynamic bitset backed by allocator.
+
+use std.types.bool;
+use std.types.size;
+use std.types.result;
+use std.types.string;
+use mem: std.memory;
+
+use allocator: std.allocator;
+use page:      std.allocator.page;
+
+# Bitset: dynamic bitset storing nbits bits in an array of u64 words.
+# ---
+# alloc:  allocator for backing storage
+# words:  pointer to the u64 word array
+# nbits:  number of bits
+# nwords: number of u64 words
+pub rec Bitset {
+    alloc:  *allocator.Allocator;
+    words:  *u64;
+    nbits:  usize;
+    nwords: usize;
+}
+
+# init: create a bitset with all bits cleared.
+# ---
+# alloc: allocator for backing storage
+# nbits: number of bits
+# ret:   a new zeroed Bitset, or an error
+pub fun init(alloc: *allocator.Allocator, nbits: usize) Result[Bitset, str] {
+    var bs: Bitset;
+    bs.alloc  = alloc;
+    bs.nbits  = nbits;
+    bs.nwords = (nbits + 63) / 64;
+
+    if (bs.nwords == 0) {
+        bs.words = nil;
+        ret ok[Bitset, str](bs);
+    }
+
+    val r: Result[*u64, str] = allocator.zallocate[u64](alloc, bs.nwords);
+    if (is_err[*u64, str](r)) {
+        ret err[Bitset, str](unwrap_err[*u64, str](r));
+    }
+    bs.words = unwrap_ok[*u64, str](r);
+    ret ok[Bitset, str](bs);
+}
+
+# dnit: free the backing word array.
+# ---
+# ret: true if memory was freed successfully
+pub fun dnit(bs: *Bitset) bool {
+    if (bs == nil) { ret true; }
+    if (bs.nwords == 0) {
+        bs.words = nil;
+        bs.nbits = 0;
+        ret true;
+    }
+    val ok_free: bool = allocator.deallocate[u64](bs.alloc, bs.words, bs.nwords);
+    bs.words  = nil;
+    bs.nbits  = 0;
+    bs.nwords = 0;
+    ret ok_free;
+}
+
+# set: set the bit at the given index.
+# ---
+# idx: bit index
+pub fun set(bs: *Bitset, idx: usize) {
+    if (idx >= bs.nbits) { ret; }
+    val word: usize = idx / 64;
+    val bit:  usize = idx % 64;
+    bs.words[word] = bs.words[word] | (1::u64 << bit);
+}
+
+# clear: clear the bit at the given index.
+# ---
+# idx: bit index
+pub fun clear(bs: *Bitset, idx: usize) {
+    if (idx >= bs.nbits) { ret; }
+    val word: usize = idx / 64;
+    val bit:  usize = idx % 64;
+    bs.words[word] = bs.words[word] & ~(1::u64 << bit);
+}
+
+# get: test the bit at the given index.
+# ---
+# idx: bit index
+# ret: true if the bit is set, false if cleared or out of range
+pub fun get(bs: &Bitset, idx: usize) bool {
+    if (idx >= bs.nbits) { ret false; }
+    val word: usize = idx / 64;
+    val bit:  usize = idx % 64;
+    ret (bs.words[word] & (1::u64 << bit)) != 0;
+}
+
+# toggle: flip the bit at the given index.
+# ---
+# idx: bit index
+pub fun toggle(bs: *Bitset, idx: usize) {
+    if (idx >= bs.nbits) { ret; }
+    val word: usize = idx / 64;
+    val bit:  usize = idx % 64;
+    bs.words[word] = bs.words[word] ^ (1::u64 << bit);
+}
+
+# count: count the number of set bits.
+# ---
+# ret: population count
+pub fun count(bs: &Bitset) usize {
+    var total: usize = 0;
+    var i: usize = 0;
+    for (i < bs.nwords) {
+        total = total + popcount(bs.words[i]);
+        i = i + 1;
+    }
+    ret total;
+}
+
+# popcount: count set bits in a u64 using the parallel algorithm.
+fun popcount(x: u64) usize {
+    var v: u64 = x;
+    v = v - ((v >> 1) & 0x5555555555555555);
+    v = (v & 0x3333333333333333) + ((v >> 2) & 0x3333333333333333);
+    v = (v + (v >> 4)) & 0x0f0f0f0f0f0f0f0f;
+    v = v * 0x0101010101010101;
+    ret (v >> 56)::usize;
+}
+
+# clear_all: clear all bits to zero.
+pub fun clear_all(bs: *Bitset) {
+    if (bs.nwords == 0) { ret; }
+    mem.zero[u64](bs.words, bs.nwords);
+}
+
+# set_all: set all bits to one, masking the trailing word.
+pub fun set_all(bs: *Bitset) {
+    if (bs.nwords == 0) { ret; }
+    mem.fill[u64](bs.words, 0xffffffffffffffff, bs.nwords);
+    val tail: usize = bs.nbits % 64;
+    if (tail != 0) {
+        bs.words[bs.nwords - 1] = (1::u64 << tail) - 1;
+    }
+}
+
+test "bitset: init and dnit" {
+    var a: allocator.Allocator;
+    page.make(?a);
+    val r: Result[Bitset, str] = init(?a, 128);
+    if (is_err[Bitset, str](r)) { ret 0; }
+    var bs: Bitset = unwrap_ok[Bitset, str](r);
+    if (bs.nbits != 128) { ret 0; }
+    if (bs.nwords != 2) { ret 0; }
+    if (!dnit(?bs)) { ret 0; }
+    ret 1;
+}
+
+test "bitset: set and get" {
+    var a: allocator.Allocator;
+    page.make(?a);
+    val r: Result[Bitset, str] = init(?a, 256);
+    if (is_err[Bitset, str](r)) { ret 0; }
+    var bs: Bitset = unwrap_ok[Bitset, str](r);
+
+    set(?bs, 0);
+    set(?bs, 63);
+    set(?bs, 64);
+    set(?bs, 255);
+
+    if (!get(?bs, 0)) { ret 0; }
+    if (!get(?bs, 63)) { ret 0; }
+    if (!get(?bs, 64)) { ret 0; }
+    if (!get(?bs, 255)) { ret 0; }
+    if (get(?bs, 1)) { ret 0; }
+    if (get(?bs, 100)) { ret 0; }
+
+    dnit(?bs);
+    ret 1;
+}
+
+test "bitset: clear bit" {
+    var a: allocator.Allocator;
+    page.make(?a);
+    val r: Result[Bitset, str] = init(?a, 64);
+    if (is_err[Bitset, str](r)) { ret 0; }
+    var bs: Bitset = unwrap_ok[Bitset, str](r);
+
+    set(?bs, 10);
+    if (!get(?bs, 10)) { ret 0; }
+    clear(?bs, 10);
+    if (get(?bs, 10)) { ret 0; }
+
+    dnit(?bs);
+    ret 1;
+}
+
+test "bitset: toggle" {
+    var a: allocator.Allocator;
+    page.make(?a);
+    val r: Result[Bitset, str] = init(?a, 64);
+    if (is_err[Bitset, str](r)) { ret 0; }
+    var bs: Bitset = unwrap_ok[Bitset, str](r);
+
+    if (get(?bs, 5)) { ret 0; }
+    toggle(?bs, 5);
+    if (!get(?bs, 5)) { ret 0; }
+    toggle(?bs, 5);
+    if (get(?bs, 5)) { ret 0; }
+
+    dnit(?bs);
+    ret 1;
+}
+
+test "bitset: count" {
+    var a: allocator.Allocator;
+    page.make(?a);
+    val r: Result[Bitset, str] = init(?a, 128);
+    if (is_err[Bitset, str](r)) { ret 0; }
+    var bs: Bitset = unwrap_ok[Bitset, str](r);
+
+    if (count(?bs) != 0) { ret 0; }
+
+    set(?bs, 0);
+    set(?bs, 1);
+    set(?bs, 64);
+    set(?bs, 127);
+    if (count(?bs) != 4) { ret 0; }
+
+    dnit(?bs);
+    ret 1;
+}
+
+test "bitset: clear_all" {
+    var a: allocator.Allocator;
+    page.make(?a);
+    val r: Result[Bitset, str] = init(?a, 128);
+    if (is_err[Bitset, str](r)) { ret 0; }
+    var bs: Bitset = unwrap_ok[Bitset, str](r);
+
+    set(?bs, 0);
+    set(?bs, 50);
+    set(?bs, 127);
+    clear_all(?bs);
+    if (count(?bs) != 0) { ret 0; }
+
+    dnit(?bs);
+    ret 1;
+}
+
+test "bitset: set_all" {
+    var a: allocator.Allocator;
+    page.make(?a);
+    val r: Result[Bitset, str] = init(?a, 100);
+    if (is_err[Bitset, str](r)) { ret 0; }
+    var bs: Bitset = unwrap_ok[Bitset, str](r);
+
+    set_all(?bs);
+    if (count(?bs) != 100) { ret 0; }
+    if (!get(?bs, 0)) { ret 0; }
+    if (!get(?bs, 99)) { ret 0; }
+
+    dnit(?bs);
+    ret 1;
+}
+
+test "bitset: out of range is safe" {
+    var a: allocator.Allocator;
+    page.make(?a);
+    val r: Result[Bitset, str] = init(?a, 64);
+    if (is_err[Bitset, str](r)) { ret 0; }
+    var bs: Bitset = unwrap_ok[Bitset, str](r);
+
+    set(?bs, 100);
+    if (get(?bs, 100)) { ret 0; }
+    clear(?bs, 200);
+    toggle(?bs, 300);
+
+    dnit(?bs);
+    ret 1;
+}
+
+test "bitset: zero bits" {
+    var a: allocator.Allocator;
+    page.make(?a);
+    val r: Result[Bitset, str] = init(?a, 0);
+    if (is_err[Bitset, str](r)) { ret 0; }
+    var bs: Bitset = unwrap_ok[Bitset, str](r);
+    if (bs.nwords != 0) { ret 0; }
+    if (count(?bs) != 0) { ret 0; }
+    dnit(?bs);
+    ret 1;
+}

@@ -1,0 +1,863 @@
+# JSON parser and emitter (integer numbers only).
+#
+# parses JSON text into a tree of Value nodes. strings are zero-copy
+# pointers into the original input buffer (escape sequences are not
+# unescaped). the caller must keep the input alive while values are in use.
+
+use std.types.bool;
+use std.types.size;
+use std.types.result;
+use std.types.string;
+use std.memory;
+use allo: std.allocator;
+
+pub def Kind: u8;
+pub val NULL:   Kind = 0;
+pub val BOOL:   Kind = 1;
+pub val NUMBER: Kind = 2;
+pub val STRING: Kind = 3;
+pub val ARRAY:  Kind = 4;
+pub val OBJECT: Kind = 5;
+
+val VALUE_SIZE: usize = $size_of(Value);
+val STR_SIZE:   usize = $size_of(str);
+
+# a parsed JSON value.
+# ---
+# kind:     type discriminator (NULL, BOOL, NUMBER, STRING, ARRAY, OBJECT)
+# bool_val: boolean value (1 = true, 0 = false) when kind == BOOL
+# num_val:  integer value when kind == NUMBER
+# str_val:  pointer into original input when kind == STRING
+# str_len:  byte length of string (not null-terminated)
+# children: heap-allocated array of child Values (ARRAY or OBJECT)
+# keys:     heap-allocated array of key strings (OBJECT only, parallel with children)
+# count:    number of children/keys
+# cap:      allocated capacity of children/keys arrays
+pub rec Value {
+    kind:     Kind;
+    bool_val: u8;
+    num_val:  i64;
+    str_val:  str;
+    str_len:  usize;
+    children: *Value;
+    keys:     *str;
+    count:    usize;
+    cap:      usize;
+}
+
+rec Parser {
+    src:   &u8;
+    len:   usize;
+    pos:   usize;
+    alloc: *allo.Allocator;
+}
+
+rec Emitter {
+    buf: *u8;
+    len: usize;
+    pos: usize;
+}
+
+# parse: parse JSON text into a Value tree.
+# ---
+# src:     pointer to JSON source bytes
+# src_len: length of source in bytes
+# alloc:   allocator for array/object storage
+# ret:     root Value on success, or error message
+pub fun parse(src: &u8, src_len: usize, alloc: *allo.Allocator) Result[Value, str] {
+    if (src == nil) {
+        ret err[Value, str]("source is nil");
+    }
+    if (alloc == nil) {
+        ret err[Value, str]("allocator is nil");
+    }
+
+    var p: Parser;
+    p.src = src;
+    p.len = src_len;
+    p.pos = 0;
+    p.alloc = alloc;
+
+    skip_ws(?p);
+    val r: Result[Value, str] = parse_value(?p);
+    if (is_err[Value, str](r)) {
+        ret r;
+    }
+
+    skip_ws(?p);
+    if (p.pos < p.len) {
+        ret err[Value, str]("trailing content after value");
+    }
+
+    ret r;
+}
+
+# value_is_null: check if a value is null.
+pub fun value_is_null(v: &Value) bool {
+    ret v.kind == NULL;
+}
+
+# value_is_bool: check if a value is a boolean.
+pub fun value_is_bool(v: &Value) bool {
+    ret v.kind == BOOL;
+}
+
+# value_is_number: check if a value is a number.
+pub fun value_is_number(v: &Value) bool {
+    ret v.kind == NUMBER;
+}
+
+# value_is_string: check if a value is a string.
+pub fun value_is_string(v: &Value) bool {
+    ret v.kind == STRING;
+}
+
+# value_is_array: check if a value is an array.
+pub fun value_is_array(v: &Value) bool {
+    ret v.kind == ARRAY;
+}
+
+# value_is_object: check if a value is an object.
+pub fun value_is_object(v: &Value) bool {
+    ret v.kind == OBJECT;
+}
+
+# value_bool: get the boolean value.
+# ---
+# ret: true if bool_val is nonzero
+pub fun value_bool(v: &Value) bool {
+    ret v.bool_val != 0;
+}
+
+# value_number: get the integer value.
+pub fun value_number(v: &Value) i64 {
+    ret v.num_val;
+}
+
+# value_string: get the string pointer and length.
+# ---
+# len: receives the byte length of the string
+# ret: pointer to the first byte of the string content
+pub fun value_string(v: &Value, len: *usize) &u8 {
+    @len = v.str_len;
+    ret v.str_val::&u8;
+}
+
+# value_count: get the number of children (array elements or object entries).
+pub fun value_count(v: &Value) usize {
+    ret v.count;
+}
+
+# value_get: get an array element or object value by index.
+# ---
+# index: zero-based index
+# ret:   pointer to the child Value, or nil if out of bounds
+pub fun value_get(v: &Value, index: usize) *Value {
+    if (index >= v.count) { ret nil; }
+    ret ?v.children[index];
+}
+
+# value_key: get an object key by index.
+# ---
+# index: zero-based index
+# ret:   key string (null-terminated), or nil if out of bounds
+pub fun value_key(v: &Value, index: usize) str {
+    if (v.kind != OBJECT || index >= v.count) { ret nil; }
+    ret v.keys[index];
+}
+
+# value_find: find an object value by key name (linear search).
+# ---
+# key: null-terminated key to search for
+# ret: pointer to the Value, or nil if not found
+pub fun value_find(v: &Value, key: str) *Value {
+    if (v.kind != OBJECT) { ret nil; }
+    var i: usize = 0;
+    for (i < v.count) {
+        if (str_equals(v.keys[i], key)) {
+            ret ?v.children[i];
+        }
+        i = i + 1;
+    }
+    ret nil;
+}
+
+# emit: emit a Value as JSON text into a buffer.
+# ---
+# v:   value to emit
+# buf: destination buffer
+# len: size of destination buffer in bytes
+# ret: number of bytes written (may exceed len if buffer too small)
+pub fun emit(v: &Value, buf: *u8, len: usize) usize {
+    var e: Emitter;
+    e.buf = buf;
+    e.len = len;
+    e.pos = 0;
+    emit_value(?e, v);
+    ret e.pos;
+}
+
+fun make_null() Value {
+    var v: Value;
+    v.kind = NULL;
+    v.bool_val = 0;
+    v.num_val = 0;
+    v.str_val = nil;
+    v.str_len = 0;
+    v.children = nil;
+    v.keys = nil;
+    v.count = 0;
+    v.cap = 0;
+    ret v;
+}
+
+fun make_bool(b: u8) Value {
+    var v: Value = make_null();
+    v.kind = BOOL;
+    v.bool_val = b;
+    ret v;
+}
+
+fun make_number(n: i64) Value {
+    var v: Value = make_null();
+    v.kind = NUMBER;
+    v.num_val = n;
+    ret v;
+}
+
+fun make_string(s: str, slen: usize) Value {
+    var v: Value = make_null();
+    v.kind = STRING;
+    v.str_val = s;
+    v.str_len = slen;
+    ret v;
+}
+
+fun make_array() Value {
+    var v: Value = make_null();
+    v.kind = ARRAY;
+    ret v;
+}
+
+fun make_object() Value {
+    var v: Value = make_null();
+    v.kind = OBJECT;
+    ret v;
+}
+
+fun skip_ws(p: *Parser) {
+    for (p.pos < p.len) {
+        val c: u8 = p.src[p.pos];
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            p.pos = p.pos + 1;
+        } or {
+            ret;
+        }
+    }
+}
+
+fun peek(p: *Parser) u8 {
+    if (p.pos >= p.len) { ret 0; }
+    ret p.src[p.pos];
+}
+
+fun advance(p: *Parser) u8 {
+    if (p.pos >= p.len) { ret 0; }
+    val c: u8 = p.src[p.pos];
+    p.pos = p.pos + 1;
+    ret c;
+}
+
+fun expect(p: *Parser, c: u8) Result[bool, str] {
+    if (p.pos >= p.len || p.src[p.pos] != c) {
+        ret err[bool, str]("unexpected character");
+    }
+    p.pos = p.pos + 1;
+    ret ok[bool, str](true);
+}
+
+fun parse_value(p: *Parser) Result[Value, str] {
+    skip_ws(p);
+    if (p.pos >= p.len) {
+        ret err[Value, str]("unexpected end of input");
+    }
+
+    val c: u8 = p.src[p.pos];
+
+    if (c == 'n') { ret parse_null(p); }
+    if (c == 't' || c == 'f') { ret parse_bool(p); }
+    if (c == '"') { ret parse_string(p); }
+    if (c == '[') { ret parse_array(p); }
+    if (c == '{') { ret parse_object(p); }
+    if (c == '-' || (c >= '0' && c <= '9')) { ret parse_number(p); }
+
+    ret err[Value, str]("unexpected character");
+}
+
+fun parse_null(p: *Parser) Result[Value, str] {
+    if (p.pos + 4 > p.len) {
+        ret err[Value, str]("unexpected end of input in null");
+    }
+    if (p.src[p.pos] != 'n' || p.src[p.pos + 1] != 'u' || p.src[p.pos + 2] != 'l' || p.src[p.pos + 3] != 'l') {
+        ret err[Value, str]("invalid null literal");
+    }
+    p.pos = p.pos + 4;
+    ret ok[Value, str](make_null());
+}
+
+fun parse_bool(p: *Parser) Result[Value, str] {
+    if (p.src[p.pos] == 't') {
+        if (p.pos + 4 > p.len) {
+            ret err[Value, str]("unexpected end of input in true");
+        }
+        if (p.src[p.pos + 1] != 'r' || p.src[p.pos + 2] != 'u' || p.src[p.pos + 3] != 'e') {
+            ret err[Value, str]("invalid true literal");
+        }
+        p.pos = p.pos + 4;
+        ret ok[Value, str](make_bool(1));
+    }
+
+    if (p.pos + 5 > p.len) {
+        ret err[Value, str]("unexpected end of input in false");
+    }
+    if (p.src[p.pos + 1] != 'a' || p.src[p.pos + 2] != 'l' || p.src[p.pos + 3] != 's' || p.src[p.pos + 4] != 'e') {
+        ret err[Value, str]("invalid false literal");
+    }
+    p.pos = p.pos + 5;
+    ret ok[Value, str](make_bool(0));
+}
+
+fun parse_number(p: *Parser) Result[Value, str] {
+    var neg: bool = false;
+    if (p.src[p.pos] == '-') {
+        neg = true;
+        p.pos = p.pos + 1;
+        if (p.pos >= p.len || p.src[p.pos] < '0' || p.src[p.pos] > '9') {
+            ret err[Value, str]("invalid number: no digits after minus");
+        }
+    }
+
+    var n: i64 = 0;
+    var has_digit: bool = false;
+    for (p.pos < p.len && p.src[p.pos] >= '0' && p.src[p.pos] <= '9') {
+        n = n * 10 + (p.src[p.pos] - '0')::i64;
+        has_digit = true;
+        p.pos = p.pos + 1;
+    }
+
+    if (!has_digit) {
+        ret err[Value, str]("invalid number: no digits");
+    }
+
+    if (neg) { n = 0 - n; }
+
+    ret ok[Value, str](make_number(n));
+}
+
+fun parse_string(p: *Parser) Result[Value, str] {
+    p.pos = p.pos + 1;
+    val start: usize = p.pos;
+
+    for (p.pos < p.len) {
+        val c: u8 = p.src[p.pos];
+        if (c == '\\') {
+            p.pos = p.pos + 2;
+            cnt;
+        }
+        if (c == '"') {
+            val slen: usize = p.pos - start;
+            val sptr: str = (p.src::usize + start)::str;
+            p.pos = p.pos + 1;
+            ret ok[Value, str](make_string(sptr, slen));
+        }
+        p.pos = p.pos + 1;
+    }
+
+    ret err[Value, str]("unterminated string");
+}
+
+fun children_grow(p: *Parser, v: *Value) Result[bool, str] {
+    var new_cap: usize = v.cap * 2;
+    if (v.cap == 0) { new_cap = 4; }
+
+    val cr: Result[*u8, str] = allo.allocate[u8](p.alloc, new_cap * VALUE_SIZE);
+    if (is_err[*u8, str](cr)) { ret err[bool, str](unwrap_err[*u8, str](cr)); }
+    val new_children: *Value = unwrap_ok[*u8, str](cr)::*Value;
+
+    if (v.count > 0) {
+        raw_copy(new_children::ptr, v.children::ptr, v.count * VALUE_SIZE);
+    }
+
+    v.children = new_children;
+    v.cap = new_cap;
+    ret ok[bool, str](true);
+}
+
+fun keys_grow(p: *Parser, v: *Value, new_cap: usize) Result[bool, str] {
+    val kr: Result[*u8, str] = allo.allocate[u8](p.alloc, new_cap * STR_SIZE);
+    if (is_err[*u8, str](kr)) { ret err[bool, str](unwrap_err[*u8, str](kr)); }
+    val new_keys: *str = unwrap_ok[*u8, str](kr)::*str;
+
+    if (v.count > 0) {
+        raw_copy(new_keys::ptr, v.keys::ptr, v.count * STR_SIZE);
+    }
+
+    v.keys = new_keys;
+    ret ok[bool, str](true);
+}
+
+fun parse_array(p: *Parser) Result[Value, str] {
+    p.pos = p.pos + 1;
+    var v: Value = make_array();
+
+    skip_ws(p);
+    if (p.pos < p.len && p.src[p.pos] == ']') {
+        p.pos = p.pos + 1;
+        ret ok[Value, str](v);
+    }
+
+    for (p.pos < p.len) {
+        val elem: Result[Value, str] = parse_value(p);
+        if (is_err[Value, str](elem)) { ret elem; }
+
+        if (v.count >= v.cap) {
+            val gr: Result[bool, str] = children_grow(p, ?v);
+            if (is_err[bool, str](gr)) { ret err[Value, str](unwrap_err[bool, str](gr)); }
+        }
+        v.children[v.count] = unwrap_ok[Value, str](elem);
+        v.count = v.count + 1;
+
+        skip_ws(p);
+        if (p.pos >= p.len) {
+            ret err[Value, str]("unterminated array");
+        }
+        if (p.src[p.pos] == ']') {
+            p.pos = p.pos + 1;
+            ret ok[Value, str](v);
+        }
+        if (p.src[p.pos] != ',') {
+            ret err[Value, str]("expected ',' or ']' in array");
+        }
+        p.pos = p.pos + 1;
+    }
+
+    ret err[Value, str]("unterminated array");
+}
+
+fun parse_object(p: *Parser) Result[Value, str] {
+    p.pos = p.pos + 1;
+    var v: Value = make_object();
+
+    skip_ws(p);
+    if (p.pos < p.len && p.src[p.pos] == '}') {
+        p.pos = p.pos + 1;
+        ret ok[Value, str](v);
+    }
+
+    for (p.pos < p.len) {
+        skip_ws(p);
+        if (p.pos >= p.len || p.src[p.pos] != '"') {
+            ret err[Value, str]("expected string key in object");
+        }
+
+        val key_res: Result[Value, str] = parse_string(p);
+        if (is_err[Value, str](key_res)) { ret key_res; }
+        val key_val: Value = unwrap_ok[Value, str](key_res);
+
+        skip_ws(p);
+        val colon: Result[bool, str] = expect(p, ':');
+        if (is_err[bool, str](colon)) {
+            ret err[Value, str]("expected ':' after object key");
+        }
+
+        val val_res: Result[Value, str] = parse_value(p);
+        if (is_err[Value, str](val_res)) { ret val_res; }
+
+        if (v.count >= v.cap) {
+            val gr: Result[bool, str] = children_grow(p, ?v);
+            if (is_err[bool, str](gr)) { ret err[Value, str](unwrap_err[bool, str](gr)); }
+
+            val kr: Result[bool, str] = keys_grow(p, ?v, v.cap);
+            if (is_err[bool, str](kr)) { ret err[Value, str](unwrap_err[bool, str](kr)); }
+        }
+
+        v.keys[v.count] = key_val.str_val;
+        v.children[v.count] = unwrap_ok[Value, str](val_res);
+        v.count = v.count + 1;
+
+        skip_ws(p);
+        if (p.pos >= p.len) {
+            ret err[Value, str]("unterminated object");
+        }
+        if (p.src[p.pos] == '}') {
+            p.pos = p.pos + 1;
+            ret ok[Value, str](v);
+        }
+        if (p.src[p.pos] != ',') {
+            ret err[Value, str]("expected ',' or '}' in object");
+        }
+        p.pos = p.pos + 1;
+    }
+
+    ret err[Value, str]("unterminated object");
+}
+
+fun emit_byte(e: *Emitter, c: u8) {
+    if (e.pos < e.len) {
+        e.buf[e.pos] = c;
+    }
+    e.pos = e.pos + 1;
+}
+
+fun emit_bytes(e: *Emitter, s: &u8, slen: usize) {
+    var i: usize = 0;
+    for (i < slen) {
+        emit_byte(e, s[i]);
+        i = i + 1;
+    }
+}
+
+fun emit_str(e: *Emitter, s: str) {
+    var i: usize = 0;
+    for (s[i] != 0) {
+        emit_byte(e, s[i]);
+        i = i + 1;
+    }
+}
+
+fun emit_i64(e: *Emitter, n: i64) {
+    if (n < 0) {
+        emit_byte(e, '-');
+        emit_u64(e, (0 - n)::u64);
+        ret;
+    }
+    emit_u64(e, n::u64);
+}
+
+fun emit_u64(e: *Emitter, n: u64) {
+    if (n == 0) {
+        emit_byte(e, '0');
+        ret;
+    }
+
+    var buf: [20]u8;
+    var len: usize = 0;
+    var tmp: u64 = n;
+    for (tmp > 0) {
+        buf[len] = (tmp % 10)::u8 + '0';
+        tmp = tmp / 10;
+        len = len + 1;
+    }
+
+    var i: usize = len;
+    for (i > 0) {
+        i = i - 1;
+        emit_byte(e, buf[i]);
+    }
+}
+
+fun emit_value(e: *Emitter, v: &Value) {
+    if (v.kind == NULL) {
+        emit_str(e, "null");
+        ret;
+    }
+
+    if (v.kind == BOOL) {
+        if (v.bool_val != 0) {
+            emit_str(e, "true");
+        } or {
+            emit_str(e, "false");
+        }
+        ret;
+    }
+
+    if (v.kind == NUMBER) {
+        emit_i64(e, v.num_val);
+        ret;
+    }
+
+    if (v.kind == STRING) {
+        emit_byte(e, '"');
+        emit_bytes(e, v.str_val::&u8, v.str_len);
+        emit_byte(e, '"');
+        ret;
+    }
+
+    if (v.kind == ARRAY) {
+        emit_byte(e, '[');
+        var i: usize = 0;
+        for (i < v.count) {
+            if (i > 0) { emit_byte(e, ','); }
+            emit_value(e, ?v.children[i]);
+            i = i + 1;
+        }
+        emit_byte(e, ']');
+        ret;
+    }
+
+    if (v.kind == OBJECT) {
+        emit_byte(e, '{');
+        var i: usize = 0;
+        for (i < v.count) {
+            if (i > 0) { emit_byte(e, ','); }
+            emit_byte(e, '"');
+            emit_str(e, v.keys[i]);
+            emit_byte(e, '"');
+            emit_byte(e, ':');
+            emit_value(e, ?v.children[i]);
+            i = i + 1;
+        }
+        emit_byte(e, '}');
+        ret;
+    }
+}
+
+use page: std.allocator.page;
+
+test "json: parse null" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "null";
+    val r: Result[Value, str] = parse(src::&u8, 4, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != NULL) { ret 0; }
+    ret 1;
+}
+
+test "json: parse true" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "true";
+    val r: Result[Value, str] = parse(src::&u8, 4, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != BOOL) { ret 0; }
+    if (v.bool_val != 1) { ret 0; }
+    ret 1;
+}
+
+test "json: parse false" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "false";
+    val r: Result[Value, str] = parse(src::&u8, 5, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != BOOL) { ret 0; }
+    if (v.bool_val != 0) { ret 0; }
+    ret 1;
+}
+
+test "json: parse positive number" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "42";
+    val r: Result[Value, str] = parse(src::&u8, 2, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != NUMBER) { ret 0; }
+    if (v.num_val != 42) { ret 0; }
+    ret 1;
+}
+
+test "json: parse negative number" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "-7";
+    val r: Result[Value, str] = parse(src::&u8, 2, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != NUMBER) { ret 0; }
+    if (v.num_val != -7) { ret 0; }
+    ret 1;
+}
+
+test "json: parse zero" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "0";
+    val r: Result[Value, str] = parse(src::&u8, 1, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != NUMBER) { ret 0; }
+    if (v.num_val != 0) { ret 0; }
+    ret 1;
+}
+
+test "json: parse string" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "\"hello\"";
+    val r: Result[Value, str] = parse(src::&u8, 7, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != STRING) { ret 0; }
+    if (v.str_len != 5) { ret 0; }
+    val sp: &u8 = v.str_val::&u8;
+    if (sp[0] != 'h') { ret 0; }
+    if (sp[4] != 'o') { ret 0; }
+    ret 1;
+}
+
+test "json: parse empty array" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "[]";
+    val r: Result[Value, str] = parse(src::&u8, 2, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != ARRAY) { ret 0; }
+    if (v.count != 0) { ret 0; }
+    ret 1;
+}
+
+test "json: parse array with elements" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "[1,2,3]";
+    val r: Result[Value, str] = parse(src::&u8, 7, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != ARRAY) { ret 0; }
+    if (v.count != 3) { ret 0; }
+    if (v.children[0].num_val != 1) { ret 0; }
+    if (v.children[1].num_val != 2) { ret 0; }
+    if (v.children[2].num_val != 3) { ret 0; }
+    ret 1;
+}
+
+test "json: parse empty object" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "{}";
+    val r: Result[Value, str] = parse(src::&u8, 2, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != OBJECT) { ret 0; }
+    if (v.count != 0) { ret 0; }
+    ret 1;
+}
+
+test "json: parse object with entry" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "{\"a\":1}";
+    val r: Result[Value, str] = parse(src::&u8, 7, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != OBJECT) { ret 0; }
+    if (v.count != 1) { ret 0; }
+    if (v.children[0].num_val != 1) { ret 0; }
+    ret 1;
+}
+
+test "json: parse nested object with array" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "{\"x\":[1,2]}";
+    val r: Result[Value, str] = parse(src::&u8, 11, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != OBJECT) { ret 0; }
+    if (v.count != 1) { ret 0; }
+    val arr: *Value = ?v.children[0];
+    if (arr.kind != ARRAY) { ret 0; }
+    if (arr.count != 2) { ret 0; }
+    if (arr.children[0].num_val != 1) { ret 0; }
+    if (arr.children[1].num_val != 2) { ret 0; }
+    ret 1;
+}
+
+test "json: value_find on object" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "{\"a\":1,\"b\":2}";
+    val r: Result[Value, str] = parse(src::&u8, 13, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    val found: *Value = value_find(?v, "b");
+    if (found == nil) { ret 0; }
+    if (found.num_val != 2) { ret 0; }
+    val missing: *Value = value_find(?v, "z");
+    if (missing != nil) { ret 0; }
+    ret 1;
+}
+
+test "json: emit null" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "null";
+    val r: Result[Value, str] = parse(src::&u8, 4, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    var buf: [16]u8;
+    val n: usize = emit(?v, ?buf[0], 16);
+    if (n != 4) { ret 0; }
+    if (buf[0] != 'n') { ret 0; }
+    if (buf[1] != 'u') { ret 0; }
+    if (buf[2] != 'l') { ret 0; }
+    if (buf[3] != 'l') { ret 0; }
+    ret 1;
+}
+
+test "json: emit number" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "123";
+    val r: Result[Value, str] = parse(src::&u8, 3, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    var buf: [16]u8;
+    val n: usize = emit(?v, ?buf[0], 16);
+    if (n != 3) { ret 0; }
+    if (buf[0] != '1') { ret 0; }
+    if (buf[1] != '2') { ret 0; }
+    if (buf[2] != '3') { ret 0; }
+    ret 1;
+}
+
+test "json: emit true" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "true";
+    val r: Result[Value, str] = parse(src::&u8, 4, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    var buf: [16]u8;
+    val n: usize = emit(?v, ?buf[0], 16);
+    if (n != 4) { ret 0; }
+    if (buf[0] != 't') { ret 0; }
+    if (buf[3] != 'e') { ret 0; }
+    ret 1;
+}
+
+test "json: roundtrip array" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "[1,2,3]";
+    val r: Result[Value, str] = parse(src::&u8, 7, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    var buf: [32]u8;
+    val n: usize = emit(?v, ?buf[0], 32);
+    if (n != 7) { ret 0; }
+    if (buf[0] != '[') { ret 0; }
+    if (buf[1] != '1') { ret 0; }
+    if (buf[2] != ',') { ret 0; }
+    if (buf[3] != '2') { ret 0; }
+    if (buf[6] != ']') { ret 0; }
+    ret 1;
+}
+
+test "json: whitespace tolerance" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "  { \"a\" : 1 } ";
+    val r: Result[Value, str] = parse(src::&u8, 14, ?a);
+    if (is_err[Value, str](r)) { ret 0; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != OBJECT) { ret 0; }
+    if (v.count != 1) { ret 0; }
+    ret 1;
+}

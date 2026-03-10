@@ -1,0 +1,51 @@
+# std.runtime.darwin.aarch64: aarch64 darwin entrypoint
+#
+# provides `_start` (via `start`), the Mach-O entry point for aarch64 darwin executables.
+#
+# on entry, the kernel places the following on the stack:
+#   [sp]     = argc
+#   [sp+8]   = argv[0]
+#   [sp+16]  = argv[1]
+#   ...
+#
+# this entrypoint:
+#   1. extracts argc and argv from the initial stack
+#   2. aligns the stack to 16 bytes (required by AAPCS64 before BL)
+#   3. calls user-supplied `main(argc, argv)`
+#   4. exits via sys_exit with the return code from main
+#
+# user code must define:
+#   $main.symbol = "main";
+#   fun main(argc: i64, argv: &&u8) i64 { ... }
+
+$if ($mach.build.target.os.id != $mach.os.darwin.id) {
+    $error("std.runtime.darwin.aarch64: requires darwin target");
+}
+
+$if ($mach.build.target.arch.id != $mach.arch.aarch64.id) {
+    $error("std.runtime.darwin.aarch64: requires aarch64 target");
+}
+
+var envp: usize = 0;
+
+$_start.symbol = "start";
+pub fun _start() {
+    asm {
+        aarch64 {
+            ldr x0, [sp]      # argc -> x0 (1st argument)
+            add x1, sp, #8    # argv -> x1 (2nd argument)
+
+            # envp = argv + (argc + 1) * 8
+            add x2, x0, #1
+            add x2, x1, x2, lsl #3
+            adrp x3, envp
+            str x2, [x3, :lo12:envp]
+
+            and sp, sp, #-16  # align stack to 16 bytes
+            bl main
+
+            mov x16, #1       # SYS_exit
+            svc #0x80
+        }
+    }
+}

@@ -1,89 +1,104 @@
+# formatted output to stdout/stderr.
+#
+# convenience wrappers around std.format backed by filesystem stdout/stderr.
+
 use std.types.size;
 use std.types.result;
 use std.types.string;
 
-use f: std.fmt;
-use stream: std.stream;
-use stdio: std.system.stdio;
+use f:      std.format;
+use writer: std.io.writer;
+use fs:     std.filesystem;
 
-# std.print: temporary glue for writing common formatted values to stdio.
-# ---
-# Convenience wrappers around std.fmt for writing formatted output to stdio.
+fun stdout_writer(w: *writer.Writer) {
+    fs.get_writer(?fs.stdout, w);
+}
 
-# print: write `s` to stdout.
+fun stderr_writer(w: *writer.Writer) {
+    fs.get_writer(?fs.stderr, w);
+}
+
+# write s to stdout.
 # ---
-# s: string to write (nil treated as empty).
-# ret: Ok(number of bytes written) on success or Err(str) on error.
+# s:   string to write
+# ret: bytes written, or an error
 pub fun print(s: str) Result[usize, str] {
-    var w: stream.Writer = stdio.stdout();
+    var w: writer.Writer;
+    stdout_writer(?w);
     ret f.write_str(?w, s);
 }
 
-# println: write `s` followed by a newline to stdout.
+# write s followed by a newline to stdout.
 # ---
-# s: string to write (nil treated as empty).
-# ret: Ok(total number of bytes written) on success or Err(str) on error.
+# s:   string to write
+# ret: bytes written, or an error
 pub fun println(s: str) Result[usize, str] {
-    var w: stream.Writer = stdio.stdout();
+    var w: writer.Writer;
+    stdout_writer(?w);
 
     val r1: Result[usize, str] = f.write_str(?w, s);
-    if (result_is_err[usize, str](r1)) { ret r1; }
+    if (is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = f.write_newline(?w);
-    if (result_is_err[usize, str](r2)) { ret r2; }
+    if (is_err[usize, str](r2)) { ret r2; }
 
-    ret ok[usize, str](result_unwrap_ok[usize, str](r1) + result_unwrap_ok[usize, str](r2));
+    ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
 }
 
-# eprint: write `s` to stderr.
+# write s to stderr.
 # ---
-# s: string to write (nil treated as empty).
-# ret: Ok(number of bytes written) on success or Err(str) on error.
+# s:   string to write
+# ret: bytes written, or an error
 pub fun eprint(s: str) Result[usize, str] {
-    var w: stream.Writer = stdio.stderr();
+    var w: writer.Writer;
+    stderr_writer(?w);
     ret f.write_str(?w, s);
 }
 
-# eprintln: write `s` followed by a newline to stderr.
+# write s followed by a newline to stderr.
 # ---
-# s: string to write (nil treated as empty).
-# ret: Ok(total number of bytes written) on success or Err(str) on error.
+# s:   string to write
+# ret: bytes written, or an error
 pub fun eprintln(s: str) Result[usize, str] {
-    var w: stream.Writer = stdio.stderr();
+    var w: writer.Writer;
+    stderr_writer(?w);
 
     val r1: Result[usize, str] = f.write_str(?w, s);
-    if (result_is_err[usize, str](r1)) { ret r1; }
+    if (is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = f.write_newline(?w);
-    if (result_is_err[usize, str](r2)) { ret r2; }
+    if (is_err[usize, str](r2)) { ret r2; }
 
-    ret ok[usize, str](result_unwrap_ok[usize, str](r1) + result_unwrap_ok[usize, str](r2));
+    ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
 }
 
-# u64: write unsigned 64-bit integer n to stdout.
+# write unsigned 64-bit integer to stdout.
 # ---
-# n: unsigned integer to write.
-# ret: Ok(number of bytes written) on success or Err(str) on error.
+# n:   value to write
+# ret: bytes written, or an error
 pub fun u64(n: u64) Result[usize, str] {
-    var w: stream.Writer = stdio.stdout();
+    var w: writer.Writer;
+    stdout_writer(?w);
     ret f.write_u64(?w, n);
 }
 
-# eu64: write unsigned 64-bit integer n to stderr.
+# write unsigned 64-bit integer to stderr.
 # ---
-# n: unsigned integer to write.
-# ret: Ok(number of bytes written) on success or Err(str) on error.
+# n:   value to write
+# ret: bytes written, or an error
 pub fun eu64(n: u64) Result[usize, str] {
-    var w: stream.Writer = stdio.stderr();
+    var w: writer.Writer;
+    stderr_writer(?w);
     ret f.write_u64(?w, n);
 }
 
-# printf: formatted output to stdout using `std.fmt`.
+# formatted output to stdout.
 # ---
-# format: format string (followed by varargs matching the format directives).
-# ret: Ok(number of bytes written) on success or Err(str) on error.
+# format: format string (see std.format.vformat for specifiers)
+# ret:    bytes written, or an error
 pub fun printf(format: str, ...) Result[usize, str] {
-    var w: stream.Writer = stdio.stdout();
+    var w: writer.Writer;
+    stdout_writer(?w);
 
     var ap: va_list;
     va_start(?ap);
@@ -93,12 +108,13 @@ pub fun printf(format: str, ...) Result[usize, str] {
     ret r;
 }
 
-# eprintf: formatted output to stderr.
+# formatted output to stderr.
 # ---
-# format: format string.
-# ret: Ok(number of bytes written) on success or Err(str) on error.
+# format: format string (see std.format.vformat for specifiers)
+# ret:    bytes written, or an error
 pub fun eprintf(format: str, ...) Result[usize, str] {
-    var w: stream.Writer = stdio.stderr();
+    var w: writer.Writer;
+    stderr_writer(?w);
 
     var ap: va_list;
     va_start(?ap);
@@ -108,40 +124,42 @@ pub fun eprintf(format: str, ...) Result[usize, str] {
     ret r;
 }
 
-# printlnf: formatted output to stdout followed by a newline.
+# formatted output to stdout followed by a newline.
 # ---
-# format: format string.
-# ret: Ok(number of bytes written) on success or Err(str) on error.
+# format: format string (see std.format.vformat for specifiers)
+# ret:    bytes written, or an error
 pub fun printlnf(format: str, ...) Result[usize, str] {
-    var w: stream.Writer = stdio.stdout();
+    var w: writer.Writer;
+    stdout_writer(?w);
 
     var ap: va_list;
     va_start(?ap);
     val r1: Result[usize, str] = f.vformat(?w, format, ?ap);
     va_end(?ap);
-    if (result_is_err[usize, str](r1)) { ret r1; }
+    if (is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = f.write_newline(?w);
-    if (result_is_err[usize, str](r2)) { ret r2; }
+    if (is_err[usize, str](r2)) { ret r2; }
 
-    ret ok[usize, str](result_unwrap_ok[usize, str](r1) + result_unwrap_ok[usize, str](r2));
+    ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
 }
 
-# eprintlnf: formatted output to stderr followed by a newline.
+# formatted output to stderr followed by a newline.
 # ---
-# format: format string.
-# ret: Ok(number of bytes written) on success or Err(str) on error.
+# format: format string (see std.format.vformat for specifiers)
+# ret:    bytes written, or an error
 pub fun eprintlnf(format: str, ...) Result[usize, str] {
-    var w: stream.Writer = stdio.stderr();
+    var w: writer.Writer;
+    stderr_writer(?w);
 
     var ap: va_list;
     va_start(?ap);
     val r1: Result[usize, str] = f.vformat(?w, format, ?ap);
     va_end(?ap);
-    if (result_is_err[usize, str](r1)) { ret r1; }
+    if (is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = f.write_newline(?w);
-    if (result_is_err[usize, str](r2)) { ret r2; }
+    if (is_err[usize, str](r2)) { ret r2; }
 
-    ret ok[usize, str](result_unwrap_ok[usize, str](r1) + result_unwrap_ok[usize, str](r2));
+    ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
 }

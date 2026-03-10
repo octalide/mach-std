@@ -1,47 +1,73 @@
+# mutable slice over a contiguous sequence of elements
+
 use std.types.bool;
 use std.types.size;
+use std.types.result;
+use std.types.string;
 use std.collections.view;
 
-# Slice[T] represents a mutable slice of elements of type T.
+# Slice[T]: mutable view into a contiguous sequence of T
+# ---
+# data: pointer to the first element
+# size: number of elements in the slice
 pub rec Slice[T] {
     data: *T;
     size: usize;
 }
 
-# Creates a Slice[T] from a pointer and size.
+# make: create a Slice[T] from a pointer and element count.
 # ---
-# data: Pointer to the data.
-# size: Number of elements in the slice.
-# ret:  A Slice[T] representing the data.
-pub fun slice_make[T](data: *T, size: usize) Slice[T] {
+# data: pointer to the data
+# size: number of elements
+# ret:  a Slice[T] over the data
+pub fun make[T](data: *T, size: usize) Slice[T] {
     var s: Slice[T];
     s.data = data;
     s.size = size;
     ret s;
 }
 
-# Checks if the Slice[T] is empty.
-# ---
-# ret: true if the slice is empty, false otherwise.
-pub fun slice_is_empty[T](this: Slice[T]) bool {
-    ret this.size == 0;
+# is_empty: check if the slice has no elements.
+pub fun is_empty[T](s: Slice[T]) bool {
+    ret s.size == 0;
 }
 
-# Converts the Slice[T] to a View[T].
+# get: retrieve a reference to the element at the given index.
 # ---
-# ret: A View[T] representing the same data as the slice.
-pub fun slice_as_view[T](this: Slice[T]) View[T] {
+# s:     slice to access
+# index: element index
+# ret:   reference to the element, or an error if out of bounds
+pub fun get[T](s: Slice[T], index: usize) Result[&T, str] {
+    if (index >= s.size) { ret err[&T, str]("index out of bounds"); }
+    ret ok[&T, str](?s.data[index]);
+}
+
+# set: update the element at the given index.
+# ---
+# s:     slice to modify
+# index: element index
+# value: new value to store
+# ret:   true on success, or an error if out of bounds
+pub fun set[T](s: Slice[T], index: usize, value: T) Result[bool, str] {
+    if (index >= s.size) { ret err[bool, str]("index out of bounds"); }
+    s.data[index] = value;
+    ret ok[bool, str](true);
+}
+
+# as_view: convert a mutable Slice[T] to a read-only View[T].
+# ---
+# s:   slice to convert
+# ret: a View[T] over the same data
+pub fun as_view[T](s: Slice[T]) View[T] {
     var v: View[T];
-    v.data = this.data;
-    v.size = this.size;
+    v.data = s.data;
+    v.size = s.size;
     ret v;
 }
 
-# --- tests ---
-
-test "slice: slice_make creates slice from pointer and size" {
+test "slice: make creates slice from pointer and size" {
     var arr: [4]i64 = [4]i64{10, 20, 30, 40};
-    val s: Slice[i64] = slice_make[i64](?arr[0], 4);
+    val s: Slice[i64] = make[i64](?arr[0], 4);
     if (s.size != 4) { ret 0; }
     if (s.data == nil) { ret 0; }
     ret 1;
@@ -49,21 +75,21 @@ test "slice: slice_make creates slice from pointer and size" {
 
 test "slice: is_empty returns true for zero size" {
     var arr: [4]i64 = [4]i64{1, 2, 3, 4};
-    val s: Slice[i64] = slice_make[i64](?arr[0], 0);
-    if (!slice_is_empty[i64](s)) { ret 0; }
+    val s: Slice[i64] = make[i64](?arr[0], 0);
+    if (!is_empty[i64](s)) { ret 0; }
     ret 1;
 }
 
 test "slice: is_empty returns false for non-zero size" {
     var arr: [4]i64 = [4]i64{1, 2, 3, 4};
-    val s: Slice[i64] = slice_make[i64](?arr[0], 4);
-    if (slice_is_empty[i64](s)) { ret 0; }
+    val s: Slice[i64] = make[i64](?arr[0], 4);
+    if (is_empty[i64](s)) { ret 0; }
     ret 1;
 }
 
 test "slice: data is accessible via slice" {
     var arr: [3]i64 = [3]i64{100, 200, 300};
-    val s: Slice[i64] = slice_make[i64](?arr[0], 3);
+    val s: Slice[i64] = make[i64](?arr[0], 3);
     if (s.data[0] != 100) { ret 0; }
     if (s.data[1] != 200) { ret 0; }
     if (s.data[2] != 300) { ret 0; }
@@ -72,7 +98,7 @@ test "slice: data is accessible via slice" {
 
 test "slice: data is mutable via slice" {
     var arr: [3]i64 = [3]i64{1, 2, 3};
-    val s: Slice[i64] = slice_make[i64](?arr[0], 3);
+    val s: Slice[i64] = make[i64](?arr[0], 3);
     s.data[1] = 999;
     if (arr[1] != 999) { ret 0; }
     ret 1;
@@ -80,8 +106,8 @@ test "slice: data is mutable via slice" {
 
 test "slice: as_view converts to view" {
     var arr: [3]i64 = [3]i64{5, 6, 7};
-    val s: Slice[i64] = slice_make[i64](?arr[0], 3);
-    val v: View[i64] = slice_as_view[i64](s);
+    val s: Slice[i64] = make[i64](?arr[0], 3);
+    val v: View[i64] = as_view[i64](s);
     if (v.size != 3) { ret 0; }
     if (v.data == nil) { ret 0; }
     ret 1;
@@ -89,8 +115,8 @@ test "slice: as_view converts to view" {
 
 test "slice: as_view preserves data reference" {
     var arr: [2]i64 = [2]i64{42, 43};
-    val s: Slice[i64] = slice_make[i64](?arr[0], 2);
-    val v: View[i64] = slice_as_view[i64](s);
+    val s: Slice[i64] = make[i64](?arr[0], 2);
+    val v: View[i64] = as_view[i64](s);
     if (v.data[0] != 42) { ret 0; }
     if (v.data[1] != 43) { ret 0; }
     ret 1;
@@ -98,7 +124,7 @@ test "slice: as_view preserves data reference" {
 
 test "slice: slice of u8 bytes" {
     var buf: [5]u8 = [5]u8{0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
-    val s: Slice[u8] = slice_make[u8](?buf[0], 5);
+    val s: Slice[u8] = make[u8](?buf[0], 5);
     if (s.size != 5) { ret 0; }
     if (s.data[0] != 0xAA) { ret 0; }
     if (s.data[4] != 0xEE) { ret 0; }
