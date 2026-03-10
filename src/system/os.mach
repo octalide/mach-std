@@ -189,22 +189,38 @@ pub fwd impl.thread_wake;
 
 # time
 
-pub fun realtime() Timespec {
+# realtime: read the wall-clock time.
+# ---
+# out: pointer to Timespec to populate
+# ret: 0 on success, negative errno on failure
+pub fun realtime(out: *Timespec) i64 {
     var ts: impl.timespec;
     val r: i64 = impl.clock_gettime(impl.CLOCK_REALTIME, ?ts);
     if (r < 0) {
-        ret Timespec{sec: 0, nsec: 0};
+        out.sec = 0;
+        out.nsec = 0;
+        ret r;
     }
-    ret Timespec{sec: ts.tv_sec, nsec: ts.tv_nsec};
+    out.sec = ts.tv_sec;
+    out.nsec = ts.tv_nsec;
+    ret 0;
 }
 
-pub fun monotonic() Timespec {
+# monotonic: read the monotonic clock.
+# ---
+# out: pointer to Timespec to populate
+# ret: 0 on success, negative errno on failure
+pub fun monotonic(out: *Timespec) i64 {
     var ts: impl.timespec;
     val r: i64 = impl.clock_gettime(impl.CLOCK_MONOTONIC, ?ts);
     if (r < 0) {
-        ret Timespec{sec: 0, nsec: 0};
+        out.sec = 0;
+        out.nsec = 0;
+        ret r;
     }
-    ret Timespec{sec: ts.tv_sec, nsec: ts.tv_nsec};
+    out.sec = ts.tv_sec;
+    out.nsec = ts.tv_nsec;
+    ret 0;
 }
 
 # error
