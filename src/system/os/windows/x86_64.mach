@@ -396,7 +396,11 @@ fun filetime_to_unix(ft: FILETIME, sec: *i64, nsec: *i64) {
 }
 
 # build a command line string from a null-terminated argv array.
-# entries containing spaces or tabs are wrapped in double quotes.
+# escapes per the CommandLineToArgvW convention:
+# ---
+# argv: null-terminated array of null-terminated strings
+# buf:  destination buffer
+# cap:  size of buf in bytes
 fun build_cmdline(argv: &&u8, buf: *u8, cap: usize) {
     var off: usize = 0;
     var i: usize = 0;
@@ -409,7 +413,7 @@ fun build_cmdline(argv: &&u8, buf: *u8, cap: usize) {
         var needs_quote: u8 = 0;
         var j: usize = 0;
         for (arg[j] != 0) {
-            if (arg[j] == 32 || arg[j] == 9) {
+            if (arg[j] == 32 || arg[j] == 9 || arg[j] == 34) {
                 needs_quote = 1;
             }
             j = j + 1;
@@ -420,9 +424,42 @@ fun build_cmdline(argv: &&u8, buf: *u8, cap: usize) {
         }
         j = 0;
         for (arg[j] != 0 && off < cap - 1) {
-            buf[off] = arg[j];
-            off = off + 1;
-            j = j + 1;
+            if (needs_quote != 0 && arg[j] == 92) {
+                var nbs: usize = 0;
+                for (arg[j + nbs] == 92) {
+                    nbs = nbs + 1;
+                }
+                if (arg[j + nbs] == 34 || arg[j + nbs] == 0) {
+                    var k: usize = 0;
+                    for (k < nbs * 2 && off < cap - 1) {
+                        buf[off] = 92;
+                        off = off + 1;
+                        k = k + 1;
+                    }
+                } or {
+                    var k: usize = 0;
+                    for (k < nbs && off < cap - 1) {
+                        buf[off] = 92;
+                        off = off + 1;
+                        k = k + 1;
+                    }
+                }
+                j = j + nbs;
+            } or (needs_quote != 0 && arg[j] == 34) {
+                if (off < cap - 1) {
+                    buf[off] = 92;
+                    off = off + 1;
+                }
+                if (off < cap - 1) {
+                    buf[off] = 34;
+                    off = off + 1;
+                }
+                j = j + 1;
+            } or {
+                buf[off] = arg[j];
+                off = off + 1;
+                j = j + 1;
+            }
         }
         if (needs_quote != 0 && off < cap - 1) {
             buf[off] = 34;
