@@ -742,6 +742,9 @@ pub fwd os_shared.stop_signal;
 pub fwd os_shared.was_continued;
 
 # spawn: create a child process running the given program.
+#
+# closes inherited file descriptors >= 3 in the child before exec to
+# prevent leaking parent FDs (pipes, sockets, etc.) to the child.
 # ---
 # pathname: path to executable
 # argv:     null-terminated argument array
@@ -753,6 +756,11 @@ pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
         ret pid;
     }
     if (pid == 0) {
+        var fd: i32 = 3;
+        for (fd < 1024) {
+            syscall1(c.SYS_CLOSE, fd::isize::usize);
+            fd = fd + 1;
+        }
         exec(pathname, argv, envp);
         syscall1(c.SYS_EXIT, 127);
     }
