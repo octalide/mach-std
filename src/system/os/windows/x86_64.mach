@@ -9,7 +9,8 @@ use std.types.bool;
 use std.types.string;
 
 use c:      std.system.os.windows.x86_64.constants;
-use shared: std.system.os.windows.shared;
+use shared:    std.system.os.windows.shared;
+use os_shared: std.system.os.shared;
 
 $if ($mach.build.target.os.id != $mach.os.windows.id) {
     $error("std.system.os.windows.x86_64: requires windows target");
@@ -488,13 +489,12 @@ pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
 # windows heap simulation: reserve large region, commit on extend
 var _brk_base: usize = 0;
 var _brk_end:  usize = 0;
-val _brk_reserve: usize = 268435456;
 
 pub fun heap_region_base() usize {
     if (_brk_base != 0) {
         ret _brk_end;
     }
-    val p: ptr = VirtualAlloc(nil, _brk_reserve, c.MEM_RESERVE, c.PAGE_NOACCESS);
+    val p: ptr = VirtualAlloc(nil, os_shared.HEAP_RESERVE, c.MEM_RESERVE, c.PAGE_NOACCESS);
     if (p == nil) {
         ret 0;
     }
@@ -513,7 +513,7 @@ pub fun heap_region_extend(addr: usize) usize {
     if (addr <= _brk_end) {
         ret _brk_end;
     }
-    if (addr > _brk_base + _brk_reserve) {
+    if (addr > _brk_base + os_shared.HEAP_RESERVE) {
         ret _brk_end;
     }
     val size: usize = addr - _brk_end;
