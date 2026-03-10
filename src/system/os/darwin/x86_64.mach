@@ -20,11 +20,7 @@ pub fun page_size() usize {
 
 pub fun terminate(code: i64) {
     shared.syscall1(c.SYS_EXIT, code::usize);
-    asm {
-        x86_64 {
-            hlt
-        }
-    }
+    asm { trap }
 }
 
 pub fun abort() {
