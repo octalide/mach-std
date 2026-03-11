@@ -1,13 +1,11 @@
-# std.system.os.darwin.aarch64.constants: aarch64 darwin syscall numbers, flags, and errno values.
+# std.system.os.darwin.constants: darwin syscall numbers, flags, and errno values.
+#
+# BSD syscall numbers are identical across darwin architectures.
 
 use std.types.size;
 
 $if ($mach.build.target.os.id != $mach.os.darwin.id) {
-    $error("std.system.os.darwin.aarch64.constants: requires darwin target");
-}
-
-$if ($mach.build.target.arch.id != $mach.arch.aarch64.id) {
-    $error("std.system.os.darwin.aarch64.constants: requires aarch64 target");
+    $error("std.system.os.darwin.constants: requires darwin target");
 }
 
 # syscall numbers (BSD convention, same across darwin arches)

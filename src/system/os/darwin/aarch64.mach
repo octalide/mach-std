@@ -1,9 +1,9 @@
 # std.system.os.darwin.aarch64: aarch64-specific darwin OS primitives.
 #
-# provides page_size, terminate, pipe, and abort which require
-# arch-specific assembly or constants. everything else is in shared.mach.
+# provides page_size and pipe which require arch-specific assembly.
+# everything else is in shared.mach.
 
-use c: std.system.os.darwin.aarch64.constants;
+use c: std.system.os.darwin.constants;
 use shared: std.system.os.darwin.shared;
 
 $if ($mach.build.target.os.id != $mach.os.darwin.id) {
@@ -16,17 +16,6 @@ $if ($mach.build.target.arch.id != $mach.arch.aarch64.id) {
 
 pub fun page_size() usize {
     ret 16384;
-}
-
-pub fun terminate(code: i64) {
-    shared.syscall1(c.SYS_EXIT, code::usize);
-    asm { trap }
-}
-
-pub fun abort() {
-    val pid: i64 = shared.syscall0(c.SYS_GETPID);
-    shared.syscall2(c.SYS_KILL, pid::usize, c.SIGABRT::usize);
-    terminate(255);
 }
 
 # pipe: create a unidirectional pipe.
@@ -134,6 +123,27 @@ pub fwd shared.syscall4;
 pub fwd shared.syscall5;
 pub fwd shared.syscall6;
 
+# process
+pub fwd shared.terminate;
+pub fwd shared.abort;
+pub fwd shared.spawn;
+pub fwd shared.getpid;
+pub fwd shared.sleep;
+pub fwd shared.getcwd;
+pub fwd shared.getenv;
+pub fwd shared.fork;
+pub fwd shared.vfork;
+pub fwd shared.exec;
+pub fwd shared.wait;
+pub fwd shared.wait_pid;
+pub fwd shared.has_exited;
+pub fwd shared.exit_code;
+pub fwd shared.was_signaled;
+pub fwd shared.term_signal;
+pub fwd shared.was_stopped;
+pub fwd shared.stop_signal;
+pub fwd shared.was_continued;
+
 # memory
 pub fwd shared.allocate;
 pub fwd shared.deallocate;
@@ -163,25 +173,6 @@ pub fwd shared.make_dir;
 pub fwd shared.read_dir;
 pub fwd shared.access;
 pub fwd shared.seek;
-
-# process
-pub fwd shared.spawn;
-pub fwd shared.getpid;
-pub fwd shared.sleep;
-pub fwd shared.getcwd;
-pub fwd shared.getenv;
-pub fwd shared.fork;
-pub fwd shared.vfork;
-pub fwd shared.exec;
-pub fwd shared.wait;
-pub fwd shared.wait_pid;
-pub fwd shared.has_exited;
-pub fwd shared.exit_code;
-pub fwd shared.was_signaled;
-pub fwd shared.term_signal;
-pub fwd shared.was_stopped;
-pub fwd shared.stop_signal;
-pub fwd shared.was_continued;
 
 # sockets
 pub fwd shared.AF_INET;
