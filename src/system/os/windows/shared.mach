@@ -1,8 +1,1493 @@
-# std.system.os.windows.shared: items shared across all windows ISA implementations.
+# std.system.os.windows.shared: code shared across all windows ISA implementations.
+#
+# windows has no stable syscall interface. all OS interaction goes through
+# kernel32.dll and ntdll.dll via ext fun declarations. a HANDLE-to-fd
+# mapping table bridges the POSIX-style fd interface used by os.mach.
+
+use std.types.size;
+use std.types.bool;
+
+use c:         std.system.os.windows.constants;
+use os_shared: std.system.os.shared;
+use atomic:    std.sync.atomic;
 
 $if ($mach.build.target.os.id != $mach.os.windows.id) {
     $error("std.system.os.windows.shared: requires windows target");
 }
 
-# path separator
+# Win32 API imports (kernel32.dll)
+
+ext ExitProcess: fun(u32);
+ext GetLastError: fun() u32;
+ext GetStdHandle: fun(u32) isize;
+ext CloseHandle: fun(isize) i32;
+
+ext VirtualAlloc: fun(ptr, usize, u32, u32) ptr;
+ext VirtualFree: fun(ptr, usize, u32) i32;
+ext VirtualProtect: fun(ptr, usize, u32, *u32) i32;
+ext VirtualLock: fun(ptr, usize) i32;
+ext VirtualUnlock: fun(ptr, usize) i32;
+ext GetProcessHeap: fun() isize;
+ext HeapAlloc: fun(isize, u32, usize) ptr;
+ext HeapFree: fun(isize, u32, ptr) i32;
+ext HeapReAlloc: fun(isize, u32, ptr, usize) ptr;
+ext GetSystemInfo: fun(*u8);
+
+ext CreateFileA: fun(&u8, u32, u32, ptr, u32, u32, isize) isize;
+ext ReadFile: fun(isize, *u8, u32, *u32, ptr) i32;
+ext WriteFile: fun(isize, &u8, u32, *u32, ptr) i32;
+ext SetFilePointerEx: fun(isize, i64, *i64, u32) i32;
+ext GetFileInformationByHandle: fun(isize, *u8) i32;
+ext CreateFileMappingA: fun(isize, ptr, u32, u32, u32, ptr) isize;
+ext MapViewOfFile: fun(isize, u32, u32, u32, usize) ptr;
+ext UnmapViewOfFile: fun(ptr) i32;
+ext FlushViewOfFile: fun(ptr, usize) i32;
+ext DeleteFileA: fun(&u8) i32;
+ext MoveFileA: fun(&u8, &u8) i32;
+ext CreateDirectoryA: fun(&u8, ptr) i32;
+ext RemoveDirectoryA: fun(&u8) i32;
+ext GetFileAttributesA: fun(&u8) u32;
+ext FindFirstFileA: fun(&u8, *u8) isize;
+ext FindNextFileA: fun(isize, *u8) i32;
+ext FindClose: fun(isize) i32;
+ext GetFinalPathNameByHandleA: fun(isize, *u8, u32, u32) u32;
+
+ext GetSystemTimeAsFileTime: fun(*u8);
+ext QueryPerformanceCounter: fun(*i64) i32;
+ext QueryPerformanceFrequency: fun(*i64) i32;
+
+ext CreateThread: fun(ptr, usize, usize, ptr, u32, *u32) isize;
+ext WaitOnAddress: fun(ptr, ptr, usize, u32) i32;
+ext WakeByAddressSingle: fun(ptr);
+
+# Winsock2 API imports (ws2_32.dll)
+
+ext WSAStartup: fun(u16, *u8) i32;
+ext WSAGetLastError: fun() i32;
+ext ws2_socket: fun(i32, i32, i32) usize;
+$ws2_socket.symbol = "socket";
+ext ws2_bind: fun(usize, *u8, i32) i32;
+$ws2_bind.symbol = "bind";
+ext ws2_listen: fun(usize, i32) i32;
+$ws2_listen.symbol = "listen";
+ext ws2_accept: fun(usize, *u8, *i32) usize;
+$ws2_accept.symbol = "accept";
+ext ws2_connect: fun(usize, *u8, i32) i32;
+$ws2_connect.symbol = "connect";
+ext ws2_sendto: fun(usize, &u8, i32, i32, *u8, i32) i32;
+$ws2_sendto.symbol = "sendto";
+ext ws2_recvfrom: fun(usize, *u8, i32, i32, *u8, *i32) i32;
+$ws2_recvfrom.symbol = "recvfrom";
+ext ws2_shutdown: fun(usize, i32) i32;
+$ws2_shutdown.symbol = "shutdown";
+ext ws2_setsockopt: fun(usize, i32, i32, *u8, i32) i32;
+$ws2_setsockopt.symbol = "setsockopt";
+ext ws2_send: fun(usize, &u8, i32, i32) i32;
+$ws2_send.symbol = "send";
+ext ws2_recv: fun(usize, *u8, i32, i32) i32;
+$ws2_recv.symbol = "recv";
+ext closesocket: fun(usize) i32;
+
+# advapi32.dll
+ext SystemFunction036: fun(*u8, u32) i32;
+
+ext GetCurrentProcessId: fun() u32;
+ext TerminateProcess: fun(isize, u32) i32;
+ext CreateProcessA: fun(&u8, *u8, ptr, ptr, i32, u32, ptr, ptr, *u8, *u8) i32;
+ext WaitForSingleObject: fun(isize, u32) u32;
+ext WaitForMultipleObjects: fun(u32, ptr, i32, u32) u32;
+ext GetExitCodeProcess: fun(isize, *u32) i32;
+ext CreatePipe: fun(*isize, *isize, ptr, u32) i32;
+ext SleepW: fun(u32);
+$SleepW.symbol = "Sleep";
+ext GetCurrentDirectoryA: fun(u32, *u8) u32;
+ext GetEnvironmentVariableA: fun(&u8, *u8, u32) u32;
+
+# Win32 structures
+
+rec FILETIME {
+    dwLowDateTime:  u32;
+    dwHighDateTime: u32;
+}
+
+rec BY_HANDLE_FILE_INFORMATION {
+    dwFileAttributes:     u32;
+    ftCreationTime:       FILETIME;
+    ftLastAccessTime:     FILETIME;
+    ftLastWriteTime:      FILETIME;
+    dwVolumeSerialNumber: u32;
+    nFileSizeHigh:        u32;
+    nFileSizeLow:         u32;
+    nNumberOfLinks:       u32;
+    nFileIndexHigh:       u32;
+    nFileIndexLow:        u32;
+}
+
+rec WIN32_FIND_DATAA {
+    dwFileAttributes: u32;
+    ftCreationTime:   FILETIME;
+    ftLastAccessTime: FILETIME;
+    ftLastWriteTime:  FILETIME;
+    nFileSizeHigh:    u32;
+    nFileSizeLow:     u32;
+    dwReserved0:      u32;
+    dwReserved1:      u32;
+    cFileName:        [260]u8;
+    cAlternateFileName: [14]u8;
+}
+
+rec PROCESS_INFORMATION {
+    hProcess:    isize;
+    hThread:     isize;
+    dwProcessId: u32;
+    dwThreadId:  u32;
+}
+
+# kernel ABI types (POSIX-compatible layout for os.mach interface)
+
+pub rec stat_t {
+    st_dev:        u64;
+    st_ino:        u64;
+    st_nlink:      u64;
+    st_mode:       u32;
+    st_uid:        u32;
+    st_gid:        u32;
+    pad0:          i32;
+    st_rdev:       u64;
+    st_size:       i64;
+    st_blksize:    i64;
+    st_blocks:     i64;
+    st_atime:      i64;
+    st_atime_nsec: i64;
+    st_mtime:      i64;
+    st_mtime_nsec: i64;
+    st_ctime:      i64;
+    st_ctime_nsec: i64;
+    _reserved0:    i64;
+    _reserved1:    i64;
+    _reserved2:    i64;
+}
+
+pub rec timespec {
+    tv_sec:  i64;
+    tv_nsec: i64;
+}
+
+pub rec dirent64 {
+    d_ino:    u64;
+    d_off:    i64;
+    d_reclen: u16;
+    d_type:   u8;
+    d_name:   [260]u8;
+}
+
+# path
 pub val separator: u8 = '\\';
+
+# portable constant re-exports
+pub val STDIN_FD:  i32 = c.STDIN_FILENO;
+pub val STDOUT_FD: i32 = c.STDOUT_FILENO;
+pub val STDERR_FD: i32 = c.STDERR_FILENO;
+
+pub val O_RDONLY:    i32 = c.O_RDONLY;
+pub val O_WRONLY:    i32 = c.O_WRONLY;
+pub val O_RDWR:      i32 = c.O_RDWR;
+pub val O_CREAT:     i32 = c.O_CREAT;
+pub val O_EXCL:      i32 = c.O_EXCL;
+pub val O_TRUNC:     i32 = c.O_TRUNC;
+pub val O_APPEND:    i32 = c.O_APPEND;
+pub val O_DIRECTORY: i32 = c.O_DIRECTORY;
+
+pub val AT_FDCWD:            i32 = c.AT_FDCWD;
+pub val AT_SYMLINK_NOFOLLOW: i32 = c.AT_SYMLINK_NOFOLLOW;
+pub val AT_REMOVEDIR:        i32 = c.AT_REMOVEDIR;
+
+pub val S_IFMT:  u32 = c.S_IFMT;
+pub val S_IFDIR: u32 = c.S_IFDIR;
+pub val S_IFREG: u32 = c.S_IFREG;
+pub val S_IFLNK: u32 = c.S_IFLNK;
+
+pub val WNOHANG:    i32 = c.WNOHANG;
+pub val WUNTRACED:  i32 = c.WUNTRACED;
+pub val WCONTINUED: i32 = c.WCONTINUED;
+
+pub val CLOCK_REALTIME:  i32 = c.CLOCK_REALTIME;
+pub val CLOCK_MONOTONIC: i32 = c.CLOCK_MONOTONIC;
+
+pub val EPERM:     i64 = c.EPERM;
+pub val ENOENT:    i64 = c.ENOENT;
+pub val ESRCH:     i64 = c.ESRCH;
+pub val EINTR:     i64 = c.EINTR;
+pub val EIO:       i64 = c.EIO;
+pub val ENXIO:     i64 = c.ENXIO;
+pub val E2BIG:     i64 = c.E2BIG;
+pub val EBADF:     i64 = c.EBADF;
+pub val ECHILD:    i64 = c.ECHILD;
+pub val EAGAIN:    i64 = c.EAGAIN;
+pub val ENOMEM:    i64 = c.ENOMEM;
+pub val EACCES:    i64 = c.EACCES;
+pub val EFAULT:    i64 = c.EFAULT;
+pub val EBUSY:     i64 = c.EBUSY;
+pub val EEXIST:    i64 = c.EEXIST;
+pub val ENODEV:    i64 = c.ENODEV;
+pub val ENOTDIR:   i64 = c.ENOTDIR;
+pub val EISDIR:    i64 = c.EISDIR;
+pub val EINVAL:    i64 = c.EINVAL;
+pub val ENFILE:    i64 = c.ENFILE;
+pub val EMFILE:    i64 = c.EMFILE;
+pub val ETXTBSY:   i64 = c.ETXTBSY;
+pub val ENOSPC:    i64 = c.ENOSPC;
+pub val EROFS:     i64 = c.EROFS;
+pub val EPIPE:     i64 = c.EPIPE;
+pub val ENOTEMPTY: i64 = c.ENOTEMPTY;
+pub val ENOTSUP:   i64 = c.ENOTSUP;
+
+pub val EINTR_MAX_RETRIES: usize = c.EINTR_MAX_RETRIES;
+
+# HANDLE-to-fd mapping table
+
+val MAX_FDS: usize = 256;
+var _handles: [256]isize;
+var _find_handles: [256]isize;
+var _initialized: bool = false;
+var _fd_lock: i64 = 0;
+
+fun fd_spin_lock() {
+    var expected: i64 = 0;
+    for (!atomic.cas(?_fd_lock, ?expected, 1)) {
+        expected = 0;
+    }
+}
+
+fun fd_spin_unlock() {
+    atomic.store(?_fd_lock, 0);
+}
+
+fun init_fds() {
+    if (_initialized) {
+        ret;
+    }
+    var i: usize = 0;
+    for (i < MAX_FDS) {
+        _handles[i] = c.INVALID_HANDLE_VALUE;
+        _find_handles[i] = c.INVALID_HANDLE_VALUE;
+        i = i + 1;
+    }
+    _handles[0] = GetStdHandle(c.STD_INPUT_HANDLE);
+    _handles[1] = GetStdHandle(c.STD_OUTPUT_HANDLE);
+    _handles[2] = GetStdHandle(c.STD_ERROR_HANDLE);
+    _initialized = true;
+}
+
+fun alloc_fd(h: isize) i32 {
+    fd_spin_lock();
+    init_fds();
+    var fd: usize = 3;
+    for (fd < MAX_FDS) {
+        if (_handles[fd] == c.INVALID_HANDLE_VALUE) {
+            _handles[fd] = h;
+            fd_spin_unlock();
+            ret fd::i32;
+        }
+        fd = fd + 1;
+    }
+    fd_spin_unlock();
+    ret -1;
+}
+
+fun get_handle(fd: i32) isize {
+    fd_spin_lock();
+    init_fds();
+    if (fd < 0 || fd::usize >= MAX_FDS) {
+        fd_spin_unlock();
+        ret c.INVALID_HANDLE_VALUE;
+    }
+    val h: isize = _handles[fd::usize];
+    fd_spin_unlock();
+    ret h;
+}
+
+fun free_fd(fd: i32) {
+    fd_spin_lock();
+    if (fd >= 0 && fd::usize < MAX_FDS) {
+        if (_find_handles[fd::usize] != c.INVALID_HANDLE_VALUE) {
+            FindClose(_find_handles[fd::usize]);
+            _find_handles[fd::usize] = c.INVALID_HANDLE_VALUE;
+        }
+        _handles[fd::usize] = c.INVALID_HANDLE_VALUE;
+    }
+    fd_spin_unlock();
+}
+
+# child process tracking table
+
+val MAX_PROCS: usize = 64;
+var _proc_handles: [64]isize;
+var _proc_pids: [64]u32;
+var _procs_init: u8 = 0;
+var _proc_lock: i64 = 0;
+
+fun proc_spin_lock() {
+    var expected: i64 = 0;
+    for (!atomic.cas(?_proc_lock, ?expected, 1)) {
+        expected = 0;
+    }
+}
+
+fun proc_spin_unlock() {
+    atomic.store(?_proc_lock, 0);
+}
+
+fun init_procs() {
+    if (_procs_init != 0) { ret; }
+    var i: usize = 0;
+    for (i < MAX_PROCS) {
+        _proc_handles[i] = c.INVALID_HANDLE_VALUE;
+        _proc_pids[i] = 0;
+        i = i + 1;
+    }
+    _procs_init = 1;
+}
+
+fun alloc_proc(pid: u32, handle: isize) bool {
+    proc_spin_lock();
+    init_procs();
+    var i: usize = 0;
+    for (i < MAX_PROCS) {
+        if (_proc_handles[i] == c.INVALID_HANDLE_VALUE) {
+            _proc_handles[i] = handle;
+            _proc_pids[i] = pid;
+            proc_spin_unlock();
+            ret true;
+        }
+        i = i + 1;
+    }
+    proc_spin_unlock();
+    ret false;
+}
+
+fun get_proc_handle(pid: u32) isize {
+    proc_spin_lock();
+    init_procs();
+    var i: usize = 0;
+    for (i < MAX_PROCS) {
+        if (_proc_pids[i] == pid && _proc_handles[i] != c.INVALID_HANDLE_VALUE) {
+            val h: isize = _proc_handles[i];
+            proc_spin_unlock();
+            ret h;
+        }
+        i = i + 1;
+    }
+    proc_spin_unlock();
+    ret c.INVALID_HANDLE_VALUE;
+}
+
+fun free_proc(pid: u32) {
+    proc_spin_lock();
+    var i: usize = 0;
+    for (i < MAX_PROCS) {
+        if (_proc_pids[i] == pid && _proc_handles[i] != c.INVALID_HANDLE_VALUE) {
+            _proc_handles[i] = c.INVALID_HANDLE_VALUE;
+            _proc_pids[i] = 0;
+            proc_spin_unlock();
+            ret;
+        }
+        i = i + 1;
+    }
+    proc_spin_unlock();
+}
+
+fun count_procs() usize {
+    proc_spin_lock();
+    init_procs();
+    var n: usize = 0;
+    var i: usize = 0;
+    for (i < MAX_PROCS) {
+        if (_proc_handles[i] != c.INVALID_HANDLE_VALUE) {
+            n = n + 1;
+        }
+        i = i + 1;
+    }
+    proc_spin_unlock();
+    ret n;
+}
+
+# Win32 error → negated POSIX errno
+fun last_error() i64 {
+    val err: u32 = GetLastError();
+    if (err == c.ERROR_FILE_NOT_FOUND || err == c.ERROR_PATH_NOT_FOUND) { ret c.ENOENT; }
+    or (err == c.ERROR_ACCESS_DENIED) { ret c.EACCES; }
+    or (err == c.ERROR_ALREADY_EXISTS || err == c.ERROR_FILE_EXISTS) { ret c.EEXIST; }
+    or (err == c.ERROR_INVALID_HANDLE || err == c.ERROR_INVALID_PARAMETER) { ret c.EINVAL; }
+    or (err == c.ERROR_NOT_ENOUGH_MEMORY || err == c.ERROR_OUTOFMEMORY) { ret c.ENOMEM; }
+    or (err == c.ERROR_DIR_NOT_EMPTY) { ret c.ENOTEMPTY; }
+    or (err == c.ERROR_DISK_FULL || err == c.ERROR_HANDLE_DISK_FULL) { ret c.ENOSPC; }
+    or (err == c.ERROR_BROKEN_PIPE) { ret c.EPIPE; }
+    or (err == c.ERROR_DIRECTORY) { ret c.ENOTDIR; }
+    or (err == c.ERROR_TOO_MANY_OPEN_FILES) { ret c.EMFILE; }
+    or (err == c.ERROR_BUSY) { ret c.EBUSY; }
+    or (err == c.ERROR_WRITE_PROTECT) { ret c.EROFS; }
+    or (err == c.ERROR_NOT_SUPPORTED) { ret c.ENOTSUP; }
+    or { ret c.EIO; }
+}
+
+# FILETIME → unix seconds + nanoseconds
+fun filetime_to_unix(ft: FILETIME, sec: *i64, nsec: *i64) {
+    val ticks: i64 = ft.dwLowDateTime::i64 | (ft.dwHighDateTime::i64 << 32);
+    val unix_ticks: i64 = ticks - c.FILETIME_UNIX_EPOCH;
+    @sec = unix_ticks / 10000000;
+    @nsec = (unix_ticks % 10000000) * 100;
+}
+
+# build a command line string from a null-terminated argv array.
+# escapes per the CommandLineToArgvW convention:
+# ---
+# argv: null-terminated array of null-terminated strings
+# buf:  destination buffer
+# cap:  size of buf in bytes
+fun build_cmdline(argv: &&u8, buf: *u8, cap: usize) {
+    var off: usize = 0;
+    var i: usize = 0;
+    for (argv[i]::usize != 0 && off < cap - 1) {
+        if (i > 0 && off < cap - 1) {
+            buf[off] = 32;
+            off = off + 1;
+        }
+        val arg: &u8 = argv[i];
+        var needs_quote: u8 = 0;
+        var j: usize = 0;
+        for (arg[j] != 0) {
+            if (arg[j] == 32 || arg[j] == 9 || arg[j] == 34) {
+                needs_quote = 1;
+            }
+            j = j + 1;
+        }
+        if (needs_quote != 0 && off < cap - 1) {
+            buf[off] = 34;
+            off = off + 1;
+        }
+        j = 0;
+        for (arg[j] != 0 && off < cap - 1) {
+            if (needs_quote != 0 && arg[j] == 92) {
+                var nbs: usize = 0;
+                for (arg[j + nbs] == 92) {
+                    nbs = nbs + 1;
+                }
+                if (arg[j + nbs] == 34 || arg[j + nbs] == 0) {
+                    var k: usize = 0;
+                    for (k < nbs * 2 && off < cap - 1) {
+                        buf[off] = 92;
+                        off = off + 1;
+                        k = k + 1;
+                    }
+                } or {
+                    var k: usize = 0;
+                    for (k < nbs && off < cap - 1) {
+                        buf[off] = 92;
+                        off = off + 1;
+                        k = k + 1;
+                    }
+                }
+                j = j + nbs;
+            } or (needs_quote != 0 && arg[j] == 34) {
+                if (off < cap - 1) {
+                    buf[off] = 92;
+                    off = off + 1;
+                }
+                if (off < cap - 1) {
+                    buf[off] = 34;
+                    off = off + 1;
+                }
+                j = j + 1;
+            } or {
+                buf[off] = arg[j];
+                off = off + 1;
+                j = j + 1;
+            }
+        }
+        if (needs_quote != 0 && off < cap - 1) {
+            buf[off] = 34;
+            off = off + 1;
+        }
+        i = i + 1;
+    }
+    if (off < cap) {
+        buf[off] = 0;
+    }
+}
+
+# POSIX prot flags → Win32 page protection
+fun prot_to_win32(prot: u32) u32 {
+    if (prot == 0) { ret c.PAGE_NOACCESS; }
+    val r: bool = (prot & 1) != 0;
+    val w: bool = (prot & 2) != 0;
+    val x: bool = (prot & 4) != 0;
+    if (x && w) { ret c.PAGE_EXECUTE_READWRITE; }
+    or (x && r) { ret c.PAGE_EXECUTE_READ; }
+    or (x) { ret c.PAGE_EXECUTE; }
+    or (w) { ret c.PAGE_READWRITE; }
+    or (r) { ret c.PAGE_READONLY; }
+    or { ret c.PAGE_NOACCESS; }
+}
+
+# memory
+
+pub fun allocate(size: usize) ptr {
+    if (size == 0) {
+        ret nil;
+    }
+    ret VirtualAlloc(nil, size, c.MEM_COMMIT | c.MEM_RESERVE, c.PAGE_READWRITE);
+}
+
+pub fun deallocate(p: ptr, size: usize) i64 {
+    if (p == nil || size == 0) {
+        ret 0;
+    }
+    if (VirtualFree(p, 0, c.MEM_RELEASE) != 0) { ret 0; }
+    ret last_error();
+}
+
+pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
+    if (p == nil) {
+        ret allocate(new_size);
+    }
+    if (new_size == 0) {
+        deallocate(p, old_size);
+        ret nil;
+    }
+    val new_p: ptr = allocate(new_size);
+    if (new_p == nil) {
+        ret nil;
+    }
+    var copy_size: usize = old_size;
+    if (new_size < copy_size) {
+        copy_size = new_size;
+    }
+    var i: usize = 0;
+    for (i < copy_size) {
+        @(new_p::usize + i)::*u8 = @(p::usize + i)::&u8;
+        i = i + 1;
+    }
+    deallocate(p, old_size);
+    ret new_p;
+}
+
+# windows heap simulation: reserve large region, commit on extend
+var _brk_base: usize = 0;
+var _brk_end:  usize = 0;
+
+pub fun heap_region_base() usize {
+    if (_brk_base != 0) {
+        ret _brk_end;
+    }
+    val p: ptr = VirtualAlloc(nil, os_shared.HEAP_RESERVE, c.MEM_RESERVE, c.PAGE_NOACCESS);
+    if (p == nil) {
+        ret 0;
+    }
+    _brk_base = p::usize;
+    _brk_end = _brk_base;
+    ret _brk_end;
+}
+
+pub fun heap_region_extend(addr: usize) usize {
+    if (_brk_base == 0) {
+        heap_region_base();
+        if (_brk_base == 0) {
+            ret 0;
+        }
+    }
+    if (addr <= _brk_end) {
+        ret _brk_end;
+    }
+    if (addr > _brk_base + os_shared.HEAP_RESERVE) {
+        ret _brk_end;
+    }
+    val size: usize = addr - _brk_end;
+    val p: ptr = VirtualAlloc(_brk_end::ptr, size, c.MEM_COMMIT, c.PAGE_READWRITE);
+    if (p == nil) {
+        ret _brk_end;
+    }
+    _brk_end = addr;
+    ret _brk_end;
+}
+
+pub fun protect(p: ptr, size: usize, prot: u32) i64 {
+    var old_prot: u32 = 0;
+    if (VirtualProtect(p, size, prot_to_win32(prot), ?old_prot) != 0) { ret 0; }
+    ret last_error();
+}
+
+pub fun lock(p: ptr, size: usize) i64 {
+    if (VirtualLock(p, size) != 0) { ret 0; }
+    ret last_error();
+}
+
+pub fun unlock(p: ptr, size: usize) i64 {
+    if (VirtualUnlock(p, size) != 0) { ret 0; }
+    ret last_error();
+}
+
+pub fun advise(p: ptr, size: usize, advice: u32) i64 {
+    ret 0;
+}
+
+pub fun page_size() usize {
+    ret 4096;
+}
+
+# map a file descriptor into memory via CreateFileMapping + MapViewOfFile.
+# ---
+# fd:     file descriptor to map
+# offset: offset into the file (must be page-aligned)
+# size:   number of bytes to map; if 0, returns nil
+# prot:   protection flags (PROT_READ, PROT_WRITE, PROT_EXEC)
+# ret:    pointer to mapped region, or nil on failure
+pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
+    if (size == 0) {
+        ret nil;
+    }
+    val h: isize = get_handle(fd);
+    if (h == c.INVALID_HANDLE_VALUE) {
+        ret nil;
+    }
+    val page_prot: u32 = prot_to_win32(prot);
+    val map_end: usize = offset + size;
+    val mapping: isize = CreateFileMappingA(h, nil, page_prot, (map_end >> 32)::u32, map_end::u32, nil);
+    if (mapping == 0) {
+        ret nil;
+    }
+    var access: u32 = 0;
+    if ((prot & 4) != 0 && (prot & 2) != 0) {
+        access = c.FILE_MAP_WRITE | c.FILE_MAP_EXECUTE;
+    } or ((prot & 4) != 0) {
+        access = c.FILE_MAP_READ | c.FILE_MAP_EXECUTE;
+    } or ((prot & 2) != 0) {
+        access = c.FILE_MAP_WRITE;
+    } or {
+        access = c.FILE_MAP_READ;
+    }
+    val p: ptr = MapViewOfFile(mapping, access, (offset >> 32)::u32, offset::u32, size);
+    CloseHandle(mapping);
+    if (p == nil) {
+        ret nil;
+    }
+    ret p;
+}
+
+# flush a memory-mapped region to its backing file via FlushViewOfFile.
+# ---
+# p:    pointer to the mapped region
+# size: size of the region in bytes
+# ret:  0 on success, or negative errno
+pub fun sync_file(p: ptr, size: usize) i64 {
+    if (p == nil || size == 0) {
+        ret 0;
+    }
+    if (FlushViewOfFile(p, size) != 0) { ret 0; }
+    ret last_error();
+}
+
+# filesystem
+
+pub fun read(fd: i32, buf: *u8, count: usize) i64 {
+    val h: isize = get_handle(fd);
+    if (h == c.INVALID_HANDLE_VALUE) {
+        ret c.EBADF;
+    }
+    var bytes_read: u32 = 0;
+    val ok: i32 = ReadFile(h, buf, count::u32, ?bytes_read, nil);
+    if (ok == 0) {
+        ret last_error();
+    }
+    ret bytes_read::i64;
+}
+
+pub fun write(fd: i32, buf: &u8, count: usize) i64 {
+    val h: isize = get_handle(fd);
+    if (h == c.INVALID_HANDLE_VALUE) {
+        ret c.EBADF;
+    }
+    var bytes_written: u32 = 0;
+    val ok: i32 = WriteFile(h, buf, count::u32, ?bytes_written, nil);
+    if (ok == 0) {
+        ret last_error();
+    }
+    ret bytes_written::i64;
+}
+
+pub fun open(dirfd: i32, path: &u8, flags: i32, mode: i32) i64 {
+    if (dirfd != c.AT_FDCWD) {
+        ret c.ENOTSUP;
+    }
+    var access: u32 = 0;
+    var creation: u32 = c.OPEN_EXISTING;
+    var attrs: u32 = c.FILE_ATTRIBUTE_NORMAL;
+
+    val rw: i32 = flags & 3;
+    if (rw == c.O_RDONLY) {
+        access = c.GENERIC_READ;
+    }
+    or (rw == c.O_WRONLY) {
+        access = c.GENERIC_WRITE;
+    }
+    or {
+        access = c.GENERIC_READ | c.GENERIC_WRITE;
+    }
+
+    if ((flags & c.O_CREAT) != 0 && (flags & c.O_EXCL) != 0) {
+        creation = c.CREATE_NEW;
+    }
+    or ((flags & c.O_CREAT) != 0 && (flags & c.O_TRUNC) != 0) {
+        creation = c.CREATE_ALWAYS;
+    }
+    or ((flags & c.O_CREAT) != 0) {
+        creation = c.OPEN_ALWAYS;
+    }
+    or ((flags & c.O_TRUNC) != 0) {
+        creation = c.TRUNCATE_EXISTING;
+    }
+
+    if ((flags & c.O_DIRECTORY) != 0) {
+        attrs = attrs | c.FILE_FLAG_BACKUP_SEMANTICS;
+    }
+
+    val h: isize = CreateFileA(path, access, c.FILE_SHARE_READ | c.FILE_SHARE_WRITE | c.FILE_SHARE_DELETE, nil, creation, attrs, 0);
+    if (h == c.INVALID_HANDLE_VALUE) {
+        ret last_error();
+    }
+
+    if ((flags & c.O_APPEND) != 0) {
+        var new_pos: i64 = 0;
+        SetFilePointerEx(h, 0, ?new_pos, c.FILE_END);
+    }
+
+    val fd: i32 = alloc_fd(h);
+    if (fd < 0) {
+        CloseHandle(h);
+        ret c.EMFILE;
+    }
+    ret fd::i64;
+}
+
+pub fun close(fd: i32) i64 {
+    val h: isize = get_handle(fd);
+    if (h == c.INVALID_HANDLE_VALUE) {
+        ret c.EBADF;
+    }
+    free_fd(fd);
+    if (CloseHandle(h) == 0) {
+        ret last_error();
+    }
+    ret 0;
+}
+
+pub fun stat(fd: i32, st: *stat_t) i64 {
+    val h: isize = get_handle(fd);
+    if (h == c.INVALID_HANDLE_VALUE) {
+        ret c.EBADF;
+    }
+    var info: BY_HANDLE_FILE_INFORMATION;
+    if (GetFileInformationByHandle(h, ?info::*u8) == 0) {
+        ret last_error();
+    }
+    st.st_dev = info.dwVolumeSerialNumber::u64;
+    st.st_ino = info.nFileIndexLow::u64 | (info.nFileIndexHigh::u64 << 32);
+    st.st_nlink = info.nNumberOfLinks::u64;
+    st.st_size = info.nFileSizeLow::i64 | (info.nFileSizeHigh::i64 << 32);
+    st.st_blksize = 4096;
+    st.st_blocks = (st.st_size + 511) / 512;
+    st.st_uid = 0;
+    st.st_gid = 0;
+    st.st_rdev = 0;
+    if ((info.dwFileAttributes & c.FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        st.st_mode = c.S_IFDIR | 0o755::u32;
+    }
+    or ((info.dwFileAttributes & c.FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+        st.st_mode = c.S_IFLNK | 0o777::u32;
+    }
+    or {
+        st.st_mode = c.S_IFREG | 0o644::u32;
+    }
+    if ((info.dwFileAttributes & c.FILE_ATTRIBUTE_READONLY) != 0) {
+        st.st_mode = st.st_mode & (0o777777::u32 - 0o222::u32);
+    }
+    filetime_to_unix(info.ftLastAccessTime, ?st.st_atime, ?st.st_atime_nsec);
+    filetime_to_unix(info.ftLastWriteTime, ?st.st_mtime, ?st.st_mtime_nsec);
+    filetime_to_unix(info.ftCreationTime, ?st.st_ctime, ?st.st_ctime_nsec);
+    ret 0;
+}
+
+# stub: dirfd is ignored — path must be absolute or relative to cwd
+pub fun stat_path(dirfd: i32, path: &u8, st: *stat_t, flags: i32) i64 {
+    val attr: u32 = GetFileAttributesA(path);
+    if (attr == 0xFFFFFFFF) {
+        ret last_error();
+    }
+    var open_flags: i32 = c.O_RDONLY;
+    if ((attr & c.FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        open_flags = open_flags | c.O_DIRECTORY;
+    }
+    val fd_result: i64 = open(dirfd, path, open_flags, 0);
+    if (fd_result < 0) {
+        ret fd_result;
+    }
+    val fd: i32 = fd_result::i32;
+    val r: i64 = stat(fd, st);
+    close(fd);
+    ret r;
+}
+
+# stub: dirfd is ignored — path must be absolute or relative to cwd
+pub fun unlink(dirfd: i32, path: &u8, flags: i32) i64 {
+    if ((flags & c.AT_REMOVEDIR) != 0) {
+        if (RemoveDirectoryA(path) == 0) {
+            ret last_error();
+        }
+        ret 0;
+    }
+    if (DeleteFileA(path) == 0) {
+        ret last_error();
+    }
+    ret 0;
+}
+
+# stub: olddir/newdir are ignored — paths must be absolute or relative to cwd
+pub fun rename(olddir: i32, oldpath: &u8, newdir: i32, newpath: &u8) i64 {
+    if (MoveFileA(oldpath, newpath) == 0) {
+        ret last_error();
+    }
+    ret 0;
+}
+
+pub fun make_dir(dirfd: i32, path: &u8, mode: i32) i64 {
+    if (CreateDirectoryA(path, nil) == 0) {
+        ret last_error();
+    }
+    ret 0;
+}
+
+pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
+    if (fd < 0 || fd::usize >= MAX_FDS) {
+        ret c.EBADF;
+    }
+    val h: isize = _handles[fd::usize];
+    if (h == c.INVALID_HANDLE_VALUE) {
+        ret c.EBADF;
+    }
+    val entry_size: usize = 280;
+    if (count < entry_size) {
+        ret c.EINVAL;
+    }
+    var data: WIN32_FIND_DATAA;
+    var fh: isize = _find_handles[fd::usize];
+    var found: i32 = 1;
+    if (fh == c.INVALID_HANDLE_VALUE) {
+        # first call: get directory path and start enumeration
+        var path_buf: [260]u8;
+        val path_len: u32 = GetFinalPathNameByHandleA(h, ?path_buf[0], 260, 0);
+        if (path_len == 0 || path_len >= 257) {
+            ret last_error();
+        }
+        # append \* for glob pattern
+        path_buf[path_len] = '\\'::u8;
+        path_buf[path_len + 1] = '*'::u8;
+        path_buf[path_len + 2] = 0;
+        fh = FindFirstFileA(?path_buf[0]::&u8, ?data::*u8);
+        if (fh == c.INVALID_HANDLE_VALUE) {
+            ret last_error();
+        }
+        _find_handles[fd::usize] = fh;
+    }
+    or {
+        found = FindNextFileA(fh, ?data::*u8);
+    }
+    var written: usize = 0;
+    var buf: *u8 = dirp::*u8;
+    for (found != 0) {
+        if (written + entry_size > count) {
+            brk;
+        }
+        var entry: *dirent64 = (buf::usize + written)::*dirent64;
+        entry.d_ino = 0;
+        entry.d_off = (written + entry_size)::i64;
+        entry.d_reclen = entry_size::u16;
+        if ((data.dwFileAttributes & c.FILE_ATTRIBUTE_DIRECTORY) != 0) {
+            entry.d_type = 4;
+        }
+        or {
+            entry.d_type = 8;
+        }
+        # copy filename
+        var i: usize = 0;
+        for (i < 259 && data.cFileName[i] != 0) {
+            entry.d_name[i] = data.cFileName[i];
+            i = i + 1;
+        }
+        entry.d_name[i] = 0;
+        written = written + entry_size;
+        found = FindNextFileA(fh, ?data::*u8);
+    }
+    if (written == 0) {
+        FindClose(fh);
+        _find_handles[fd::usize] = c.INVALID_HANDLE_VALUE;
+        ret 0;
+    }
+    ret written::i64;
+}
+
+pub fun access(dirfd: i32, path: &u8, mode: i32, flags: i32) i64 {
+    val attr: u32 = GetFileAttributesA(path);
+    if (attr == 0xFFFFFFFF) {
+        ret last_error();
+    }
+    ret 0;
+}
+
+pub fun seek(fd: i32, offset: i64, whence: i32) i64 {
+    val h: isize = get_handle(fd);
+    if (h == c.INVALID_HANDLE_VALUE) {
+        ret c.EBADF;
+    }
+    var method: u32 = c.FILE_BEGIN;
+    if (whence == c.SEEK_CUR) {
+        method = c.FILE_CURRENT;
+    }
+    or (whence == c.SEEK_END) {
+        method = c.FILE_END;
+    }
+    var new_pos: i64 = 0;
+    if (SetFilePointerEx(h, offset, ?new_pos, method) == 0) {
+        ret last_error();
+    }
+    ret new_pos;
+}
+
+# process
+
+pub fun terminate(code: i64) {
+    ExitProcess(code::u32);
+}
+
+pub fun abort() {
+    ExitProcess(255);
+}
+
+# spawn: create a child process running the given program.
+#
+# uses CreateProcess to launch the child. the process handle is tracked
+# in the process table for wait/wait_pid. envp is ignored; the child
+# inherits the parent's environment.
+# ---
+# pathname: path to executable
+# argv:     null-terminated argument array
+# envp:     null-terminated environment array (ignored on windows)
+# ret:      child PID on success, or negative errno
+pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
+    var cmdline: [32768]u8;
+    build_cmdline(argv, ?cmdline[0], 32768);
+
+    var si: [104]u8;
+    var k: usize = 0;
+    for (k < 104) {
+        si[k] = 0;
+        k = k + 1;
+    }
+    si[0] = 104;
+
+    var pi: PROCESS_INFORMATION;
+
+    val ok: i32 = CreateProcessA(
+        pathname, ?cmdline[0],
+        nil, nil,
+        1, 0,
+        nil, nil,
+        ?si[0], ?pi::*u8
+    );
+    if (ok == 0) {
+        ret last_error();
+    }
+
+    CloseHandle(pi.hThread);
+    if (!alloc_proc(pi.dwProcessId, pi.hProcess)) {
+        CloseHandle(pi.hProcess);
+        ret c.EAGAIN;
+    }
+    ret pi.dwProcessId::i64;
+}
+
+# getpid: return the current process ID.
+# ---
+# ret: process ID
+pub fun getpid() i64 {
+    ret GetCurrentProcessId()::i64;
+}
+
+# pipe: create a unidirectional pipe.
+# ---
+# fds: pointer to two i32s; fds[0] = read end, fds[1] = write end
+# ret: 0 on success, or negative errno
+pub fun pipe(fds: *i32) i64 {
+    var read_h: isize = 0;
+    var write_h: isize = 0;
+    if (CreatePipe(?read_h, ?write_h, nil, 0) == 0) {
+        ret last_error();
+    }
+    val rfd: i32 = alloc_fd(read_h);
+    if (rfd < 0) {
+        CloseHandle(read_h);
+        CloseHandle(write_h);
+        ret c.EMFILE;
+    }
+    val wfd: i32 = alloc_fd(write_h);
+    if (wfd < 0) {
+        free_fd(rfd);
+        CloseHandle(read_h);
+        CloseHandle(write_h);
+        ret c.EMFILE;
+    }
+    fds[0] = rfd;
+    fds[1] = wfd;
+    ret 0;
+}
+
+# sleep: suspend execution for the given number of nanoseconds.
+# ---
+# nsec: nanoseconds to sleep
+pub fun sleep(nsec: i64) {
+    if (nsec <= 0) { ret; }
+    val ms: u32 = (nsec / 1000000)::u32;
+    SleepW(ms);
+}
+
+# getcwd: get the current working directory.
+# ---
+# buf:  destination buffer
+# size: buffer capacity in bytes
+# ret:  length of path on success, or negative errno
+pub fun getcwd(buf: *u8, size: usize) i64 {
+    val len: u32 = GetCurrentDirectoryA(size::u32, buf);
+    if (len == 0) {
+        ret last_error();
+    }
+    ret len::i64;
+}
+
+# getenv: look up an environment variable by name.
+# ---
+# name: null-terminated variable name
+# buf:  destination buffer for the value
+# cap:  buffer capacity in bytes
+# ret:  length of value on success, or NOT_FOUND
+pub fun getenv(name: &u8, buf: *u8, cap: usize) i64 {
+    val len: u32 = GetEnvironmentVariableA(name, buf, cap::u32);
+    if (len == 0) {
+        val err: u32 = GetLastError();
+        if (err == 203) {
+            ret os_shared.NOT_FOUND;
+        }
+        ret c.EIO;
+    }
+    ret len::i64;
+}
+
+# wait: wait for a child process to change state.
+#
+# uses the process handle table to look up children by pid.
+# pid == -1 waits for any child. WNOHANG uses a zero timeout.
+pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
+    init_procs();
+
+    if (pid > 0) {
+        val h: isize = get_proc_handle(pid::u32);
+        if (h == c.INVALID_HANDLE_VALUE) {
+            ret c.ECHILD;
+        }
+
+        var timeout: u32 = c.INFINITE;
+        if ((options & c.WNOHANG) != 0) {
+            timeout = 0;
+        }
+
+        val result: u32 = WaitForSingleObject(h, timeout);
+        if (result == c.WAIT_TIMEOUT) {
+            ret 0;
+        }
+        if (result == c.WAIT_FAILED) {
+            ret last_error();
+        }
+
+        var ec: u32 = 0;
+        GetExitCodeProcess(h, ?ec);
+        if (wstatus != nil) {
+            @wstatus = (ec::i32 << 8);
+        }
+        CloseHandle(h);
+        free_proc(pid::u32);
+        ret pid;
+    }
+
+    if (pid == -1) {
+        var wait_handles: [64]isize;
+        var wait_pids: [64]u32;
+        var n: usize = 0;
+        var i: usize = 0;
+
+        for (i < MAX_PROCS) {
+            if (_proc_handles[i] != c.INVALID_HANDLE_VALUE) {
+                wait_handles[n] = _proc_handles[i];
+                wait_pids[n] = _proc_pids[i];
+                n = n + 1;
+            }
+            i = i + 1;
+        }
+
+        if (n == 0) {
+            ret c.ECHILD;
+        }
+
+        var timeout: u32 = c.INFINITE;
+        if ((options & c.WNOHANG) != 0) {
+            timeout = 0;
+        }
+
+        val result: u32 = WaitForMultipleObjects(n::u32, ?wait_handles[0]::ptr, 0, timeout);
+        if (result == c.WAIT_TIMEOUT) {
+            ret 0;
+        }
+        if (result == c.WAIT_FAILED) {
+            ret last_error();
+        }
+        if (result >= n::u32) {
+            ret c.EIO;
+        }
+
+        val idx: usize = result::usize;
+        var ec: u32 = 0;
+        GetExitCodeProcess(wait_handles[idx], ?ec);
+        if (wstatus != nil) {
+            @wstatus = (ec::i32 << 8);
+        }
+        val child_pid: u32 = wait_pids[idx];
+        CloseHandle(wait_handles[idx]);
+        free_proc(child_pid);
+        ret child_pid::i64;
+    }
+
+    ret c.EINVAL;
+}
+
+pub fun wait_pid(pid: i64, wstatus: *i32, options: i32) i64 {
+    ret wait(pid, wstatus, options, nil);
+}
+
+# wait status decoding (POSIX encoding: exit_code << 8 for normal exit)
+
+pub fun has_exited(status: i32) bool {
+    ret (status & 0x7f) == 0;
+}
+
+pub fun exit_code(status: i32) i32 {
+    ret (status >> 8) & 0xff;
+}
+
+pub fun was_signaled(status: i32) bool {
+    ret false;
+}
+
+pub fun term_signal(status: i32) i32 {
+    ret 0;
+}
+
+pub fun was_stopped(status: i32) bool {
+    ret false;
+}
+
+pub fun stop_signal(status: i32) i32 {
+    ret 0;
+}
+
+# threads
+
+# thread callback. receives the pre-allocated stack base as its parameter,
+# where fn_addr and done_addr are stored at offsets 0 and 8.
+fun thread_trampoline(arg: ptr) {
+    val base: usize = arg::usize;
+    val fn_addr: usize = @(base::*usize);
+    val done_addr: usize = @((base + 8)::*usize);
+    val fn_ptr: fun() = fn_addr::fun();
+    fn_ptr();
+    val done: *i64 = done_addr::*i64;
+    @done = 1;
+    WakeByAddressSingle(done::ptr);
+}
+
+# thread_spawn: create a new thread via CreateThread.
+#
+# stores fn and done_ptr at the base of the pre-allocated stack region,
+# then passes that address as CreateThread's lpParameter. the trampoline
+# reads both values from the parameter, so no globals are needed and
+# multiple threads may be spawned concurrently.
+# ---
+# f:          function to execute in the new thread
+# done_ptr:   pointer to a completion flag (set to 1 when thread exits)
+# stack_base: base address of the pre-allocated stack region
+# stack_size: size of the stack in bytes
+# ret:        thread ID on success, or negative errno on failure
+pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: usize) i64 {
+    @(stack_base::*usize) = f::usize;
+    @((stack_base + 8)::*usize) = done_ptr::usize;
+    var tid: u32 = 0;
+    val tramp: fun(ptr) = thread_trampoline;
+    val h: isize = CreateThread(nil, stack_size, tramp::usize, stack_base::ptr, 0, ?tid);
+    if (h == 0) {
+        ret last_error();
+    }
+    CloseHandle(h);
+    ret tid::i64;
+}
+
+# thread_wait: block until the value at addr changes from expected.
+#
+# wraps WaitOnAddress for 64-bit compare-and-wait. returns immediately
+# if *addr does not equal expected. spurious wakeups are possible.
+# ---
+# addr:     pointer to the futex word
+# expected: value to compare against
+# ret:      0 on wake, or negative errno
+pub fun thread_wait(addr: *i64, expected: i64) i64 {
+    var cmp: i64 = expected;
+    val ok: i32 = WaitOnAddress(addr::ptr, ?cmp::ptr, 8, c.INFINITE);
+    if (ok == 0) {
+        ret last_error();
+    }
+    ret 0;
+}
+
+# thread_wake: wake one thread blocked on WaitOnAddress at addr.
+# ---
+# addr: pointer to the futex word
+# ret:  0 (always succeeds)
+pub fun thread_wake(addr: *i64) i64 {
+    WakeByAddressSingle(addr::ptr);
+    ret 0;
+}
+
+# sockets
+
+pub val AF_INET:      i32 = c.AF_INET;
+pub val SOCK_STREAM:  i32 = c.SOCK_STREAM;
+pub val SOCK_DGRAM:   i32 = c.SOCK_DGRAM;
+pub val SOL_SOCKET:   i32 = c.SOL_SOCKET;
+pub val SO_REUSEADDR: i32 = c.SO_REUSEADDR;
+pub val SHUT_RD:      i32 = c.SHUT_RD;
+pub val SHUT_WR:      i32 = c.SHUT_WR;
+pub val SHUT_RDWR:    i32 = c.SHUT_RDWR;
+
+pub val SOCKADDR_IN_SIZE: usize = 16;
+
+pub fun sock_addr_init(sa: *u8, port: u16, addr: &u8) {
+    var i: usize = 0;
+    for (i < SOCKADDR_IN_SIZE) { sa[i] = 0; i = i + 1; }
+    sa[0] = AF_INET::u8;
+    sa[1] = 0;
+    sa[2] = (port >> 8)::u8;
+    sa[3] = (port & 255)::u8;
+    sa[4] = addr[0];
+    sa[5] = addr[1];
+    sa[6] = addr[2];
+    sa[7] = addr[3];
+}
+
+pub fun sock_addr_read(sa: &u8, port: *u16, addr: *u8) {
+    @port = (sa[2]::u16 << 8) | sa[3]::u16;
+    addr[0] = sa[4];
+    addr[1] = sa[5];
+    addr[2] = sa[6];
+    addr[3] = sa[7];
+}
+
+pub fun sock_send(fd: i32, buf: &u8, len: usize) i64 {
+    if (!ensure_wsa()) { ret c.EIO; }
+    val res: i32 = ws2_send(fd::usize, buf, len::i32, 0);
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    ret res::i64;
+}
+
+pub fun sock_recv(fd: i32, buf: *u8, len: usize) i64 {
+    if (!ensure_wsa()) { ret c.EIO; }
+    val res: i32 = ws2_recv(fd::usize, buf, len::i32, 0);
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    ret res::i64;
+}
+
+pub fun sock_close(fd: i32) i64 {
+    ret closesocket(fd::usize)::i64;
+}
+
+fun wsa_last_error() i64 {
+    val err: i32 = WSAGetLastError();
+    if (err == c.WSAECONNREFUSED)  { ret c.ECONNREFUSED; }
+    or (err == c.WSAETIMEDOUT)     { ret c.ETIMEDOUT; }
+    or (err == c.WSAECONNRESET)    { ret c.ECONNRESET; }
+    or (err == c.WSAECONNABORTED)  { ret c.ECONNABORTED; }
+    or (err == c.WSAENOTCONN)      { ret c.ENOTCONN; }
+    or (err == c.WSAENETUNREACH)   { ret c.ENETUNREACH; }
+    or (err == c.WSAEHOSTUNREACH)  { ret c.EHOSTUNREACH; }
+    or (err == c.WSAEADDRINUSE)    { ret c.EADDRINUSE; }
+    or (err == c.WSAEADDRNOTAVAIL) { ret c.EADDRNOTAVAIL; }
+    or (err == c.WSAEWOULDBLOCK)   { ret c.EAGAIN; }
+    or (err == c.WSAEINPROGRESS)   { ret c.EINPROGRESS; }
+    or (err == c.WSAENOTSOCK)      { ret c.ENOTSOCK; }
+    or (err == c.WSAEMSGSIZE)      { ret c.EMSGSIZE; }
+    or (err == c.WSAEAFNOSUPPORT)  { ret c.EAFNOSUPPORT; }
+    or { ret c.EIO; }
+}
+
+var wsa_initialized: i64 = 0;
+
+fun ensure_wsa() bool {
+    if (wsa_initialized != 0) { ret true; }
+    var wsa_data: [408]u8;
+    val res: i32 = WSAStartup(0x0202, ?wsa_data[0]);
+    if (res != 0) { ret false; }
+    wsa_initialized = 1;
+    ret true;
+}
+
+pub fun sock_create(domain: i32, typ: i32, protocol: i32) i64 {
+    if (!ensure_wsa()) { ret c.EIO; }
+    val s: usize = ws2_socket(domain, typ, protocol);
+    if (s == c.INVALID_SOCKET) { ret wsa_last_error(); }
+    ret s::i64;
+}
+
+pub fun sock_bind(fd: i32, addr: *u8, addrlen: usize) i64 {
+    val res: i32 = ws2_bind(fd::usize, addr, addrlen::i32);
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    ret 0;
+}
+
+pub fun sock_listen(fd: i32, backlog: i32) i64 {
+    val res: i32 = ws2_listen(fd::usize, backlog);
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    ret 0;
+}
+
+pub fun sock_accept(fd: i32, addr: *u8, addrlen: *u32) i64 {
+    val s: usize = ws2_accept(fd::usize, addr, addrlen::*i32);
+    if (s == c.INVALID_SOCKET) { ret wsa_last_error(); }
+    ret s::i64;
+}
+
+pub fun sock_connect(fd: i32, addr: *u8, addrlen: usize) i64 {
+    val res: i32 = ws2_connect(fd::usize, addr, addrlen::i32);
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    ret 0;
+}
+
+pub fun sock_sendto(fd: i32, buf: &u8, len: usize, flags: i32, addr: *u8, addrlen: usize) i64 {
+    val res: i32 = ws2_sendto(fd::usize, buf, len::i32, flags, addr, addrlen::i32);
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    ret res::i64;
+}
+
+pub fun sock_recvfrom(fd: i32, buf: *u8, len: usize, flags: i32, addr: *u8, addrlen: *u32) i64 {
+    val res: i32 = ws2_recvfrom(fd::usize, buf, len::i32, flags, addr, addrlen::*i32);
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    ret res::i64;
+}
+
+pub fun sock_shutdown(fd: i32, how: i32) i64 {
+    val res: i32 = ws2_shutdown(fd::usize, how);
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    ret 0;
+}
+
+pub fun sock_setopt(fd: i32, level: i32, opt: i32, value: *u8, vallen: usize) i64 {
+    val res: i32 = ws2_setsockopt(fd::usize, level, opt, value, vallen::i32);
+    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    ret 0;
+}
+
+# dns
+
+pub val DNS_HOSTS_PATH: str = "C:/Windows/System32/drivers/etc/hosts";
+
+# dns_nameserver: get the primary DNS nameserver address.
+#
+# windows does not use /etc/resolv.conf. a real implementation would
+# call GetAdaptersAddresses or read the registry. returns NOT_FOUND
+# until a Win32 implementation is added.
+# ---
+# ns:  pointer to 4 bytes to fill with the IPv4 address
+# ret: 0 on success, or NOT_FOUND / negative errno
+pub fun dns_nameserver(ns: *u8) i64 {
+    ret os_shared.NOT_FOUND;
+}
+
+# random
+
+# random_fill: fill a buffer with cryptographic random bytes via RtlGenRandom.
+# ---
+# buf:  destination buffer
+# len:  number of bytes to fill
+# ret:  0 on success, or negative errno
+pub fun random_fill(buf: *u8, len: usize) i64 {
+    if (len == 0) { ret 0; }
+    if (SystemFunction036(buf, len::u32) != 0) { ret 0; }
+    ret c.EIO;
+}
+
+# time
+
+pub fun clock_gettime(clock_id: i32, ts: *timespec) i64 {
+    if (clock_id == c.CLOCK_MONOTONIC) {
+        var count: i64 = 0;
+        var freq: i64 = 0;
+        QueryPerformanceCounter(?count);
+        QueryPerformanceFrequency(?freq);
+        if (freq == 0) {
+            ret c.EIO;
+        }
+        ts.tv_sec = count / freq;
+        ts.tv_nsec = ((count % freq) * 1000000000) / freq;
+        ret 0;
+    }
+    var ft: FILETIME;
+    GetSystemTimeAsFileTime(?ft::*u8);
+    filetime_to_unix(ft, ?ts.tv_sec, ?ts.tv_nsec);
+    ret 0;
+}
+
+# errno
+
+pub fun error_message(code: i64) str {
+    if (code == c.EPERM) { ret "operation not permitted"; }
+    or (code == c.ENOENT) { ret "no such file or directory"; }
+    or (code == c.ESRCH) { ret "no such process"; }
+    or (code == c.EINTR) { ret "interrupted system call"; }
+    or (code == c.EIO) { ret "input/output error"; }
+    or (code == c.ENXIO) { ret "no such device or address"; }
+    or (code == c.E2BIG) { ret "argument list too long"; }
+    or (code == c.EBADF) { ret "bad file descriptor"; }
+    or (code == c.ECHILD) { ret "no child processes"; }
+    or (code == c.EAGAIN) { ret "resource temporarily unavailable"; }
+    or (code == c.ENOMEM) { ret "out of memory"; }
+    or (code == c.EACCES) { ret "permission denied"; }
+    or (code == c.EFAULT) { ret "bad address"; }
+    or (code == c.EBUSY) { ret "device or resource busy"; }
+    or (code == c.EEXIST) { ret "file exists"; }
+    or (code == c.ENODEV) { ret "no such device"; }
+    or (code == c.ENOTDIR) { ret "not a directory"; }
+    or (code == c.EISDIR) { ret "is a directory"; }
+    or (code == c.EINVAL) { ret "invalid argument"; }
+    or (code == c.ENFILE) { ret "too many open files in system"; }
+    or (code == c.EMFILE) { ret "too many open files"; }
+    or (code == c.ETXTBSY) { ret "text file busy"; }
+    or (code == c.ENOSPC) { ret "no space left on device"; }
+    or (code == c.EROFS) { ret "read-only file system"; }
+    or (code == c.EPIPE) { ret "broken pipe"; }
+    or (code == c.ENOTEMPTY) { ret "directory not empty"; }
+    or (code == c.ENOTSUP) { ret "operation not supported"; }
+    or { ret "unknown error"; }
+}
