@@ -13,9 +13,86 @@ $if ($mach.build.target.os.id != $mach.os.darwin.id) {
     $error("std.system.os.darwin.shared: requires darwin target");
 }
 
-use c: std.system.os.darwin.constants;
-
 use os_shared: std.system.os.shared;
+
+# syscall numbers (BSD convention, same across darwin arches)
+val SYS_EXIT:             usize = 1;
+val SYS_FORK:             usize = 2;
+val SYS_READ:             usize = 3;
+val SYS_WRITE:            usize = 4;
+val SYS_CLOSE:            usize = 6;
+val SYS_WAIT4:            usize = 7;
+val SYS_MMAP:             usize = 197;
+val SYS_MUNMAP:           usize = 73;
+val SYS_MPROTECT:         usize = 74;
+val SYS_MSYNC:            usize = 65;
+val SYS_MADVISE:          usize = 75;
+val SYS_MLOCK:            usize = 203;
+val SYS_MUNLOCK:          usize = 204;
+val SYS_EXECVE:           usize = 59;
+val SYS_VFORK:            usize = 66;
+val SYS_LSEEK:            usize = 199;
+val SYS_FSTAT64:          usize = 339;
+val SYS_GETDIRENTRIES64:  usize = 344;
+val SYS_OPENAT:           usize = 463;
+val SYS_MKDIRAT:          usize = 464;
+val SYS_RENAMEAT:         usize = 465;
+val SYS_UNLINKAT:         usize = 466;
+val SYS_FACCESSAT:        usize = 468;
+val SYS_FSTATAT64:        usize = 470;
+val SYS_PIPE:             usize = 42;
+val SYS_SELECT:           usize = 93;
+val SYS_GETTIMEOFDAY:     usize = 116;
+val SYS_CLOCK_GETTIME:    usize = 427;
+val SYS_GETPID:           usize = 20;
+val SYS_KILL:             usize = 37;
+val SYS___GETCWD:         usize = 304;
+val SYS_GETENTROPY:       usize = 500;
+val SYS_SOCKET:           usize = 97;
+val SYS_CONNECT:          usize = 98;
+val SYS_ACCEPT:           usize = 30;
+val SYS_SENDTO:           usize = 133;
+val SYS_RECVFROM:         usize = 29;
+val SYS_SHUTDOWN:         usize = 134;
+val SYS_BIND:             usize = 104;
+val SYS_LISTEN:           usize = 106;
+val SYS_SETSOCKOPT:       usize = 105;
+val SYS_GETRLIMIT:        usize = 194;
+val RLIMIT_NOFILE:        usize = 8;
+
+val SIGABRT: i32 = 6;
+
+# mmap protection
+val PROT_NONE:  i32 = 0;
+val PROT_READ:  i32 = 1;
+val PROT_WRITE: i32 = 2;
+val PROT_EXEC:  i32 = 4;
+
+# mmap flags
+val MAP_SHARED:    i32 = 1;
+val MAP_PRIVATE:   i32 = 2;
+val MAP_FIXED:     i32 = 16;
+val MAP_ANONYMOUS: i32 = 0x1000;
+
+# msync flags
+val MS_ASYNC:      i32 = 1;
+val MS_INVALIDATE: i32 = 2;
+val MS_SYNC:       i32 = 0x10;
+
+# lseek whence
+val SEEK_SET: i32 = 0;
+val SEEK_CUR: i32 = 1;
+val SEEK_END: i32 = 2;
+
+# thread creation (bsdthread)
+val SYS_BSDTHREAD_CREATE:    usize = 360;
+val SYS_BSDTHREAD_TERMINATE: usize = 361;
+val SYS_BSDTHREAD_REGISTER:  usize = 366;
+
+# ulock (futex equivalent)
+val SYS_ULOCK_WAIT: usize = 515;
+val SYS_ULOCK_WAKE: usize = 516;
+val UL_COMPARE_AND_WAIT64: usize = 5;
 
 # kernel ABI types
 
@@ -72,65 +149,65 @@ pub rec dirent64 {
 # path
 pub val separator: u8 = '/';
 
-# portable constant re-exports
-pub val STDIN_FD:  i32 = c.STDIN_FILENO;
-pub val STDOUT_FD: i32 = c.STDOUT_FILENO;
-pub val STDERR_FD: i32 = c.STDERR_FILENO;
+# portable constants
+pub val STDIN_FD:  i32 = 0;
+pub val STDOUT_FD: i32 = 1;
+pub val STDERR_FD: i32 = 2;
 
-pub val O_RDONLY:    i32 = c.O_RDONLY;
-pub val O_WRONLY:    i32 = c.O_WRONLY;
-pub val O_RDWR:      i32 = c.O_RDWR;
-pub val O_CREAT:     i32 = c.O_CREAT;
-pub val O_EXCL:      i32 = c.O_EXCL;
-pub val O_TRUNC:     i32 = c.O_TRUNC;
-pub val O_APPEND:    i32 = c.O_APPEND;
-pub val O_DIRECTORY: i32 = c.O_DIRECTORY;
+pub val O_RDONLY:    i32 = 0;
+pub val O_WRONLY:    i32 = 1;
+pub val O_RDWR:      i32 = 2;
+pub val O_CREAT:     i32 = 0x200;
+pub val O_EXCL:      i32 = 0x800;
+pub val O_TRUNC:     i32 = 0x400;
+pub val O_APPEND:    i32 = 8;
+pub val O_DIRECTORY: i32 = 0x100000;
 
-pub val AT_FDCWD:            i32 = c.AT_FDCWD;
-pub val AT_SYMLINK_NOFOLLOW: i32 = c.AT_SYMLINK_NOFOLLOW;
-pub val AT_REMOVEDIR:        i32 = c.AT_REMOVEDIR;
+pub val AT_FDCWD:            i32 = -2;
+pub val AT_SYMLINK_NOFOLLOW: i32 = 0x0020;
+pub val AT_REMOVEDIR:        i32 = 0x0080;
 
-pub val S_IFMT:  u32 = c.S_IFMT;
-pub val S_IFDIR: u32 = c.S_IFDIR;
-pub val S_IFREG: u32 = c.S_IFREG;
-pub val S_IFLNK: u32 = c.S_IFLNK;
+pub val S_IFMT:  u32 = 0o170000;
+pub val S_IFDIR: u32 = 0o040000;
+pub val S_IFREG: u32 = 0o100000;
+pub val S_IFLNK: u32 = 0o120000;
 
-pub val WNOHANG:    i32 = c.WNOHANG;
-pub val WUNTRACED:  i32 = c.WUNTRACED;
-pub val WCONTINUED: i32 = c.WCONTINUED;
+pub val WNOHANG:    i32 = 1;
+pub val WUNTRACED:  i32 = 2;
+pub val WCONTINUED: i32 = 0x10;
 
-pub val CLOCK_REALTIME:  i32 = c.CLOCK_REALTIME;
-pub val CLOCK_MONOTONIC: i32 = c.CLOCK_MONOTONIC;
+pub val CLOCK_REALTIME:  i32 = 0;
+pub val CLOCK_MONOTONIC: i32 = 6;
 
-pub val EPERM:     i64 = c.EPERM;
-pub val ENOENT:    i64 = c.ENOENT;
-pub val ESRCH:     i64 = c.ESRCH;
-pub val EINTR:     i64 = c.EINTR;
-pub val EIO:       i64 = c.EIO;
-pub val ENXIO:     i64 = c.ENXIO;
-pub val E2BIG:     i64 = c.E2BIG;
-pub val EBADF:     i64 = c.EBADF;
-pub val ECHILD:    i64 = c.ECHILD;
-pub val EAGAIN:    i64 = c.EAGAIN;
-pub val ENOMEM:    i64 = c.ENOMEM;
-pub val EACCES:    i64 = c.EACCES;
-pub val EFAULT:    i64 = c.EFAULT;
-pub val EBUSY:     i64 = c.EBUSY;
-pub val EEXIST:    i64 = c.EEXIST;
-pub val ENODEV:    i64 = c.ENODEV;
-pub val ENOTDIR:   i64 = c.ENOTDIR;
-pub val EISDIR:    i64 = c.EISDIR;
-pub val EINVAL:    i64 = c.EINVAL;
-pub val ENFILE:    i64 = c.ENFILE;
-pub val EMFILE:    i64 = c.EMFILE;
-pub val ETXTBSY:   i64 = c.ETXTBSY;
-pub val ENOSPC:    i64 = c.ENOSPC;
-pub val EROFS:     i64 = c.EROFS;
-pub val EPIPE:     i64 = c.EPIPE;
-pub val ENOTEMPTY: i64 = c.ENOTEMPTY;
-pub val ENOTSUP:   i64 = c.ENOTSUP;
+pub val EPERM:     i64 = -1;
+pub val ENOENT:    i64 = -2;
+pub val ESRCH:     i64 = -3;
+pub val EINTR:     i64 = -4;
+pub val EIO:       i64 = -5;
+pub val ENXIO:     i64 = -6;
+pub val E2BIG:     i64 = -7;
+pub val EBADF:     i64 = -9;
+pub val ECHILD:    i64 = -10;
+pub val EAGAIN:    i64 = -35;
+pub val ENOMEM:    i64 = -12;
+pub val EACCES:    i64 = -13;
+pub val EFAULT:    i64 = -14;
+pub val EBUSY:     i64 = -16;
+pub val EEXIST:    i64 = -17;
+pub val ENODEV:    i64 = -19;
+pub val ENOTDIR:   i64 = -20;
+pub val EISDIR:    i64 = -21;
+pub val EINVAL:    i64 = -22;
+pub val ENFILE:    i64 = -23;
+pub val EMFILE:    i64 = -24;
+pub val ETXTBSY:   i64 = -26;
+pub val ENOSPC:    i64 = -28;
+pub val EROFS:     i64 = -30;
+pub val EPIPE:     i64 = -32;
+pub val ENOTEMPTY: i64 = -66;
+pub val ENOTSUP:   i64 = -45;
 
-pub val EINTR_MAX_RETRIES: usize = c.EINTR_MAX_RETRIES;
+pub val EINTR_MAX_RETRIES: usize = 8;
 
 # syscall wrappers (portable DSL — compiler emits arch-appropriate instructions)
 
@@ -182,14 +259,14 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
 # ---
 # code: exit code
 pub fun terminate(code: i64) {
-    syscall1(c.SYS_EXIT, code::usize);
+    syscall1(SYS_EXIT, code::usize);
     asm { trap }
 }
 
 # abort: abort the process immediately with exit code 255.
 pub fun abort() {
-    val pid: i64 = syscall0(c.SYS_GETPID);
-    syscall2(c.SYS_KILL, pid::usize, c.SIGABRT::usize);
+    val pid: i64 = syscall0(SYS_GETPID);
+    syscall2(SYS_KILL, pid::usize, SIGABRT::usize);
     terminate(255);
 }
 
@@ -200,9 +277,9 @@ pub fun allocate(size: usize) ptr {
         ret nil;
     }
     val res: i64 = syscall6(
-        c.SYS_MMAP, 0, size,
-        (c.PROT_READ | c.PROT_WRITE)::u32::usize,
-        (c.MAP_PRIVATE | c.MAP_ANONYMOUS)::u32::usize,
+        SYS_MMAP, 0, size,
+        (PROT_READ | PROT_WRITE)::u32::usize,
+        (MAP_PRIVATE | MAP_ANONYMOUS)::u32::usize,
         (-1)::isize::usize, 0
     );
     if (res < 0) {
@@ -215,7 +292,7 @@ pub fun deallocate(p: ptr, size: usize) i64 {
     if (p == nil || size == 0) {
         ret 0;
     }
-    ret syscall2(c.SYS_MUNMAP, p::usize, size);
+    ret syscall2(SYS_MUNMAP, p::usize, size);
 }
 
 # darwin has no mremap — allocate new, copy, free old.
@@ -253,9 +330,9 @@ pub fun heap_region_base() usize {
         ret _brk_end;
     }
     val res: i64 = syscall6(
-        c.SYS_MMAP, 0, os_shared.HEAP_RESERVE,
-        c.PROT_NONE::u32::usize,
-        (c.MAP_PRIVATE | c.MAP_ANONYMOUS)::u32::usize,
+        SYS_MMAP, 0, os_shared.HEAP_RESERVE,
+        PROT_NONE::u32::usize,
+        (MAP_PRIVATE | MAP_ANONYMOUS)::u32::usize,
         (-1)::isize::usize, 0
     );
     if (res < 0) {
@@ -281,8 +358,8 @@ pub fun heap_region_extend(addr: usize) usize {
     }
     val size: usize = addr - _brk_end;
     val res: i64 = syscall3(
-        c.SYS_MPROTECT, _brk_end,
-        size, (c.PROT_READ | c.PROT_WRITE)::u32::usize
+        SYS_MPROTECT, _brk_end,
+        size, (PROT_READ | PROT_WRITE)::u32::usize
     );
     if (res < 0) {
         ret _brk_end;
@@ -292,19 +369,19 @@ pub fun heap_region_extend(addr: usize) usize {
 }
 
 pub fun protect(p: ptr, size: usize, prot: u32) i64 {
-    ret syscall3(c.SYS_MPROTECT, p::usize, size, prot::usize);
+    ret syscall3(SYS_MPROTECT, p::usize, size, prot::usize);
 }
 
 pub fun lock(p: ptr, size: usize) i64 {
-    ret syscall2(c.SYS_MLOCK, p::usize, size);
+    ret syscall2(SYS_MLOCK, p::usize, size);
 }
 
 pub fun unlock(p: ptr, size: usize) i64 {
-    ret syscall2(c.SYS_MUNLOCK, p::usize, size);
+    ret syscall2(SYS_MUNLOCK, p::usize, size);
 }
 
 pub fun advise(p: ptr, size: usize, advice: u32) i64 {
-    ret syscall3(c.SYS_MADVISE, p::usize, size, advice::usize);
+    ret syscall3(SYS_MADVISE, p::usize, size, advice::usize);
 }
 
 pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
@@ -312,8 +389,8 @@ pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
         ret nil;
     }
     val res: i64 = syscall6(
-        c.SYS_MMAP, 0, size,
-        prot::usize, c.MAP_SHARED::u32::usize,
+        SYS_MMAP, 0, size,
+        prot::usize, MAP_SHARED::u32::usize,
         fd::u32::usize, offset
     );
     if (res < 0) {
@@ -326,7 +403,7 @@ pub fun sync_file(p: ptr, size: usize) i64 {
     if (p == nil || size == 0) {
         ret 0;
     }
-    ret syscall3(c.SYS_MSYNC, p::usize, size, c.MS_SYNC::u32::usize);
+    ret syscall3(SYS_MSYNC, p::usize, size, MS_SYNC::u32::usize);
 }
 
 # environment (set by runtime at program start)
@@ -336,94 +413,94 @@ pub var _envp: usize = 0;
 
 pub fun read(fd: i32, buf: *u8, count: usize) i64 {
     var retries: usize = 0;
-    for (retries < c.EINTR_MAX_RETRIES) {
-        val res: i64 = syscall3(c.SYS_READ, fd::isize::usize, buf::usize, count);
-        if (res != c.EINTR) { ret res; }
+    for (retries < EINTR_MAX_RETRIES) {
+        val res: i64 = syscall3(SYS_READ, fd::isize::usize, buf::usize, count);
+        if (res != EINTR) { ret res; }
         retries = retries + 1;
     }
-    ret c.EINTR;
+    ret EINTR;
 }
 
 pub fun write(fd: i32, buf: &u8, count: usize) i64 {
     var retries: usize = 0;
-    for (retries < c.EINTR_MAX_RETRIES) {
-        val res: i64 = syscall3(c.SYS_WRITE, fd::isize::usize, buf::usize, count);
-        if (res != c.EINTR) { ret res; }
+    for (retries < EINTR_MAX_RETRIES) {
+        val res: i64 = syscall3(SYS_WRITE, fd::isize::usize, buf::usize, count);
+        if (res != EINTR) { ret res; }
         retries = retries + 1;
     }
-    ret c.EINTR;
+    ret EINTR;
 }
 
 pub fun open(dirfd: i32, path: &u8, flags: i32, mode: i32) i64 {
     var retries: usize = 0;
-    for (retries < c.EINTR_MAX_RETRIES) {
-        val res: i64 = syscall4(c.SYS_OPENAT, dirfd::isize::usize, path::usize, flags::u32::usize, mode::u32::usize);
-        if (res != c.EINTR) { ret res; }
+    for (retries < EINTR_MAX_RETRIES) {
+        val res: i64 = syscall4(SYS_OPENAT, dirfd::isize::usize, path::usize, flags::u32::usize, mode::u32::usize);
+        if (res != EINTR) { ret res; }
         retries = retries + 1;
     }
-    ret c.EINTR;
+    ret EINTR;
 }
 
 pub fun close(fd: i32) i64 {
-    ret syscall1(c.SYS_CLOSE, fd::isize::usize);
+    ret syscall1(SYS_CLOSE, fd::isize::usize);
 }
 
 pub fun stat(fd: i32, st: *stat_t) i64 {
-    ret syscall2(c.SYS_FSTAT64, fd::isize::usize, st::usize);
+    ret syscall2(SYS_FSTAT64, fd::isize::usize, st::usize);
 }
 
 pub fun stat_path(dirfd: i32, path: &u8, st: *stat_t, flags: i32) i64 {
-    ret syscall4(c.SYS_FSTATAT64, dirfd::isize::usize, path::usize, st::usize, flags::u32::usize);
+    ret syscall4(SYS_FSTATAT64, dirfd::isize::usize, path::usize, st::usize, flags::u32::usize);
 }
 
 pub fun unlink(dirfd: i32, path: &u8, flags: i32) i64 {
-    ret syscall3(c.SYS_UNLINKAT, dirfd::isize::usize, path::usize, flags::u32::usize);
+    ret syscall3(SYS_UNLINKAT, dirfd::isize::usize, path::usize, flags::u32::usize);
 }
 
 pub fun rename(olddir: i32, oldpath: &u8, newdir: i32, newpath: &u8) i64 {
-    ret syscall4(c.SYS_RENAMEAT, olddir::isize::usize, oldpath::usize, newdir::isize::usize, newpath::usize);
+    ret syscall4(SYS_RENAMEAT, olddir::isize::usize, oldpath::usize, newdir::isize::usize, newpath::usize);
 }
 
 pub fun make_dir(dirfd: i32, path: &u8, mode: i32) i64 {
-    ret syscall3(c.SYS_MKDIRAT, dirfd::isize::usize, path::usize, mode::u32::usize);
+    ret syscall3(SYS_MKDIRAT, dirfd::isize::usize, path::usize, mode::u32::usize);
 }
 
 # darwin uses getdirentries64 instead of getdents64.
 pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
     var basep: i64 = 0;
-    ret syscall4(c.SYS_GETDIRENTRIES64, fd::isize::usize, dirp::usize, count, ?basep::usize);
+    ret syscall4(SYS_GETDIRENTRIES64, fd::isize::usize, dirp::usize, count, ?basep::usize);
 }
 
 pub fun access(dirfd: i32, path: &u8, mode: i32, flags: i32) i64 {
-    ret syscall4(c.SYS_FACCESSAT, dirfd::isize::usize, path::usize, mode::u32::usize, flags::u32::usize);
+    ret syscall4(SYS_FACCESSAT, dirfd::isize::usize, path::usize, mode::u32::usize, flags::u32::usize);
 }
 
 pub fun seek(fd: i32, offset: i64, whence: i32) i64 {
-    ret syscall3(c.SYS_LSEEK, fd::isize::usize, offset::isize::usize, whence::u32::usize);
+    ret syscall3(SYS_LSEEK, fd::isize::usize, offset::isize::usize, whence::u32::usize);
 }
 
 # process
 
 pub fun fork() i64 {
-    ret syscall0(c.SYS_FORK);
+    ret syscall0(SYS_FORK);
 }
 
 pub fun vfork() i64 {
-    ret syscall0(c.SYS_VFORK);
+    ret syscall0(SYS_VFORK);
 }
 
 pub fun exec(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
-    ret syscall3(c.SYS_EXECVE, pathname::usize, argv::usize, envp::usize);
+    ret syscall3(SYS_EXECVE, pathname::usize, argv::usize, envp::usize);
 }
 
 pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
     var retries: usize = 0;
-    for (retries < c.EINTR_MAX_RETRIES) {
-        val res: i64 = syscall4(c.SYS_WAIT4, pid::usize, wstatus::usize, options::usize, rusage::usize);
-        if (res != c.EINTR) { ret res; }
+    for (retries < EINTR_MAX_RETRIES) {
+        val res: i64 = syscall4(SYS_WAIT4, pid::usize, wstatus::usize, options::usize, rusage::usize);
+        if (res != EINTR) { ret res; }
         retries = retries + 1;
     }
-    ret c.EINTR;
+    ret EINTR;
 }
 
 pub fun wait_pid(pid: i64, wstatus: *i32, options: i32) i64 {
@@ -456,16 +533,16 @@ pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
     if (pid == 0) {
         var rl: [2]u64;
         var max_fd: i32 = 1024;
-        if (syscall2(c.SYS_GETRLIMIT, c.RLIMIT_NOFILE, (?rl[0])::usize) == 0 && rl[0] > 0) {
+        if (syscall2(SYS_GETRLIMIT, RLIMIT_NOFILE, (?rl[0])::usize) == 0 && rl[0] > 0) {
             max_fd = rl[0]::i32;
         }
         var fd: i32 = 3;
         for (fd < max_fd) {
-            syscall1(c.SYS_CLOSE, fd::isize::usize);
+            syscall1(SYS_CLOSE, fd::isize::usize);
             fd = fd + 1;
         }
         exec(pathname, argv, envp);
-        syscall1(c.SYS_EXIT, 127);
+        syscall1(SYS_EXIT, 127);
     }
     ret pid;
 }
@@ -474,7 +551,7 @@ pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
 # ---
 # ret: process ID
 pub fun getpid() i64 {
-    ret syscall0(c.SYS_GETPID);
+    ret syscall0(SYS_GETPID);
 }
 
 # sleep: suspend execution for the given number of nanoseconds.
@@ -493,7 +570,7 @@ pub fun sleep(nsec: i64) {
     var tv: timeval;
     tv.tv_sec = sec;
     tv.tv_usec = usec::i32;
-    syscall5(c.SYS_SELECT, 0, 0, 0, 0, ?tv::usize);
+    syscall5(SYS_SELECT, 0, 0, 0, 0, ?tv::usize);
 }
 
 # getcwd: get the current working directory.
@@ -502,7 +579,7 @@ pub fun sleep(nsec: i64) {
 # size: buffer capacity in bytes
 # ret:  length of path on success, or negative errno
 pub fun getcwd(buf: *u8, size: usize) i64 {
-    ret syscall2(c.SYS___GETCWD, buf::usize, size);
+    ret syscall2(SYS___GETCWD, buf::usize, size);
 }
 
 # getenv: look up an environment variable by name.
@@ -550,13 +627,13 @@ fun thread_start(self: usize, kport: usize, func: usize, arg: usize, stacksize: 
     fn_ptr();
     val done: *i64 = done_addr::*i64;
     @done = 1;
-    syscall3(c.SYS_ULOCK_WAKE, c.UL_COMPARE_AND_WAIT64, done_addr, 0);
-    syscall4(c.SYS_BSDTHREAD_TERMINATE, stack_base, stack_size, kport, 0);
+    syscall3(SYS_ULOCK_WAKE, UL_COMPARE_AND_WAIT64, done_addr, 0);
+    syscall4(SYS_BSDTHREAD_TERMINATE, stack_base, stack_size, kport, 0);
 }
 
 # workqueue thread callback (unused, required by bsdthread_register).
 fun thread_wq_start(self: usize, kport: usize, saddr: usize, arg: usize, cnt: usize, flags: usize) {
-    syscall4(c.SYS_BSDTHREAD_TERMINATE, 0, 0, 0, 0);
+    syscall4(SYS_BSDTHREAD_TERMINATE, 0, 0, 0, 0);
 }
 
 fun ensure_thread_registered() {
@@ -565,7 +642,7 @@ fun ensure_thread_registered() {
     if (!atomic.cas(?thread_registered, ?expected, 1)) { ret; }
     val start: fun(usize, usize, usize, usize, usize, usize) = thread_start;
     val wq: fun(usize, usize, usize, usize, usize, usize) = thread_wq_start;
-    syscall6(c.SYS_BSDTHREAD_REGISTER, start::usize, wq::usize, 64, 0, 0, 0);
+    syscall6(SYS_BSDTHREAD_REGISTER, start::usize, wq::usize, 64, 0, 0, 0);
 }
 
 # thread_spawn: create a new thread via bsdthread_create.
@@ -587,7 +664,7 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
     ctx[1] = stack_base;
     ctx[2] = stack_size;
     val stack_top: usize = stack_base + stack_size;
-    ret syscall5(c.SYS_BSDTHREAD_CREATE, f::usize, ctx::usize, stack_top, 0, 0);
+    ret syscall5(SYS_BSDTHREAD_CREATE, f::usize, ctx::usize, stack_top, 0, 0);
 }
 
 # thread_wait: block until the value at addr changes from expected.
@@ -599,7 +676,7 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
 # expected: value to compare against
 # ret:      0 on wake, or negative errno
 pub fun thread_wait(addr: *i64, expected: i64) i64 {
-    ret syscall4(c.SYS_ULOCK_WAIT, c.UL_COMPARE_AND_WAIT64, addr::usize, expected::usize, 0);
+    ret syscall4(SYS_ULOCK_WAIT, UL_COMPARE_AND_WAIT64, addr::usize, expected::usize, 0);
 }
 
 # thread_wake: wake one thread blocked on a ulock wait at addr.
@@ -607,19 +684,19 @@ pub fun thread_wait(addr: *i64, expected: i64) i64 {
 # addr: pointer to the futex word
 # ret:  number of threads woken, or negative errno
 pub fun thread_wake(addr: *i64) i64 {
-    ret syscall3(c.SYS_ULOCK_WAKE, c.UL_COMPARE_AND_WAIT64, addr::usize, 0);
+    ret syscall3(SYS_ULOCK_WAKE, UL_COMPARE_AND_WAIT64, addr::usize, 0);
 }
 
 # sockets
 
-pub val AF_INET:      i32 = c.AF_INET;
-pub val SOCK_STREAM:  i32 = c.SOCK_STREAM;
-pub val SOCK_DGRAM:   i32 = c.SOCK_DGRAM;
-pub val SOL_SOCKET:   i32 = c.SOL_SOCKET;
-pub val SO_REUSEADDR: i32 = c.SO_REUSEADDR;
-pub val SHUT_RD:      i32 = c.SHUT_RD;
-pub val SHUT_WR:      i32 = c.SHUT_WR;
-pub val SHUT_RDWR:    i32 = c.SHUT_RDWR;
+pub val AF_INET:      i32 = 2;
+pub val SOCK_STREAM:  i32 = 1;
+pub val SOCK_DGRAM:   i32 = 2;
+pub val SOL_SOCKET:   i32 = 0xFFFF;
+pub val SO_REUSEADDR: i32 = 4;
+pub val SHUT_RD:      i32 = 0;
+pub val SHUT_WR:      i32 = 1;
+pub val SHUT_RDWR:    i32 = 2;
 
 pub val SOCKADDR_IN_SIZE: usize = 16;
 
@@ -657,39 +734,39 @@ pub fun sock_close(fd: i32) i64 {
 }
 
 pub fun sock_create(domain: i32, typ: i32, protocol: i32) i64 {
-    ret syscall3(c.SYS_SOCKET, domain::u32::usize, typ::u32::usize, protocol::u32::usize);
+    ret syscall3(SYS_SOCKET, domain::u32::usize, typ::u32::usize, protocol::u32::usize);
 }
 
 pub fun sock_bind(fd: i32, addr: *u8, addrlen: usize) i64 {
-    ret syscall3(c.SYS_BIND, fd::isize::usize, addr::usize, addrlen);
+    ret syscall3(SYS_BIND, fd::isize::usize, addr::usize, addrlen);
 }
 
 pub fun sock_listen(fd: i32, backlog: i32) i64 {
-    ret syscall2(c.SYS_LISTEN, fd::isize::usize, backlog::u32::usize);
+    ret syscall2(SYS_LISTEN, fd::isize::usize, backlog::u32::usize);
 }
 
 pub fun sock_accept(fd: i32, addr: *u8, addrlen: *u32) i64 {
-    ret syscall3(c.SYS_ACCEPT, fd::isize::usize, addr::usize, addrlen::usize);
+    ret syscall3(SYS_ACCEPT, fd::isize::usize, addr::usize, addrlen::usize);
 }
 
 pub fun sock_connect(fd: i32, addr: *u8, addrlen: usize) i64 {
-    ret syscall3(c.SYS_CONNECT, fd::isize::usize, addr::usize, addrlen);
+    ret syscall3(SYS_CONNECT, fd::isize::usize, addr::usize, addrlen);
 }
 
 pub fun sock_sendto(fd: i32, buf: &u8, len: usize, flags: i32, addr: *u8, addrlen: usize) i64 {
-    ret syscall6(c.SYS_SENDTO, fd::isize::usize, buf::usize, len, flags::u32::usize, addr::usize, addrlen);
+    ret syscall6(SYS_SENDTO, fd::isize::usize, buf::usize, len, flags::u32::usize, addr::usize, addrlen);
 }
 
 pub fun sock_recvfrom(fd: i32, buf: *u8, len: usize, flags: i32, addr: *u8, addrlen: *u32) i64 {
-    ret syscall6(c.SYS_RECVFROM, fd::isize::usize, buf::usize, len, flags::u32::usize, addr::usize, addrlen::usize);
+    ret syscall6(SYS_RECVFROM, fd::isize::usize, buf::usize, len, flags::u32::usize, addr::usize, addrlen::usize);
 }
 
 pub fun sock_shutdown(fd: i32, how: i32) i64 {
-    ret syscall2(c.SYS_SHUTDOWN, fd::isize::usize, how::u32::usize);
+    ret syscall2(SYS_SHUTDOWN, fd::isize::usize, how::u32::usize);
 }
 
 pub fun sock_setopt(fd: i32, level: i32, opt: i32, value: *u8, vallen: usize) i64 {
-    ret syscall5(c.SYS_SETSOCKOPT, fd::isize::usize, level::u32::usize, opt::u32::usize, value::usize, vallen);
+    ret syscall5(SYS_SETSOCKOPT, fd::isize::usize, level::u32::usize, opt::u32::usize, value::usize, vallen);
 }
 
 # dns
@@ -780,7 +857,7 @@ pub fun random_fill(buf: *u8, len: usize) i64 {
         var chunk: usize = len - filled;
         if (chunk > 256) { chunk = 256; }
         val dst: usize = buf::usize + filled;
-        val res: i64 = syscall2(c.SYS_GETENTROPY, dst, chunk);
+        val res: i64 = syscall2(SYS_GETENTROPY, dst, chunk);
         if (res < 0) { ret res; }
         filled = filled + chunk;
     }
@@ -789,8 +866,7 @@ pub fun random_fill(buf: *u8, len: usize) i64 {
 
 # time
 
-# clock_gettime: read a clock into a timespec.
-#
+# clock_gettime: read a clock into a timespe#
 # uses the kernel clock_gettime syscall (available since macOS 10.12).
 # CLOCK_MONOTONIC returns true monotonic time via the kernel's nanouptime.
 # ---
@@ -798,38 +874,38 @@ pub fun random_fill(buf: *u8, len: usize) i64 {
 # ts:       output timespec
 # ret:      0 on success, or negative errno
 pub fun clock_gettime(clock_id: i32, ts: *timespec) i64 {
-    ret syscall2(c.SYS_CLOCK_GETTIME, clock_id::u32::usize, ts::usize);
+    ret syscall2(SYS_CLOCK_GETTIME, clock_id::u32::usize, ts::usize);
 }
 
 # errno
 
 pub fun error_message(code: i64) str {
-    if (code == c.EPERM) { ret "operation not permitted"; }
-    or (code == c.ENOENT) { ret "no such file or directory"; }
-    or (code == c.ESRCH) { ret "no such process"; }
-    or (code == c.EINTR) { ret "interrupted system call"; }
-    or (code == c.EIO) { ret "input/output error"; }
-    or (code == c.ENXIO) { ret "no such device or address"; }
-    or (code == c.E2BIG) { ret "argument list too long"; }
-    or (code == c.EBADF) { ret "bad file descriptor"; }
-    or (code == c.ECHILD) { ret "no child processes"; }
-    or (code == c.EAGAIN) { ret "resource temporarily unavailable"; }
-    or (code == c.ENOMEM) { ret "out of memory"; }
-    or (code == c.EACCES) { ret "permission denied"; }
-    or (code == c.EFAULT) { ret "bad address"; }
-    or (code == c.EBUSY) { ret "device or resource busy"; }
-    or (code == c.EEXIST) { ret "file exists"; }
-    or (code == c.ENODEV) { ret "no such device"; }
-    or (code == c.ENOTDIR) { ret "not a directory"; }
-    or (code == c.EISDIR) { ret "is a directory"; }
-    or (code == c.EINVAL) { ret "invalid argument"; }
-    or (code == c.ENFILE) { ret "too many open files in system"; }
-    or (code == c.EMFILE) { ret "too many open files"; }
-    or (code == c.ETXTBSY) { ret "text file busy"; }
-    or (code == c.ENOSPC) { ret "no space left on device"; }
-    or (code == c.EROFS) { ret "read-only file system"; }
-    or (code == c.EPIPE) { ret "broken pipe"; }
-    or (code == c.ENOTEMPTY) { ret "directory not empty"; }
-    or (code == c.ENOTSUP) { ret "operation not supported"; }
+    if (code == EPERM) { ret "operation not permitted"; }
+    or (code == ENOENT) { ret "no such file or directory"; }
+    or (code == ESRCH) { ret "no such process"; }
+    or (code == EINTR) { ret "interrupted system call"; }
+    or (code == EIO) { ret "input/output error"; }
+    or (code == ENXIO) { ret "no such device or address"; }
+    or (code == E2BIG) { ret "argument list too long"; }
+    or (code == EBADF) { ret "bad file descriptor"; }
+    or (code == ECHILD) { ret "no child processes"; }
+    or (code == EAGAIN) { ret "resource temporarily unavailable"; }
+    or (code == ENOMEM) { ret "out of memory"; }
+    or (code == EACCES) { ret "permission denied"; }
+    or (code == EFAULT) { ret "bad address"; }
+    or (code == EBUSY) { ret "device or resource busy"; }
+    or (code == EEXIST) { ret "file exists"; }
+    or (code == ENODEV) { ret "no such device"; }
+    or (code == ENOTDIR) { ret "not a directory"; }
+    or (code == EISDIR) { ret "is a directory"; }
+    or (code == EINVAL) { ret "invalid argument"; }
+    or (code == ENFILE) { ret "too many open files in system"; }
+    or (code == EMFILE) { ret "too many open files"; }
+    or (code == ETXTBSY) { ret "text file busy"; }
+    or (code == ENOSPC) { ret "no space left on device"; }
+    or (code == EROFS) { ret "read-only file system"; }
+    or (code == EPIPE) { ret "broken pipe"; }
+    or (code == ENOTEMPTY) { ret "directory not empty"; }
+    or (code == ENOTSUP) { ret "operation not supported"; }
     or { ret "unknown error"; }
 }

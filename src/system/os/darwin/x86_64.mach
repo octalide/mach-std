@@ -3,7 +3,6 @@
 # provides page_size and pipe which require arch-specific assembly.
 # everything else is in shared.mach.
 
-use c: std.system.os.darwin.constants;
 use shared: std.system.os.darwin.shared;
 
 $if ($mach.build.target.os.id != $mach.os.darwin.id) {

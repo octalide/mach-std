@@ -7,13 +7,147 @@
 use std.types.size;
 use std.types.bool;
 
-use c:         std.system.os.windows.constants;
 use os_shared: std.system.os.shared;
 use atomic:    std.sync.atomic;
 
 $if ($mach.build.target.os.id != $mach.os.windows.id) {
     $error("std.system.os.windows.shared: requires windows target");
 }
+
+# Win32 generic access rights
+val GENERIC_READ:    u32 = 0x80000000;
+val GENERIC_WRITE:   u32 = 0x40000000;
+val GENERIC_EXECUTE: u32 = 0x20000000;
+val GENERIC_ALL:     u32 = 0x10000000;
+
+# file share modes
+val FILE_SHARE_READ:   u32 = 1;
+val FILE_SHARE_WRITE:  u32 = 2;
+val FILE_SHARE_DELETE: u32 = 4;
+
+# creation disposition
+val CREATE_NEW:        u32 = 1;
+val CREATE_ALWAYS:     u32 = 2;
+val OPEN_EXISTING:     u32 = 3;
+val OPEN_ALWAYS:       u32 = 4;
+val TRUNCATE_EXISTING: u32 = 5;
+
+# file attributes
+val FILE_ATTRIBUTE_NORMAL:    u32 = 0x80;
+val FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
+val FILE_ATTRIBUTE_READONLY:  u32 = 0x01;
+val FILE_ATTRIBUTE_HIDDEN:    u32 = 0x02;
+val FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+val FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x02000000;
+
+# invalid handle
+val INVALID_HANDLE_VALUE: isize = -1;
+
+# standard handle IDs
+val STD_INPUT_HANDLE:  u32 = (-10)::i32::u32;
+val STD_OUTPUT_HANDLE: u32 = (-11)::i32::u32;
+val STD_ERROR_HANDLE:  u32 = (-12)::i32::u32;
+
+# VirtualAlloc types
+val MEM_COMMIT:      u32 = 0x1000;
+val MEM_RESERVE:     u32 = 0x2000;
+val MEM_DECOMMIT:    u32 = 0x4000;
+val MEM_RELEASE:     u32 = 0x8000;
+val MEM_LARGE_PAGES: u32 = 0x20000000;
+
+# VirtualProtect / VirtualAlloc protection
+val PAGE_NOACCESS:          u32 = 0x01;
+val PAGE_READONLY:          u32 = 0x02;
+val PAGE_READWRITE:         u32 = 0x04;
+val PAGE_EXECUTE:           u32 = 0x10;
+val PAGE_EXECUTE_READ:      u32 = 0x20;
+val PAGE_EXECUTE_READWRITE: u32 = 0x40;
+
+# file mapping access rights
+val FILE_MAP_READ:    u32 = 0x0004;
+val FILE_MAP_WRITE:   u32 = 0x0002;
+val FILE_MAP_EXECUTE: u32 = 0x0020;
+
+# SetFilePointerEx move methods
+val FILE_BEGIN:   u32 = 0;
+val FILE_CURRENT: u32 = 1;
+val FILE_END:     u32 = 2;
+
+# GetFileType return values
+val FILE_TYPE_DISK: u32 = 1;
+val FILE_TYPE_CHAR: u32 = 2;
+val FILE_TYPE_PIPE: u32 = 3;
+
+# Win32 error codes
+val ERROR_SUCCESS:          u32 = 0;
+val ERROR_FILE_NOT_FOUND:   u32 = 2;
+val ERROR_PATH_NOT_FOUND:   u32 = 3;
+val ERROR_ACCESS_DENIED:    u32 = 5;
+val ERROR_INVALID_HANDLE:   u32 = 6;
+val ERROR_NOT_ENOUGH_MEMORY: u32 = 8;
+val ERROR_OUTOFMEMORY:      u32 = 14;
+val ERROR_WRITE_PROTECT:    u32 = 19;
+val ERROR_BAD_LENGTH:       u32 = 24;
+val ERROR_SHARING_VIOLATION: u32 = 32;
+val ERROR_LOCK_VIOLATION:   u32 = 33;
+val ERROR_HANDLE_DISK_FULL: u32 = 39;
+val ERROR_NOT_SUPPORTED:    u32 = 50;
+val ERROR_FILE_EXISTS:      u32 = 80;
+val ERROR_INVALID_PARAMETER: u32 = 87;
+val ERROR_DISK_FULL:        u32 = 112;
+val ERROR_ALREADY_EXISTS:   u32 = 183;
+val ERROR_DIR_NOT_EMPTY:    u32 = 145;
+val ERROR_DIRECTORY:        u32 = 267;
+val ERROR_TOO_MANY_OPEN_FILES: u32 = 4;
+val ERROR_BROKEN_PIPE:      u32 = 109;
+val ERROR_BUSY:             u32 = 170;
+
+# lseek whence
+val SEEK_SET: i32 = 0;
+val SEEK_CUR: i32 = 1;
+val SEEK_END: i32 = 2;
+
+# WaitForSingleObject
+val WAIT_OBJECT_0: u32 = 0;
+val WAIT_TIMEOUT:  u32 = 258;
+val WAIT_FAILED:   u32 = 0xFFFFFFFF;
+val INFINITE:      u32 = 0xFFFFFFFF;
+
+# FILETIME epoch offset (100-ns intervals from 1601-01-01 to 1970-01-01)
+val FILETIME_UNIX_EPOCH: i64 = 116444736000000000;
+
+# Winsock2 constants
+val INVALID_SOCKET: usize = (-1)::isize::usize;
+val SOCKET_ERROR:   i32 = -1;
+
+val WSAEWOULDBLOCK:    i32 = 10035;
+val WSAEINPROGRESS:    i32 = 10036;
+val WSAENOTSOCK:       i32 = 10038;
+val WSAEMSGSIZE:       i32 = 10040;
+val WSAEAFNOSUPPORT:   i32 = 10047;
+val WSAEADDRINUSE:     i32 = 10048;
+val WSAEADDRNOTAVAIL:  i32 = 10049;
+val WSAENETUNREACH:    i32 = 10051;
+val WSAECONNABORTED:   i32 = 10053;
+val WSAECONNRESET:     i32 = 10054;
+val WSAENOTCONN:       i32 = 10057;
+val WSAETIMEDOUT:      i32 = 10060;
+val WSAECONNREFUSED:   i32 = 10061;
+val WSAEHOSTUNREACH:   i32 = 10065;
+
+val ECONNREFUSED:  i64 = -111;
+val ETIMEDOUT:     i64 = -110;
+val ECONNRESET:    i64 = -104;
+val ECONNABORTED:  i64 = -103;
+val ENETUNREACH:   i64 = -101;
+val EADDRINUSE:    i64 = -98;
+val EADDRNOTAVAIL: i64 = -99;
+val EHOSTUNREACH:  i64 = -113;
+val ENOTCONN:      i64 = -107;
+val EMSGSIZE:      i64 = -90;
+val EAFNOSUPPORT:  i64 = -97;
+val EINPROGRESS:   i64 = -115;
+val ENOTSOCK:      i64 = -88;
 
 # Win32 API imports (kernel32.dll)
 
@@ -184,65 +318,65 @@ pub rec dirent64 {
 # path
 pub val separator: u8 = '\\';
 
-# portable constant re-exports
-pub val STDIN_FD:  i32 = c.STDIN_FILENO;
-pub val STDOUT_FD: i32 = c.STDOUT_FILENO;
-pub val STDERR_FD: i32 = c.STDERR_FILENO;
+# portable constants
+pub val STDIN_FD:  i32 = 0;
+pub val STDOUT_FD: i32 = 1;
+pub val STDERR_FD: i32 = 2;
 
-pub val O_RDONLY:    i32 = c.O_RDONLY;
-pub val O_WRONLY:    i32 = c.O_WRONLY;
-pub val O_RDWR:      i32 = c.O_RDWR;
-pub val O_CREAT:     i32 = c.O_CREAT;
-pub val O_EXCL:      i32 = c.O_EXCL;
-pub val O_TRUNC:     i32 = c.O_TRUNC;
-pub val O_APPEND:    i32 = c.O_APPEND;
-pub val O_DIRECTORY: i32 = c.O_DIRECTORY;
+pub val O_RDONLY:    i32 = 0;
+pub val O_WRONLY:    i32 = 1;
+pub val O_RDWR:      i32 = 2;
+pub val O_CREAT:     i32 = 0x100;
+pub val O_EXCL:      i32 = 0x200;
+pub val O_TRUNC:     i32 = 0x400;
+pub val O_APPEND:    i32 = 0x800;
+pub val O_DIRECTORY: i32 = 0x10000;
 
-pub val AT_FDCWD:            i32 = c.AT_FDCWD;
-pub val AT_SYMLINK_NOFOLLOW: i32 = c.AT_SYMLINK_NOFOLLOW;
-pub val AT_REMOVEDIR:        i32 = c.AT_REMOVEDIR;
+pub val AT_FDCWD:            i32 = -100;
+pub val AT_SYMLINK_NOFOLLOW: i32 = 0x0100;
+pub val AT_REMOVEDIR:        i32 = 0x0200;
 
-pub val S_IFMT:  u32 = c.S_IFMT;
-pub val S_IFDIR: u32 = c.S_IFDIR;
-pub val S_IFREG: u32 = c.S_IFREG;
-pub val S_IFLNK: u32 = c.S_IFLNK;
+pub val S_IFMT:  u32 = 0o170000;
+pub val S_IFDIR: u32 = 0o040000;
+pub val S_IFREG: u32 = 0o100000;
+pub val S_IFLNK: u32 = 0o120000;
 
-pub val WNOHANG:    i32 = c.WNOHANG;
-pub val WUNTRACED:  i32 = c.WUNTRACED;
-pub val WCONTINUED: i32 = c.WCONTINUED;
+pub val WNOHANG:    i32 = 1;
+pub val WUNTRACED:  i32 = 2;
+pub val WCONTINUED: i32 = 8;
 
-pub val CLOCK_REALTIME:  i32 = c.CLOCK_REALTIME;
-pub val CLOCK_MONOTONIC: i32 = c.CLOCK_MONOTONIC;
+pub val CLOCK_REALTIME:  i32 = 0;
+pub val CLOCK_MONOTONIC: i32 = 1;
 
-pub val EPERM:     i64 = c.EPERM;
-pub val ENOENT:    i64 = c.ENOENT;
-pub val ESRCH:     i64 = c.ESRCH;
-pub val EINTR:     i64 = c.EINTR;
-pub val EIO:       i64 = c.EIO;
-pub val ENXIO:     i64 = c.ENXIO;
-pub val E2BIG:     i64 = c.E2BIG;
-pub val EBADF:     i64 = c.EBADF;
-pub val ECHILD:    i64 = c.ECHILD;
-pub val EAGAIN:    i64 = c.EAGAIN;
-pub val ENOMEM:    i64 = c.ENOMEM;
-pub val EACCES:    i64 = c.EACCES;
-pub val EFAULT:    i64 = c.EFAULT;
-pub val EBUSY:     i64 = c.EBUSY;
-pub val EEXIST:    i64 = c.EEXIST;
-pub val ENODEV:    i64 = c.ENODEV;
-pub val ENOTDIR:   i64 = c.ENOTDIR;
-pub val EISDIR:    i64 = c.EISDIR;
-pub val EINVAL:    i64 = c.EINVAL;
-pub val ENFILE:    i64 = c.ENFILE;
-pub val EMFILE:    i64 = c.EMFILE;
-pub val ETXTBSY:   i64 = c.ETXTBSY;
-pub val ENOSPC:    i64 = c.ENOSPC;
-pub val EROFS:     i64 = c.EROFS;
-pub val EPIPE:     i64 = c.EPIPE;
-pub val ENOTEMPTY: i64 = c.ENOTEMPTY;
-pub val ENOTSUP:   i64 = c.ENOTSUP;
+pub val EPERM:     i64 = -1;
+pub val ENOENT:    i64 = -2;
+pub val ESRCH:     i64 = -3;
+pub val EINTR:     i64 = -4;
+pub val EIO:       i64 = -5;
+pub val ENXIO:     i64 = -6;
+pub val E2BIG:     i64 = -7;
+pub val EBADF:     i64 = -9;
+pub val ECHILD:    i64 = -10;
+pub val EAGAIN:    i64 = -11;
+pub val ENOMEM:    i64 = -12;
+pub val EACCES:    i64 = -13;
+pub val EFAULT:    i64 = -14;
+pub val EBUSY:     i64 = -16;
+pub val EEXIST:    i64 = -17;
+pub val ENODEV:    i64 = -19;
+pub val ENOTDIR:   i64 = -20;
+pub val EISDIR:    i64 = -21;
+pub val EINVAL:    i64 = -22;
+pub val ENFILE:    i64 = -23;
+pub val EMFILE:    i64 = -24;
+pub val ETXTBSY:   i64 = -26;
+pub val ENOSPC:    i64 = -28;
+pub val EROFS:     i64 = -30;
+pub val EPIPE:     i64 = -32;
+pub val ENOTEMPTY: i64 = -39;
+pub val ENOTSUP:   i64 = -95;
 
-pub val EINTR_MAX_RETRIES: usize = c.EINTR_MAX_RETRIES;
+pub val EINTR_MAX_RETRIES: usize = 8;
 
 # HANDLE-to-fd mapping table
 
@@ -269,13 +403,13 @@ fun init_fds() {
     }
     var i: usize = 0;
     for (i < MAX_FDS) {
-        _handles[i] = c.INVALID_HANDLE_VALUE;
-        _find_handles[i] = c.INVALID_HANDLE_VALUE;
+        _handles[i] = INVALID_HANDLE_VALUE;
+        _find_handles[i] = INVALID_HANDLE_VALUE;
         i = i + 1;
     }
-    _handles[0] = GetStdHandle(c.STD_INPUT_HANDLE);
-    _handles[1] = GetStdHandle(c.STD_OUTPUT_HANDLE);
-    _handles[2] = GetStdHandle(c.STD_ERROR_HANDLE);
+    _handles[0] = GetStdHandle(STD_INPUT_HANDLE);
+    _handles[1] = GetStdHandle(STD_OUTPUT_HANDLE);
+    _handles[2] = GetStdHandle(STD_ERROR_HANDLE);
     _initialized = true;
 }
 
@@ -284,7 +418,7 @@ fun alloc_fd(h: isize) i32 {
     init_fds();
     var fd: usize = 3;
     for (fd < MAX_FDS) {
-        if (_handles[fd] == c.INVALID_HANDLE_VALUE) {
+        if (_handles[fd] == INVALID_HANDLE_VALUE) {
             _handles[fd] = h;
             fd_spin_unlock();
             ret fd::i32;
@@ -300,7 +434,7 @@ fun get_handle(fd: i32) isize {
     init_fds();
     if (fd < 0 || fd::usize >= MAX_FDS) {
         fd_spin_unlock();
-        ret c.INVALID_HANDLE_VALUE;
+        ret INVALID_HANDLE_VALUE;
     }
     val h: isize = _handles[fd::usize];
     fd_spin_unlock();
@@ -310,11 +444,11 @@ fun get_handle(fd: i32) isize {
 fun free_fd(fd: i32) {
     fd_spin_lock();
     if (fd >= 0 && fd::usize < MAX_FDS) {
-        if (_find_handles[fd::usize] != c.INVALID_HANDLE_VALUE) {
+        if (_find_handles[fd::usize] != INVALID_HANDLE_VALUE) {
             FindClose(_find_handles[fd::usize]);
-            _find_handles[fd::usize] = c.INVALID_HANDLE_VALUE;
+            _find_handles[fd::usize] = INVALID_HANDLE_VALUE;
         }
-        _handles[fd::usize] = c.INVALID_HANDLE_VALUE;
+        _handles[fd::usize] = INVALID_HANDLE_VALUE;
     }
     fd_spin_unlock();
 }
@@ -342,7 +476,7 @@ fun init_procs() {
     if (_procs_init != 0) { ret; }
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        _proc_handles[i] = c.INVALID_HANDLE_VALUE;
+        _proc_handles[i] = INVALID_HANDLE_VALUE;
         _proc_pids[i] = 0;
         i = i + 1;
     }
@@ -354,7 +488,7 @@ fun alloc_proc(pid: u32, handle: isize) bool {
     init_procs();
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_handles[i] == c.INVALID_HANDLE_VALUE) {
+        if (_proc_handles[i] == INVALID_HANDLE_VALUE) {
             _proc_handles[i] = handle;
             _proc_pids[i] = pid;
             proc_spin_unlock();
@@ -371,7 +505,7 @@ fun get_proc_handle(pid: u32) isize {
     init_procs();
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_pids[i] == pid && _proc_handles[i] != c.INVALID_HANDLE_VALUE) {
+        if (_proc_pids[i] == pid && _proc_handles[i] != INVALID_HANDLE_VALUE) {
             val h: isize = _proc_handles[i];
             proc_spin_unlock();
             ret h;
@@ -379,15 +513,15 @@ fun get_proc_handle(pid: u32) isize {
         i = i + 1;
     }
     proc_spin_unlock();
-    ret c.INVALID_HANDLE_VALUE;
+    ret INVALID_HANDLE_VALUE;
 }
 
 fun free_proc(pid: u32) {
     proc_spin_lock();
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_pids[i] == pid && _proc_handles[i] != c.INVALID_HANDLE_VALUE) {
-            _proc_handles[i] = c.INVALID_HANDLE_VALUE;
+        if (_proc_pids[i] == pid && _proc_handles[i] != INVALID_HANDLE_VALUE) {
+            _proc_handles[i] = INVALID_HANDLE_VALUE;
             _proc_pids[i] = 0;
             proc_spin_unlock();
             ret;
@@ -403,7 +537,7 @@ fun count_procs() usize {
     var n: usize = 0;
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_handles[i] != c.INVALID_HANDLE_VALUE) {
+        if (_proc_handles[i] != INVALID_HANDLE_VALUE) {
             n = n + 1;
         }
         i = i + 1;
@@ -415,26 +549,26 @@ fun count_procs() usize {
 # Win32 error → negated POSIX errno
 fun last_error() i64 {
     val err: u32 = GetLastError();
-    if (err == c.ERROR_FILE_NOT_FOUND || err == c.ERROR_PATH_NOT_FOUND) { ret c.ENOENT; }
-    or (err == c.ERROR_ACCESS_DENIED) { ret c.EACCES; }
-    or (err == c.ERROR_ALREADY_EXISTS || err == c.ERROR_FILE_EXISTS) { ret c.EEXIST; }
-    or (err == c.ERROR_INVALID_HANDLE || err == c.ERROR_INVALID_PARAMETER) { ret c.EINVAL; }
-    or (err == c.ERROR_NOT_ENOUGH_MEMORY || err == c.ERROR_OUTOFMEMORY) { ret c.ENOMEM; }
-    or (err == c.ERROR_DIR_NOT_EMPTY) { ret c.ENOTEMPTY; }
-    or (err == c.ERROR_DISK_FULL || err == c.ERROR_HANDLE_DISK_FULL) { ret c.ENOSPC; }
-    or (err == c.ERROR_BROKEN_PIPE) { ret c.EPIPE; }
-    or (err == c.ERROR_DIRECTORY) { ret c.ENOTDIR; }
-    or (err == c.ERROR_TOO_MANY_OPEN_FILES) { ret c.EMFILE; }
-    or (err == c.ERROR_BUSY) { ret c.EBUSY; }
-    or (err == c.ERROR_WRITE_PROTECT) { ret c.EROFS; }
-    or (err == c.ERROR_NOT_SUPPORTED) { ret c.ENOTSUP; }
-    or { ret c.EIO; }
+    if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) { ret ENOENT; }
+    or (err == ERROR_ACCESS_DENIED) { ret EACCES; }
+    or (err == ERROR_ALREADY_EXISTS || err == ERROR_FILE_EXISTS) { ret EEXIST; }
+    or (err == ERROR_INVALID_HANDLE || err == ERROR_INVALID_PARAMETER) { ret EINVAL; }
+    or (err == ERROR_NOT_ENOUGH_MEMORY || err == ERROR_OUTOFMEMORY) { ret ENOMEM; }
+    or (err == ERROR_DIR_NOT_EMPTY) { ret ENOTEMPTY; }
+    or (err == ERROR_DISK_FULL || err == ERROR_HANDLE_DISK_FULL) { ret ENOSPC; }
+    or (err == ERROR_BROKEN_PIPE) { ret EPIPE; }
+    or (err == ERROR_DIRECTORY) { ret ENOTDIR; }
+    or (err == ERROR_TOO_MANY_OPEN_FILES) { ret EMFILE; }
+    or (err == ERROR_BUSY) { ret EBUSY; }
+    or (err == ERROR_WRITE_PROTECT) { ret EROFS; }
+    or (err == ERROR_NOT_SUPPORTED) { ret ENOTSUP; }
+    or { ret EIO; }
 }
 
 # FILETIME → unix seconds + nanoseconds
 fun filetime_to_unix(ft: FILETIME, sec: *i64, nsec: *i64) {
     val ticks: i64 = ft.dwLowDateTime::i64 | (ft.dwHighDateTime::i64 << 32);
-    val unix_ticks: i64 = ticks - c.FILETIME_UNIX_EPOCH;
+    val unix_ticks: i64 = ticks - FILETIME_UNIX_EPOCH;
     @sec = unix_ticks / 10000000;
     @nsec = (unix_ticks % 10000000) * 100;
 }
@@ -518,16 +652,16 @@ fun build_cmdline(argv: &&u8, buf: *u8, cap: usize) {
 
 # POSIX prot flags → Win32 page protection
 fun prot_to_win32(prot: u32) u32 {
-    if (prot == 0) { ret c.PAGE_NOACCESS; }
+    if (prot == 0) { ret PAGE_NOACCESS; }
     val r: bool = (prot & 1) != 0;
     val w: bool = (prot & 2) != 0;
     val x: bool = (prot & 4) != 0;
-    if (x && w) { ret c.PAGE_EXECUTE_READWRITE; }
-    or (x && r) { ret c.PAGE_EXECUTE_READ; }
-    or (x) { ret c.PAGE_EXECUTE; }
-    or (w) { ret c.PAGE_READWRITE; }
-    or (r) { ret c.PAGE_READONLY; }
-    or { ret c.PAGE_NOACCESS; }
+    if (x && w) { ret PAGE_EXECUTE_READWRITE; }
+    or (x && r) { ret PAGE_EXECUTE_READ; }
+    or (x) { ret PAGE_EXECUTE; }
+    or (w) { ret PAGE_READWRITE; }
+    or (r) { ret PAGE_READONLY; }
+    or { ret PAGE_NOACCESS; }
 }
 
 # memory
@@ -536,14 +670,14 @@ pub fun allocate(size: usize) ptr {
     if (size == 0) {
         ret nil;
     }
-    ret VirtualAlloc(nil, size, c.MEM_COMMIT | c.MEM_RESERVE, c.PAGE_READWRITE);
+    ret VirtualAlloc(nil, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 }
 
 pub fun deallocate(p: ptr, size: usize) i64 {
     if (p == nil || size == 0) {
         ret 0;
     }
-    if (VirtualFree(p, 0, c.MEM_RELEASE) != 0) { ret 0; }
+    if (VirtualFree(p, 0, MEM_RELEASE) != 0) { ret 0; }
     ret last_error();
 }
 
@@ -580,7 +714,7 @@ pub fun heap_region_base() usize {
     if (_brk_base != 0) {
         ret _brk_end;
     }
-    val p: ptr = VirtualAlloc(nil, os_shared.HEAP_RESERVE, c.MEM_RESERVE, c.PAGE_NOACCESS);
+    val p: ptr = VirtualAlloc(nil, os_shared.HEAP_RESERVE, MEM_RESERVE, PAGE_NOACCESS);
     if (p == nil) {
         ret 0;
     }
@@ -603,7 +737,7 @@ pub fun heap_region_extend(addr: usize) usize {
         ret _brk_end;
     }
     val size: usize = addr - _brk_end;
-    val p: ptr = VirtualAlloc(_brk_end::ptr, size, c.MEM_COMMIT, c.PAGE_READWRITE);
+    val p: ptr = VirtualAlloc(_brk_end::ptr, size, MEM_COMMIT, PAGE_READWRITE);
     if (p == nil) {
         ret _brk_end;
     }
@@ -647,7 +781,7 @@ pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
         ret nil;
     }
     val h: isize = get_handle(fd);
-    if (h == c.INVALID_HANDLE_VALUE) {
+    if (h == INVALID_HANDLE_VALUE) {
         ret nil;
     }
     val page_prot: u32 = prot_to_win32(prot);
@@ -658,13 +792,13 @@ pub fun map_file(fd: i32, offset: usize, size: usize, prot: u32) ptr {
     }
     var access: u32 = 0;
     if ((prot & 4) != 0 && (prot & 2) != 0) {
-        access = c.FILE_MAP_WRITE | c.FILE_MAP_EXECUTE;
+        access = FILE_MAP_WRITE | FILE_MAP_EXECUTE;
     } or ((prot & 4) != 0) {
-        access = c.FILE_MAP_READ | c.FILE_MAP_EXECUTE;
+        access = FILE_MAP_READ | FILE_MAP_EXECUTE;
     } or ((prot & 2) != 0) {
-        access = c.FILE_MAP_WRITE;
+        access = FILE_MAP_WRITE;
     } or {
-        access = c.FILE_MAP_READ;
+        access = FILE_MAP_READ;
     }
     val p: ptr = MapViewOfFile(mapping, access, (offset >> 32)::u32, offset::u32, size);
     CloseHandle(mapping);
@@ -691,8 +825,8 @@ pub fun sync_file(p: ptr, size: usize) i64 {
 
 pub fun read(fd: i32, buf: *u8, count: usize) i64 {
     val h: isize = get_handle(fd);
-    if (h == c.INVALID_HANDLE_VALUE) {
-        ret c.EBADF;
+    if (h == INVALID_HANDLE_VALUE) {
+        ret EBADF;
     }
     var bytes_read: u32 = 0;
     val ok: i32 = ReadFile(h, buf, count::u32, ?bytes_read, nil);
@@ -704,8 +838,8 @@ pub fun read(fd: i32, buf: *u8, count: usize) i64 {
 
 pub fun write(fd: i32, buf: &u8, count: usize) i64 {
     val h: isize = get_handle(fd);
-    if (h == c.INVALID_HANDLE_VALUE) {
-        ret c.EBADF;
+    if (h == INVALID_HANDLE_VALUE) {
+        ret EBADF;
     }
     var bytes_written: u32 = 0;
     val ok: i32 = WriteFile(h, buf, count::u32, ?bytes_written, nil);
@@ -716,63 +850,63 @@ pub fun write(fd: i32, buf: &u8, count: usize) i64 {
 }
 
 pub fun open(dirfd: i32, path: &u8, flags: i32, mode: i32) i64 {
-    if (dirfd != c.AT_FDCWD) {
-        ret c.ENOTSUP;
+    if (dirfd != AT_FDCWD) {
+        ret ENOTSUP;
     }
     var access: u32 = 0;
-    var creation: u32 = c.OPEN_EXISTING;
-    var attrs: u32 = c.FILE_ATTRIBUTE_NORMAL;
+    var creation: u32 = OPEN_EXISTING;
+    var attrs: u32 = FILE_ATTRIBUTE_NORMAL;
 
     val rw: i32 = flags & 3;
-    if (rw == c.O_RDONLY) {
-        access = c.GENERIC_READ;
+    if (rw == O_RDONLY) {
+        access = GENERIC_READ;
     }
-    or (rw == c.O_WRONLY) {
-        access = c.GENERIC_WRITE;
+    or (rw == O_WRONLY) {
+        access = GENERIC_WRITE;
     }
     or {
-        access = c.GENERIC_READ | c.GENERIC_WRITE;
+        access = GENERIC_READ | GENERIC_WRITE;
     }
 
-    if ((flags & c.O_CREAT) != 0 && (flags & c.O_EXCL) != 0) {
-        creation = c.CREATE_NEW;
+    if ((flags & O_CREAT) != 0 && (flags & O_EXCL) != 0) {
+        creation = CREATE_NEW;
     }
-    or ((flags & c.O_CREAT) != 0 && (flags & c.O_TRUNC) != 0) {
-        creation = c.CREATE_ALWAYS;
+    or ((flags & O_CREAT) != 0 && (flags & O_TRUNC) != 0) {
+        creation = CREATE_ALWAYS;
     }
-    or ((flags & c.O_CREAT) != 0) {
-        creation = c.OPEN_ALWAYS;
+    or ((flags & O_CREAT) != 0) {
+        creation = OPEN_ALWAYS;
     }
-    or ((flags & c.O_TRUNC) != 0) {
-        creation = c.TRUNCATE_EXISTING;
-    }
-
-    if ((flags & c.O_DIRECTORY) != 0) {
-        attrs = attrs | c.FILE_FLAG_BACKUP_SEMANTICS;
+    or ((flags & O_TRUNC) != 0) {
+        creation = TRUNCATE_EXISTING;
     }
 
-    val h: isize = CreateFileA(path, access, c.FILE_SHARE_READ | c.FILE_SHARE_WRITE | c.FILE_SHARE_DELETE, nil, creation, attrs, 0);
-    if (h == c.INVALID_HANDLE_VALUE) {
+    if ((flags & O_DIRECTORY) != 0) {
+        attrs = attrs | FILE_FLAG_BACKUP_SEMANTICS;
+    }
+
+    val h: isize = CreateFileA(path, access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nil, creation, attrs, 0);
+    if (h == INVALID_HANDLE_VALUE) {
         ret last_error();
     }
 
-    if ((flags & c.O_APPEND) != 0) {
+    if ((flags & O_APPEND) != 0) {
         var new_pos: i64 = 0;
-        SetFilePointerEx(h, 0, ?new_pos, c.FILE_END);
+        SetFilePointerEx(h, 0, ?new_pos, FILE_END);
     }
 
     val fd: i32 = alloc_fd(h);
     if (fd < 0) {
         CloseHandle(h);
-        ret c.EMFILE;
+        ret EMFILE;
     }
     ret fd::i64;
 }
 
 pub fun close(fd: i32) i64 {
     val h: isize = get_handle(fd);
-    if (h == c.INVALID_HANDLE_VALUE) {
-        ret c.EBADF;
+    if (h == INVALID_HANDLE_VALUE) {
+        ret EBADF;
     }
     free_fd(fd);
     if (CloseHandle(h) == 0) {
@@ -783,8 +917,8 @@ pub fun close(fd: i32) i64 {
 
 pub fun stat(fd: i32, st: *stat_t) i64 {
     val h: isize = get_handle(fd);
-    if (h == c.INVALID_HANDLE_VALUE) {
-        ret c.EBADF;
+    if (h == INVALID_HANDLE_VALUE) {
+        ret EBADF;
     }
     var info: BY_HANDLE_FILE_INFORMATION;
     if (GetFileInformationByHandle(h, ?info::*u8) == 0) {
@@ -799,16 +933,16 @@ pub fun stat(fd: i32, st: *stat_t) i64 {
     st.st_uid = 0;
     st.st_gid = 0;
     st.st_rdev = 0;
-    if ((info.dwFileAttributes & c.FILE_ATTRIBUTE_DIRECTORY) != 0) {
-        st.st_mode = c.S_IFDIR | 0o755::u32;
+    if ((info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        st.st_mode = S_IFDIR | 0o755::u32;
     }
-    or ((info.dwFileAttributes & c.FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
-        st.st_mode = c.S_IFLNK | 0o777::u32;
+    or ((info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+        st.st_mode = S_IFLNK | 0o777::u32;
     }
     or {
-        st.st_mode = c.S_IFREG | 0o644::u32;
+        st.st_mode = S_IFREG | 0o644::u32;
     }
-    if ((info.dwFileAttributes & c.FILE_ATTRIBUTE_READONLY) != 0) {
+    if ((info.dwFileAttributes & FILE_ATTRIBUTE_READONLY) != 0) {
         st.st_mode = st.st_mode & (0o777777::u32 - 0o222::u32);
     }
     filetime_to_unix(info.ftLastAccessTime, ?st.st_atime, ?st.st_atime_nsec);
@@ -823,9 +957,9 @@ pub fun stat_path(dirfd: i32, path: &u8, st: *stat_t, flags: i32) i64 {
     if (attr == 0xFFFFFFFF) {
         ret last_error();
     }
-    var open_flags: i32 = c.O_RDONLY;
-    if ((attr & c.FILE_ATTRIBUTE_DIRECTORY) != 0) {
-        open_flags = open_flags | c.O_DIRECTORY;
+    var open_flags: i32 = O_RDONLY;
+    if ((attr & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        open_flags = open_flags | O_DIRECTORY;
     }
     val fd_result: i64 = open(dirfd, path, open_flags, 0);
     if (fd_result < 0) {
@@ -839,7 +973,7 @@ pub fun stat_path(dirfd: i32, path: &u8, st: *stat_t, flags: i32) i64 {
 
 # stub: dirfd is ignored — path must be absolute or relative to cwd
 pub fun unlink(dirfd: i32, path: &u8, flags: i32) i64 {
-    if ((flags & c.AT_REMOVEDIR) != 0) {
+    if ((flags & AT_REMOVEDIR) != 0) {
         if (RemoveDirectoryA(path) == 0) {
             ret last_error();
         }
@@ -868,20 +1002,20 @@ pub fun make_dir(dirfd: i32, path: &u8, mode: i32) i64 {
 
 pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
     if (fd < 0 || fd::usize >= MAX_FDS) {
-        ret c.EBADF;
+        ret EBADF;
     }
     val h: isize = _handles[fd::usize];
-    if (h == c.INVALID_HANDLE_VALUE) {
-        ret c.EBADF;
+    if (h == INVALID_HANDLE_VALUE) {
+        ret EBADF;
     }
     val entry_size: usize = 280;
     if (count < entry_size) {
-        ret c.EINVAL;
+        ret EINVAL;
     }
     var data: WIN32_FIND_DATAA;
     var fh: isize = _find_handles[fd::usize];
     var found: i32 = 1;
-    if (fh == c.INVALID_HANDLE_VALUE) {
+    if (fh == INVALID_HANDLE_VALUE) {
         # first call: get directory path and start enumeration
         var path_buf: [260]u8;
         val path_len: u32 = GetFinalPathNameByHandleA(h, ?path_buf[0], 260, 0);
@@ -893,7 +1027,7 @@ pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
         path_buf[path_len + 1] = '*'::u8;
         path_buf[path_len + 2] = 0;
         fh = FindFirstFileA(?path_buf[0]::&u8, ?data::*u8);
-        if (fh == c.INVALID_HANDLE_VALUE) {
+        if (fh == INVALID_HANDLE_VALUE) {
             ret last_error();
         }
         _find_handles[fd::usize] = fh;
@@ -911,7 +1045,7 @@ pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
         entry.d_ino = 0;
         entry.d_off = (written + entry_size)::i64;
         entry.d_reclen = entry_size::u16;
-        if ((data.dwFileAttributes & c.FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        if ((data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
             entry.d_type = 4;
         }
         or {
@@ -929,7 +1063,7 @@ pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
     }
     if (written == 0) {
         FindClose(fh);
-        _find_handles[fd::usize] = c.INVALID_HANDLE_VALUE;
+        _find_handles[fd::usize] = INVALID_HANDLE_VALUE;
         ret 0;
     }
     ret written::i64;
@@ -945,15 +1079,15 @@ pub fun access(dirfd: i32, path: &u8, mode: i32, flags: i32) i64 {
 
 pub fun seek(fd: i32, offset: i64, whence: i32) i64 {
     val h: isize = get_handle(fd);
-    if (h == c.INVALID_HANDLE_VALUE) {
-        ret c.EBADF;
+    if (h == INVALID_HANDLE_VALUE) {
+        ret EBADF;
     }
-    var method: u32 = c.FILE_BEGIN;
-    if (whence == c.SEEK_CUR) {
-        method = c.FILE_CURRENT;
+    var method: u32 = FILE_BEGIN;
+    if (whence == SEEK_CUR) {
+        method = FILE_CURRENT;
     }
-    or (whence == c.SEEK_END) {
-        method = c.FILE_END;
+    or (whence == SEEK_END) {
+        method = FILE_END;
     }
     var new_pos: i64 = 0;
     if (SetFilePointerEx(h, offset, ?new_pos, method) == 0) {
@@ -1010,7 +1144,7 @@ pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
     CloseHandle(pi.hThread);
     if (!alloc_proc(pi.dwProcessId, pi.hProcess)) {
         CloseHandle(pi.hProcess);
-        ret c.EAGAIN;
+        ret EAGAIN;
     }
     ret pi.dwProcessId::i64;
 }
@@ -1036,14 +1170,14 @@ pub fun pipe(fds: *i32) i64 {
     if (rfd < 0) {
         CloseHandle(read_h);
         CloseHandle(write_h);
-        ret c.EMFILE;
+        ret EMFILE;
     }
     val wfd: i32 = alloc_fd(write_h);
     if (wfd < 0) {
         free_fd(rfd);
         CloseHandle(read_h);
         CloseHandle(write_h);
-        ret c.EMFILE;
+        ret EMFILE;
     }
     fds[0] = rfd;
     fds[1] = wfd;
@@ -1085,7 +1219,7 @@ pub fun getenv(name: &u8, buf: *u8, cap: usize) i64 {
         if (err == 203) {
             ret os_shared.NOT_FOUND;
         }
-        ret c.EIO;
+        ret EIO;
     }
     ret len::i64;
 }
@@ -1099,20 +1233,20 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
 
     if (pid > 0) {
         val h: isize = get_proc_handle(pid::u32);
-        if (h == c.INVALID_HANDLE_VALUE) {
-            ret c.ECHILD;
+        if (h == INVALID_HANDLE_VALUE) {
+            ret ECHILD;
         }
 
-        var timeout: u32 = c.INFINITE;
-        if ((options & c.WNOHANG) != 0) {
+        var timeout: u32 = INFINITE;
+        if ((options & WNOHANG) != 0) {
             timeout = 0;
         }
 
         val result: u32 = WaitForSingleObject(h, timeout);
-        if (result == c.WAIT_TIMEOUT) {
+        if (result == WAIT_TIMEOUT) {
             ret 0;
         }
-        if (result == c.WAIT_FAILED) {
+        if (result == WAIT_FAILED) {
             ret last_error();
         }
 
@@ -1133,7 +1267,7 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
         var i: usize = 0;
 
         for (i < MAX_PROCS) {
-            if (_proc_handles[i] != c.INVALID_HANDLE_VALUE) {
+            if (_proc_handles[i] != INVALID_HANDLE_VALUE) {
                 wait_handles[n] = _proc_handles[i];
                 wait_pids[n] = _proc_pids[i];
                 n = n + 1;
@@ -1142,23 +1276,23 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
         }
 
         if (n == 0) {
-            ret c.ECHILD;
+            ret ECHILD;
         }
 
-        var timeout: u32 = c.INFINITE;
-        if ((options & c.WNOHANG) != 0) {
+        var timeout: u32 = INFINITE;
+        if ((options & WNOHANG) != 0) {
             timeout = 0;
         }
 
         val result: u32 = WaitForMultipleObjects(n::u32, ?wait_handles[0]::ptr, 0, timeout);
-        if (result == c.WAIT_TIMEOUT) {
+        if (result == WAIT_TIMEOUT) {
             ret 0;
         }
-        if (result == c.WAIT_FAILED) {
+        if (result == WAIT_FAILED) {
             ret last_error();
         }
         if (result >= n::u32) {
-            ret c.EIO;
+            ret EIO;
         }
 
         val idx: usize = result::usize;
@@ -1173,7 +1307,7 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
         ret child_pid::i64;
     }
 
-    ret c.EINVAL;
+    ret EINVAL;
 }
 
 pub fun wait_pid(pid: i64, wstatus: *i32, options: i32) i64 {
@@ -1256,7 +1390,7 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
 # ret:      0 on wake, or negative errno
 pub fun thread_wait(addr: *i64, expected: i64) i64 {
     var cmp: i64 = expected;
-    val ok: i32 = WaitOnAddress(addr::ptr, ?cmp::ptr, 8, c.INFINITE);
+    val ok: i32 = WaitOnAddress(addr::ptr, ?cmp::ptr, 8, INFINITE);
     if (ok == 0) {
         ret last_error();
     }
@@ -1274,14 +1408,14 @@ pub fun thread_wake(addr: *i64) i64 {
 
 # sockets
 
-pub val AF_INET:      i32 = c.AF_INET;
-pub val SOCK_STREAM:  i32 = c.SOCK_STREAM;
-pub val SOCK_DGRAM:   i32 = c.SOCK_DGRAM;
-pub val SOL_SOCKET:   i32 = c.SOL_SOCKET;
-pub val SO_REUSEADDR: i32 = c.SO_REUSEADDR;
-pub val SHUT_RD:      i32 = c.SHUT_RD;
-pub val SHUT_WR:      i32 = c.SHUT_WR;
-pub val SHUT_RDWR:    i32 = c.SHUT_RDWR;
+pub val AF_INET:      i32 = 2;
+pub val SOCK_STREAM:  i32 = 1;
+pub val SOCK_DGRAM:   i32 = 2;
+pub val SOL_SOCKET:   i32 = 0xFFFF;
+pub val SO_REUSEADDR: i32 = 4;
+pub val SHUT_RD:      i32 = 0;
+pub val SHUT_WR:      i32 = 1;
+pub val SHUT_RDWR:    i32 = 2;
 
 pub val SOCKADDR_IN_SIZE: usize = 16;
 
@@ -1307,16 +1441,16 @@ pub fun sock_addr_read(sa: &u8, port: *u16, addr: *u8) {
 }
 
 pub fun sock_send(fd: i32, buf: &u8, len: usize) i64 {
-    if (!ensure_wsa()) { ret c.EIO; }
+    if (!ensure_wsa()) { ret EIO; }
     val res: i32 = ws2_send(fd::usize, buf, len::i32, 0);
-    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    if (res == SOCKET_ERROR) { ret wsa_last_error(); }
     ret res::i64;
 }
 
 pub fun sock_recv(fd: i32, buf: *u8, len: usize) i64 {
-    if (!ensure_wsa()) { ret c.EIO; }
+    if (!ensure_wsa()) { ret EIO; }
     val res: i32 = ws2_recv(fd::usize, buf, len::i32, 0);
-    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    if (res == SOCKET_ERROR) { ret wsa_last_error(); }
     ret res::i64;
 }
 
@@ -1326,21 +1460,21 @@ pub fun sock_close(fd: i32) i64 {
 
 fun wsa_last_error() i64 {
     val err: i32 = WSAGetLastError();
-    if (err == c.WSAECONNREFUSED)  { ret c.ECONNREFUSED; }
-    or (err == c.WSAETIMEDOUT)     { ret c.ETIMEDOUT; }
-    or (err == c.WSAECONNRESET)    { ret c.ECONNRESET; }
-    or (err == c.WSAECONNABORTED)  { ret c.ECONNABORTED; }
-    or (err == c.WSAENOTCONN)      { ret c.ENOTCONN; }
-    or (err == c.WSAENETUNREACH)   { ret c.ENETUNREACH; }
-    or (err == c.WSAEHOSTUNREACH)  { ret c.EHOSTUNREACH; }
-    or (err == c.WSAEADDRINUSE)    { ret c.EADDRINUSE; }
-    or (err == c.WSAEADDRNOTAVAIL) { ret c.EADDRNOTAVAIL; }
-    or (err == c.WSAEWOULDBLOCK)   { ret c.EAGAIN; }
-    or (err == c.WSAEINPROGRESS)   { ret c.EINPROGRESS; }
-    or (err == c.WSAENOTSOCK)      { ret c.ENOTSOCK; }
-    or (err == c.WSAEMSGSIZE)      { ret c.EMSGSIZE; }
-    or (err == c.WSAEAFNOSUPPORT)  { ret c.EAFNOSUPPORT; }
-    or { ret c.EIO; }
+    if (err == WSAECONNREFUSED)  { ret ECONNREFUSED; }
+    or (err == WSAETIMEDOUT)     { ret ETIMEDOUT; }
+    or (err == WSAECONNRESET)    { ret ECONNRESET; }
+    or (err == WSAECONNABORTED)  { ret ECONNABORTED; }
+    or (err == WSAENOTCONN)      { ret ENOTCONN; }
+    or (err == WSAENETUNREACH)   { ret ENETUNREACH; }
+    or (err == WSAEHOSTUNREACH)  { ret EHOSTUNREACH; }
+    or (err == WSAEADDRINUSE)    { ret EADDRINUSE; }
+    or (err == WSAEADDRNOTAVAIL) { ret EADDRNOTAVAIL; }
+    or (err == WSAEWOULDBLOCK)   { ret EAGAIN; }
+    or (err == WSAEINPROGRESS)   { ret EINPROGRESS; }
+    or (err == WSAENOTSOCK)      { ret ENOTSOCK; }
+    or (err == WSAEMSGSIZE)      { ret EMSGSIZE; }
+    or (err == WSAEAFNOSUPPORT)  { ret EAFNOSUPPORT; }
+    or { ret EIO; }
 }
 
 var wsa_initialized: i64 = 0;
@@ -1355,57 +1489,57 @@ fun ensure_wsa() bool {
 }
 
 pub fun sock_create(domain: i32, typ: i32, protocol: i32) i64 {
-    if (!ensure_wsa()) { ret c.EIO; }
+    if (!ensure_wsa()) { ret EIO; }
     val s: usize = ws2_socket(domain, typ, protocol);
-    if (s == c.INVALID_SOCKET) { ret wsa_last_error(); }
+    if (s == INVALID_SOCKET) { ret wsa_last_error(); }
     ret s::i64;
 }
 
 pub fun sock_bind(fd: i32, addr: *u8, addrlen: usize) i64 {
     val res: i32 = ws2_bind(fd::usize, addr, addrlen::i32);
-    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    if (res == SOCKET_ERROR) { ret wsa_last_error(); }
     ret 0;
 }
 
 pub fun sock_listen(fd: i32, backlog: i32) i64 {
     val res: i32 = ws2_listen(fd::usize, backlog);
-    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    if (res == SOCKET_ERROR) { ret wsa_last_error(); }
     ret 0;
 }
 
 pub fun sock_accept(fd: i32, addr: *u8, addrlen: *u32) i64 {
     val s: usize = ws2_accept(fd::usize, addr, addrlen::*i32);
-    if (s == c.INVALID_SOCKET) { ret wsa_last_error(); }
+    if (s == INVALID_SOCKET) { ret wsa_last_error(); }
     ret s::i64;
 }
 
 pub fun sock_connect(fd: i32, addr: *u8, addrlen: usize) i64 {
     val res: i32 = ws2_connect(fd::usize, addr, addrlen::i32);
-    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    if (res == SOCKET_ERROR) { ret wsa_last_error(); }
     ret 0;
 }
 
 pub fun sock_sendto(fd: i32, buf: &u8, len: usize, flags: i32, addr: *u8, addrlen: usize) i64 {
     val res: i32 = ws2_sendto(fd::usize, buf, len::i32, flags, addr, addrlen::i32);
-    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    if (res == SOCKET_ERROR) { ret wsa_last_error(); }
     ret res::i64;
 }
 
 pub fun sock_recvfrom(fd: i32, buf: *u8, len: usize, flags: i32, addr: *u8, addrlen: *u32) i64 {
     val res: i32 = ws2_recvfrom(fd::usize, buf, len::i32, flags, addr, addrlen::*i32);
-    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    if (res == SOCKET_ERROR) { ret wsa_last_error(); }
     ret res::i64;
 }
 
 pub fun sock_shutdown(fd: i32, how: i32) i64 {
     val res: i32 = ws2_shutdown(fd::usize, how);
-    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    if (res == SOCKET_ERROR) { ret wsa_last_error(); }
     ret 0;
 }
 
 pub fun sock_setopt(fd: i32, level: i32, opt: i32, value: *u8, vallen: usize) i64 {
     val res: i32 = ws2_setsockopt(fd::usize, level, opt, value, vallen::i32);
-    if (res == c.SOCKET_ERROR) { ret wsa_last_error(); }
+    if (res == SOCKET_ERROR) { ret wsa_last_error(); }
     ret 0;
 }
 
@@ -1435,19 +1569,19 @@ pub fun dns_nameserver(ns: *u8) i64 {
 pub fun random_fill(buf: *u8, len: usize) i64 {
     if (len == 0) { ret 0; }
     if (SystemFunction036(buf, len::u32) != 0) { ret 0; }
-    ret c.EIO;
+    ret EIO;
 }
 
 # time
 
 pub fun clock_gettime(clock_id: i32, ts: *timespec) i64 {
-    if (clock_id == c.CLOCK_MONOTONIC) {
+    if (clock_id == CLOCK_MONOTONIC) {
         var count: i64 = 0;
         var freq: i64 = 0;
         QueryPerformanceCounter(?count);
         QueryPerformanceFrequency(?freq);
         if (freq == 0) {
-            ret c.EIO;
+            ret EIO;
         }
         ts.tv_sec = count / freq;
         ts.tv_nsec = ((count % freq) * 1000000000) / freq;
@@ -1462,32 +1596,32 @@ pub fun clock_gettime(clock_id: i32, ts: *timespec) i64 {
 # errno
 
 pub fun error_message(code: i64) str {
-    if (code == c.EPERM) { ret "operation not permitted"; }
-    or (code == c.ENOENT) { ret "no such file or directory"; }
-    or (code == c.ESRCH) { ret "no such process"; }
-    or (code == c.EINTR) { ret "interrupted system call"; }
-    or (code == c.EIO) { ret "input/output error"; }
-    or (code == c.ENXIO) { ret "no such device or address"; }
-    or (code == c.E2BIG) { ret "argument list too long"; }
-    or (code == c.EBADF) { ret "bad file descriptor"; }
-    or (code == c.ECHILD) { ret "no child processes"; }
-    or (code == c.EAGAIN) { ret "resource temporarily unavailable"; }
-    or (code == c.ENOMEM) { ret "out of memory"; }
-    or (code == c.EACCES) { ret "permission denied"; }
-    or (code == c.EFAULT) { ret "bad address"; }
-    or (code == c.EBUSY) { ret "device or resource busy"; }
-    or (code == c.EEXIST) { ret "file exists"; }
-    or (code == c.ENODEV) { ret "no such device"; }
-    or (code == c.ENOTDIR) { ret "not a directory"; }
-    or (code == c.EISDIR) { ret "is a directory"; }
-    or (code == c.EINVAL) { ret "invalid argument"; }
-    or (code == c.ENFILE) { ret "too many open files in system"; }
-    or (code == c.EMFILE) { ret "too many open files"; }
-    or (code == c.ETXTBSY) { ret "text file busy"; }
-    or (code == c.ENOSPC) { ret "no space left on device"; }
-    or (code == c.EROFS) { ret "read-only file system"; }
-    or (code == c.EPIPE) { ret "broken pipe"; }
-    or (code == c.ENOTEMPTY) { ret "directory not empty"; }
-    or (code == c.ENOTSUP) { ret "operation not supported"; }
+    if (code == EPERM) { ret "operation not permitted"; }
+    or (code == ENOENT) { ret "no such file or directory"; }
+    or (code == ESRCH) { ret "no such process"; }
+    or (code == EINTR) { ret "interrupted system call"; }
+    or (code == EIO) { ret "input/output error"; }
+    or (code == ENXIO) { ret "no such device or address"; }
+    or (code == E2BIG) { ret "argument list too long"; }
+    or (code == EBADF) { ret "bad file descriptor"; }
+    or (code == ECHILD) { ret "no child processes"; }
+    or (code == EAGAIN) { ret "resource temporarily unavailable"; }
+    or (code == ENOMEM) { ret "out of memory"; }
+    or (code == EACCES) { ret "permission denied"; }
+    or (code == EFAULT) { ret "bad address"; }
+    or (code == EBUSY) { ret "device or resource busy"; }
+    or (code == EEXIST) { ret "file exists"; }
+    or (code == ENODEV) { ret "no such device"; }
+    or (code == ENOTDIR) { ret "not a directory"; }
+    or (code == EISDIR) { ret "is a directory"; }
+    or (code == EINVAL) { ret "invalid argument"; }
+    or (code == ENFILE) { ret "too many open files in system"; }
+    or (code == EMFILE) { ret "too many open files"; }
+    or (code == ETXTBSY) { ret "text file busy"; }
+    or (code == ENOSPC) { ret "no space left on device"; }
+    or (code == EROFS) { ret "read-only file system"; }
+    or (code == EPIPE) { ret "broken pipe"; }
+    or (code == ENOTEMPTY) { ret "directory not empty"; }
+    or (code == ENOTSUP) { ret "operation not supported"; }
     or { ret "unknown error"; }
 }
