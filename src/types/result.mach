@@ -1,8 +1,7 @@
 # std.types.result: success-or-error value type
 
 use std.types.bool;
-use std.types.string;
-use os: std.system.os;
+use panic: std.system.panic;
 
 # Result[T, E]: represents either success (ok) containing T, or error (err) containing E.
 # ---
@@ -55,9 +54,7 @@ pub fun is_err[T, E](res: Result[T, E]) bool {
 # ret: the contained ok value
 pub fun unwrap_ok[T, E](res: Result[T, E]) T {
     if (!res.tag) {
-        val msg: str = "unwrap_ok called on Err\n";
-        os.write(os.STDERR_FD, msg::&u8, str_len(msg));
-        os.abort();
+        panic.panic("unwrap_ok called on Err\n");
     }
     ret res.value.ok;
 }
@@ -69,9 +66,7 @@ pub fun unwrap_ok[T, E](res: Result[T, E]) T {
 # ret: the contained err value
 pub fun unwrap_err[T, E](res: Result[T, E]) E {
     if (res.tag) {
-        val msg: str = "unwrap_err called on Ok\n";
-        os.write(os.STDERR_FD, msg::&u8, str_len(msg));
-        os.abort();
+        panic.panic("unwrap_err called on Ok\n");
     }
     ret res.value.err;
 }
