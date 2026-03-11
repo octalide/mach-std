@@ -6,7 +6,6 @@
 
 use std.types.size;
 use std.types.bool;
-use std.types.string;
 
 use c:      std.system.os.windows.x86_64.constants;
 use shared:    std.system.os.windows.shared;
