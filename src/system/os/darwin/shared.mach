@@ -2,7 +2,7 @@
 #
 # contains types, constants, syscall wrappers, and all OS primitives that
 # are identical across darwin architectures. arch-specific modules provide
-# only page_size, terminate, pipe, and abort.
+# only page_size and pipe.
 
 use std.types.size;
 use std.types.bool;
@@ -13,15 +13,7 @@ $if ($mach.build.target.os.id != $mach.os.darwin.id) {
     $error("std.system.os.darwin.shared: requires darwin target");
 }
 
-$if ($mach.build.target.arch.id == $mach.arch.aarch64.id) {
-    use c: std.system.os.darwin.aarch64.constants;
-}
-$or ($mach.build.target.arch.id == $mach.arch.x86_64.id) {
-    use c: std.system.os.darwin.x86_64.constants;
-}
-$or {
-    $error("std.system.os.darwin.shared: unsupported architecture");
-}
+use c: std.system.os.darwin.constants;
 
 use os_shared: std.system.os.shared;
 
@@ -182,6 +174,23 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
     var out: i64;
     asm { syscall out, n, a0, a1, a2, a3, a4, a5 }
     ret out;
+}
+
+# process
+
+# terminate: exit the process with the given code.
+# ---
+# code: exit code
+pub fun terminate(code: i64) {
+    syscall1(c.SYS_EXIT, code::usize);
+    asm { trap }
+}
+
+# abort: abort the process immediately with exit code 255.
+pub fun abort() {
+    val pid: i64 = syscall0(c.SYS_GETPID);
+    syscall2(c.SYS_KILL, pid::usize, c.SIGABRT::usize);
+    terminate(255);
 }
 
 # memory
