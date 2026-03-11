@@ -1,12 +1,12 @@
-# std.system.os.windows.x86_64.constants: x86_64 windows constants.
+# std.system.os.windows.constants: windows constants.
 #
-# windows has no stable syscall interface. all OS interaction goes through
-# ntdll.dll and kernel32.dll via ext fun declarations.
+# Win32 constants are architecture-independent. all OS interaction goes
+# through ntdll.dll and kernel32.dll via ext fun declarations.
 
 use std.types.size;
 
 $if ($mach.build.target.os.id != $mach.os.windows.id) {
-    $error("std.system.os.windows.x86_64.constants: requires windows target");
+    $error("std.system.os.windows.constants: requires windows target");
 }
 
 $if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
