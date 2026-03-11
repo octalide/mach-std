@@ -787,33 +787,18 @@ pub fun random_fill(buf: *u8, len: usize) i64 {
     ret 0;
 }
 
-# time (darwin uses gettimeofday; no direct clock_gettime syscall)
-# TODO: CLOCK_MONOTONIC not actually monotonic on darwin — uses gettimeofday.
-# needs mach_absolute_time() via commpage for true monotonic time.
+# time
 
-# Converts a clock_id to a timespec using the best available mechanism.
+# clock_gettime: read a clock into a timespec.
 #
-# Darwin has no clock_gettime syscall; both CLOCK_REALTIME and CLOCK_MONOTONIC
-# fall back to gettimeofday for now.
-# TODO: CLOCK_MONOTONIC should use mach_absolute_time() via the commpage.
+# uses the kernel clock_gettime syscall (available since macOS 10.12).
+# CLOCK_MONOTONIC returns true monotonic time via the kernel's nanouptime.
 # ---
 # clock_id: CLOCK_REALTIME or CLOCK_MONOTONIC
 # ts:       output timespec
-# ret:      0 on success, -EINVAL for unknown clock_id
+# ret:      0 on success, or negative errno
 pub fun clock_gettime(clock_id: i32, ts: *timespec) i64 {
-    if (clock_id != c.CLOCK_REALTIME) {
-        if (clock_id != c.CLOCK_MONOTONIC) {
-            ret -c.EINVAL::i64;
-        }
-    }
-    var tv: timeval;
-    val res: i64 = syscall2(c.SYS_GETTIMEOFDAY, ?tv::usize, 0);
-    if (res < 0) {
-        ret res;
-    }
-    ts.tv_sec = tv.tv_sec;
-    ts.tv_nsec = tv.tv_usec::i64 * 1000;
-    ret 0;
+    ret syscall2(c.SYS_CLOCK_GETTIME, clock_id::u32::usize, ts::usize);
 }
 
 # errno

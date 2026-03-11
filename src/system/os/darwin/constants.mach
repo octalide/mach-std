@@ -36,6 +36,7 @@ pub val SYS_FSTATAT64:        usize = 470;
 pub val SYS_PIPE:             usize = 42;
 pub val SYS_SELECT:           usize = 93;
 pub val SYS_GETTIMEOFDAY:     usize = 116;
+pub val SYS_CLOCK_GETTIME:    usize = 427;
 pub val SYS_GETPID:           usize = 20;
 pub val SYS_KILL:             usize = 37;
 pub val SYS___GETCWD:         usize = 304;
