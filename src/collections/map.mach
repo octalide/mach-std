@@ -77,9 +77,9 @@ pub fun dnit[K, V](m: *Map[K, V]) bool {
     }
 
     var ok: bool = true;
-    if (allocator.deallocate[K](m.alloc, m.keys, m.cap) < 0) { ok = false; }
-    if (allocator.deallocate[V](m.alloc, m.values, m.cap) < 0) { ok = false; }
-    if (allocator.deallocate[u8](m.alloc, m.states, m.cap) < 0) { ok = false; }
+    if (!allocator.allocator_free[K](m.alloc, m.keys, m.cap)) { ok = false; }
+    if (!allocator.allocator_free[V](m.alloc, m.values, m.cap)) { ok = false; }
+    if (!allocator.allocator_free[u8](m.alloc, m.states, m.cap)) { ok = false; }
 
     m.keys       = nil;
     m.values     = nil;
@@ -185,23 +185,23 @@ fun grow[K, V](m: *Map[K, V], new_cap: usize) Result[usize, str] {
         ret ok[usize, str](m.cap);
     }
 
-    val keys_r: Result[*K, str] = allocator.allocate[K](m.alloc, new_cap);
+    val keys_r: Result[*K, str] = allocator.allocator_alloc[K](m.alloc, new_cap);
     if (is_err[*K, str](keys_r)) {
         ret err[usize, str](unwrap_err[*K, str](keys_r));
     }
     val new_keys: *K = unwrap_ok[*K, str](keys_r);
 
-    val values_r: Result[*V, str] = allocator.allocate[V](m.alloc, new_cap);
+    val values_r: Result[*V, str] = allocator.allocator_alloc[V](m.alloc, new_cap);
     if (is_err[*V, str](values_r)) {
-        allocator.deallocate[K](m.alloc, new_keys, new_cap);
+        allocator.allocator_free[K](m.alloc, new_keys, new_cap);
         ret err[usize, str](unwrap_err[*V, str](values_r));
     }
     val new_values: *V = unwrap_ok[*V, str](values_r);
 
-    val states_r: Result[*u8, str] = allocator.zallocate[u8](m.alloc, new_cap);
+    val states_r: Result[*u8, str] = allocator.allocator_zalloc[u8](m.alloc, new_cap);
     if (is_err[*u8, str](states_r)) {
-        allocator.deallocate[K](m.alloc, new_keys, new_cap);
-        allocator.deallocate[V](m.alloc, new_values, new_cap);
+        allocator.allocator_free[K](m.alloc, new_keys, new_cap);
+        allocator.allocator_free[V](m.alloc, new_values, new_cap);
         ret err[usize, str](unwrap_err[*u8, str](states_r));
     }
     val new_states: *u8 = unwrap_ok[*u8, str](states_r);
@@ -237,9 +237,9 @@ fun grow[K, V](m: *Map[K, V], new_cap: usize) Result[usize, str] {
             i = i + 1;
         }
 
-        allocator.deallocate[K](m.alloc, old_keys, old_cap);
-        allocator.deallocate[V](m.alloc, old_values, old_cap);
-        allocator.deallocate[u8](m.alloc, old_states, old_cap);
+        allocator.allocator_free[K](m.alloc, old_keys, old_cap);
+        allocator.allocator_free[V](m.alloc, old_values, old_cap);
+        allocator.allocator_free[u8](m.alloc, old_states, old_cap);
     }
 
     ret ok[usize, str](new_cap);
