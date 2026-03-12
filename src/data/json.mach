@@ -383,7 +383,7 @@ fun children_grow(p: *Parser, v: *Value) Result[bool, str] {
     var new_cap: usize = v.cap * 2;
     if (v.cap == 0) { new_cap = 4; }
 
-    val cr: Result[*u8, str] = allo.allocator_alloc[u8](p.alloc, new_cap * VALUE_SIZE);
+    val cr: Result[*u8, str] = allo.allocate[u8](p.alloc, new_cap * VALUE_SIZE);
     if (is_err[*u8, str](cr)) { ret err[bool, str](unwrap_err[*u8, str](cr)); }
     val new_children: *Value = unwrap_ok[*u8, str](cr)::*Value;
 
@@ -397,7 +397,7 @@ fun children_grow(p: *Parser, v: *Value) Result[bool, str] {
 }
 
 fun keys_grow(p: *Parser, v: *Value, new_cap: usize) Result[bool, str] {
-    val kr: Result[*u8, str] = allo.allocator_alloc[u8](p.alloc, new_cap * STR_SIZE);
+    val kr: Result[*u8, str] = allo.allocate[u8](p.alloc, new_cap * STR_SIZE);
     if (is_err[*u8, str](kr)) { ret err[bool, str](unwrap_err[*u8, str](kr)); }
     val new_keys: *str = unwrap_ok[*u8, str](kr)::*str;
 

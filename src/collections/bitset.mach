@@ -39,7 +39,7 @@ pub fun init(alloc: *allocator.Allocator, nbits: usize) Result[Bitset, str] {
         ret ok[Bitset, str](bs);
     }
 
-    val r: Result[*u64, str] = allocator.allocator_zalloc[u64](alloc, bs.nwords);
+    val r: Result[*u64, str] = allocator.zallocate[u64](alloc, bs.nwords);
     if (is_err[*u64, str](r)) {
         ret err[Bitset, str](unwrap_err[*u64, str](r));
     }
@@ -57,11 +57,11 @@ pub fun dnit(bs: *Bitset) bool {
         bs.nbits = 0;
         ret true;
     }
-    val res: bool = allocator.allocator_free[u64](bs.alloc, bs.words, bs.nwords);
+    val res: i64 = allocator.deallocate[u64](bs.alloc, bs.words, bs.nwords);
     bs.words  = nil;
     bs.nbits  = 0;
     bs.nwords = 0;
-    ret res;
+    ret res == 0;
 }
 
 # set: set the bit at the given index.

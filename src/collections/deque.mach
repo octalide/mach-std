@@ -9,7 +9,7 @@ use allo: std.allocator;
 use page: std.allocator.page;
 
 pub rec Deque[T] {
-    alloc: *allo.Allocator;
+    alloc: &allo.Allocator;
     data:  *T;
     head:  usize;
     len:   usize;
@@ -20,7 +20,7 @@ pub rec Deque[T] {
 # ---
 # alloc: allocator to use for allocations
 # ret:   a new empty Deque[T]
-pub fun init[T](alloc: *allo.Allocator) Deque[T] {
+pub fun init[T](alloc: &allo.Allocator) Deque[T] {
     var dq: Deque[T];
     dq.alloc = alloc;
     dq.data = nil;
@@ -42,15 +42,15 @@ pub fun dnit[T](dq: *Deque[T]) bool {
         ret true;
     }
 
-    val res: bool = allo.allocator_free[T](dq.alloc, dq.data, dq.cap);
-    if (res) {
+    val res: i64 = allo.deallocate[T](dq.alloc, dq.data, dq.cap);
+    if (res == 0) {
         dq.data = nil;
         dq.len = 0;
         dq.head = 0;
         dq.cap = 0;
     }
 
-    ret res;
+    ret res == 0;
 }
 
 # check if the deque is empty.
@@ -78,7 +78,7 @@ fun grow[T](dq: *Deque[T]) Result[usize, str] {
         new_cap = dq.cap * 2;
     }
 
-    val r: Result[*T, str] = allo.allocator_alloc[T](dq.alloc, new_cap);
+    val r: Result[*T, str] = allo.allocate[T](dq.alloc, new_cap);
     if (is_err[*T, str](r)) {
         ret err[usize, str](unwrap_err[*T, str](r));
     }
@@ -93,7 +93,7 @@ fun grow[T](dq: *Deque[T]) Result[usize, str] {
     }
 
     if (dq.cap > 0) {
-        allo.allocator_free[T](dq.alloc, dq.data, dq.cap);
+        allo.deallocate[T](dq.alloc, dq.data, dq.cap);
     }
 
     dq.data = new_data;

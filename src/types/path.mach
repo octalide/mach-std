@@ -106,7 +106,7 @@ pub fun extension(p: Path) str {
 # a:   allocator for the result
 # p:   path to extract stem from
 # ret: the stem, or an error message
-pub fun stem(a: *allocator.Allocator, p: Path) Result[Path, str] {
+pub fun stem(a: &allocator.Allocator, p: Path) Result[Path, str] {
     if (a == nil) { ret err[Path, str]("allocator is nil"); }
 
     val name: str = filename(p);
@@ -121,7 +121,7 @@ pub fun stem(a: *allocator.Allocator, p: Path) Result[Path, str] {
     val ext_len:  usize = str_len(file_ext);
     val stem_len: usize = len - ext_len - 1;
 
-    val r: Result[*u8, str] = allocator.allocator_alloc[u8](a, stem_len + 1);
+    val r: Result[*u8, str] = allocator.allocate[u8](a, stem_len + 1);
     if (is_err[*u8, str](r)) {
         ret err[Path, str](unwrap_err[*u8, str](r));
     }
@@ -138,12 +138,12 @@ pub fun stem(a: *allocator.Allocator, p: Path) Result[Path, str] {
 # a:   allocator for the new path
 # p:   path to clone (nil returns nil)
 # ret: the cloned path, or an error message
-pub fun clone(a: *allocator.Allocator, p: Path) Result[Path, str] {
+pub fun clone(a: &allocator.Allocator, p: Path) Result[Path, str] {
     if (a == nil) { ret err[Path, str]("allocator is nil"); }
     if (p == nil) { ret ok[Path, str](nil); }
 
     val n: usize            = str_len(p);
-    val r: Result[*u8, str] = allocator.allocator_alloc[u8](a, n + 1);
+    val r: Result[*u8, str] = allocator.allocate[u8](a, n + 1);
     if (is_err[*u8, str](r)) {
         ret err[Path, str](unwrap_err[*u8, str](r));
     }
@@ -161,7 +161,7 @@ pub fun clone(a: *allocator.Allocator, p: Path) Result[Path, str] {
 # left:  left path segment
 # right: right path segment
 # ret:   the joined path, or an error message
-pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str] {
+pub fun join(a: &allocator.Allocator, left: Path, right: Path) Result[Path, str] {
     if (a == nil) { ret err[Path, str]("allocator is nil"); }
     if (is_empty(left))  { ret clone(a, right); }
     if (is_empty(right)) { ret clone(a, left); }
@@ -175,7 +175,7 @@ pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str]
     if (!has_sep) { extra = 1; }
 
     val out_len: usize = left_len + right_len + extra;
-    val r: Result[*u8, str] = allocator.allocator_alloc[u8](a, out_len + 1);
+    val r: Result[*u8, str] = allocator.allocate[u8](a, out_len + 1);
     if (is_err[*u8, str](r)) {
         ret err[Path, str](unwrap_err[*u8, str](r));
     }
@@ -200,7 +200,7 @@ pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str]
 # a:   allocator for the resulting path
 # p:   path to get parent of
 # ret: the parent path, or an error message
-pub fun parent(a: *allocator.Allocator, p: Path) Result[Path, str] {
+pub fun parent(a: &allocator.Allocator, p: Path) Result[Path, str] {
     if (a == nil)    { ret err[Path, str]("allocator is nil"); }
     if (is_empty(p)) { ret clone(a, "."); }
 
@@ -228,7 +228,7 @@ pub fun parent(a: *allocator.Allocator, p: Path) Result[Path, str] {
     }
     if (parent_end == 0) { ret clone_sep(a, sep); }
 
-    val r: Result[*u8, str] = allocator.allocator_alloc[u8](a, parent_end + 1);
+    val r: Result[*u8, str] = allocator.allocate[u8](a, parent_end + 1);
     if (is_err[*u8, str](r)) {
         ret err[Path, str](unwrap_err[*u8, str](r));
     }
@@ -240,8 +240,8 @@ pub fun parent(a: *allocator.Allocator, p: Path) Result[Path, str] {
     ret ok[Path, str](buf::&u8);
 }
 
-fun clone_sep(a: *allocator.Allocator, sep: u8) Result[Path, str] {
-    val r: Result[*u8, str] = allocator.allocator_alloc[u8](a, 2);
+fun clone_sep(a: &allocator.Allocator, sep: u8) Result[Path, str] {
+    val r: Result[*u8, str] = allocator.allocate[u8](a, 2);
     if (is_err[*u8, str](r)) {
         ret err[Path, str](unwrap_err[*u8, str](r));
     }

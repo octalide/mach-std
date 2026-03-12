@@ -1,210 +1,162 @@
 # std.allocator: generic allocator interface and utilities
 #
 # this is intended to be the glue between platform memory primitives and higher
-# level containers/types.
+# level containers/types
 
 use std.types.bool;
+use std.types.option;
 use std.types.result;
 use std.types.size;
 use std.types.string;
 
-use heap: std.allocator.heap;
+use mem:    std.memory;
 
-# AllocError: textual allocation error messages returned by allocator Result types.
+# Allocator: backend-agnostic allocator interface
 # ---
-# these are short, human-readable strings (for example: "out of memory").
-pub def AllocError: str;
-
-# Allocator: backend-agnostic allocator interface.
-# ---
-# ctx:       opaque context passed to callbacks.
-# alloc_fn:  allocate (ctx, size, align) -> ptr (nil on OOM).
-# resize_fn: resize (ctx, p, old_size, new_size, align) -> ptr (nil on OOM).
-# free_fn:   free (ctx, p, size, align) -> bool.
+# ctx:           opaque context passed to callbacks.
+# fn_allocate:   allocate (ctx, size, align) -> ptr (nil on OOM).
+# fn_reallocate: reallocate (ctx, p, old_size, new_size, align) -> ptr (nil on OOM).
+# fn_deallocate: deallocate (ctx, p, size, align) -> i64 (0 on success, negative errno on failure).
 pub rec Allocator {
-    ctx:       ptr;
-    alloc_fn:  fun(ptr, usize, usize) ptr;
-    resize_fn: fun(ptr, ptr, usize, usize, usize) ptr;
-    free_fn:   fun(ptr, ptr, usize, usize) bool;
+    ctx:           ptr;
+    fn_allocate:   fun(ptr, usize, usize)             Option[ptr];
+    fn_reallocate: fun(ptr, ptr, usize, usize, usize) Option[ptr];
+    fn_deallocate: fun(ptr, ptr, usize, usize)        i64;
 }
 
-# allocator_alloc_bytes: allocate raw bytes using this allocator.
+# allocate_raw: allocate raw bytes using this allocator
 # ---
-# this:  allocator to use for this allocation.
+# a:     allocator to use for this allocation.
 # size:  number of bytes (0 returns nil).
 # align: requested alignment in bytes.
-# ret:   Ok(ptr) on success or Err(AllocError) on out-of-memory.
-pub fun allocator_alloc_bytes(this: *Allocator, size: usize, align: usize) Result[ptr, AllocError] {
+# ret:   ptr to allocated memory or error on OOM
+pub fun allocate_raw(a: &Allocator, size: usize, align: usize) Result[ptr, str] {
     if (size == 0) {
-        ret ok[ptr, AllocError](nil);
+        ret ok[ptr, str](nil);
     }
 
-    val p: ptr = this.alloc_fn(this.ctx, size, align);
-    if (p == nil) {
-        ret err[ptr, AllocError]("out of memory");
+    val opt_fn_allocate: Option[ptr] = a.fn_allocate(a.ctx, size, align);
+    if (is_none[ptr](opt_fn_allocate)) {
+        ret err[ptr, str]("out of memory");
     }
 
-    ret ok[ptr, AllocError](p);
+    ret ok[ptr, str](unwrap[ptr](opt_fn_allocate));
 }
 
-# allocator_resize_bytes: resize an allocation in-place if possible, otherwise may return a new pointer.
+# reallocate_raw: reallocate an allocation in-place if possible, otherwise may return a new pointer
 # ---
-# this:     allocator to use for this operation.
-# p:        existing pointer (or nil to allocate new).
-# old_size: previous size in bytes.
-# new_size: desired size in bytes (0 frees the allocation).
-# align:    alignment in bytes.
-# ret:      Ok(ptr) with the new pointer (or nil for freed) or Err(AllocError) on OOM.
-pub fun allocator_resize_bytes(this: *Allocator, p: ptr, old_size: usize, new_size: usize, align: usize) Result[ptr, AllocError] {
+# a:        allocator to use for this operation
+# p:        existing pointer (or nil to allocate new)
+# old_size: previous size in bytes
+# new_size: desired size in bytes (0 frees the allocation)
+# align:    alignment in bytes
+# ret:      ptr to reallocated memory (same as p if in-place) or error on OOM
+pub fun reallocate_raw(a: &Allocator, p: ptr, old_size: usize, new_size: usize, align: usize) Result[ptr, str] {
     if (new_size == 0) {
-        val ok_free: bool = this.free_fn(this.ctx, p, old_size, align);
-        ret ok[ptr, AllocError](nil);
+        val res_deallocate: i64 = deallocate_raw(a, p, old_size, align);
+        if (res_deallocate == 0) {
+            ret ok[ptr, str](nil);
+        }
+
+        ret err[ptr, str]("failed to deallocate on reallocate to zero");
     }
 
-    val q: ptr = this.resize_fn(this.ctx, p, old_size, new_size, align);
-    if (q == nil) {
-        ret err[ptr, AllocError]("out of memory");
+    val opt_fn_reallocate: Option[ptr] = a.fn_reallocate(a.ctx, p, old_size, new_size, align);
+    if (is_none[ptr](opt_fn_reallocate)) {
+        ret err[ptr, str]("out of memory");
     }
 
-    ret ok[ptr, AllocError](q);
+    ret ok[ptr, str](unwrap[ptr](opt_fn_reallocate));
 }
 
-# allocator_free_bytes: free an allocation previously returned by alloc_bytes or resize_bytes.
+# deallocate_raw: deallocate an allocation previously returned by allocate_raw or reallocate_raw
 # ---
-# this:  allocator to use for this operation.
-# p:     pointer previously returned by alloc_bytes or resize_bytes.
-# size:  size in bytes that was allocated.
-# align: alignment in bytes.
-# ret:   true on success.
-pub fun allocator_free_bytes(this: *Allocator, p: ptr, size: usize, align: usize) bool {
-    ret this.free_fn(this.ctx, p, size, align);
+# a:     Allocator to use for this operation
+# p:     pointer previously returned by allocate_raw or reallocate_raw
+# size:  size in bytes that was allocated
+# align: alignment in bytes
+# ret:   0 on success, or negative errno
+pub fun deallocate_raw(a: &Allocator, p: ptr, size: usize, align: usize) i64 {
+    ret a.fn_deallocate(a.ctx, p, size, align);
 }
 
-# allocator_alloc: allocate count elements of type T.
+# allocate: allocate count elements of type T
 # ---
-# this:  allocator to use for this allocation.
-# count: number of elements to allocate.
-# ret:   Ok(*T) pointer (nil for count == 0) or Err(AllocError) on OOM or overflow.
-pub fun allocator_alloc[T](this: *Allocator, count: usize) Result[*T, AllocError] {
+# a:     Allocator to use for this allocation
+# count: number of elements to allocate
+# ret:   pointer to allocated memory or error on OOM or overflow (nil for count == 0)
+pub fun allocate[T](a: &Allocator, count: usize) Result[*T, str] {
     if (count == 0) {
-        ret ok[*T, AllocError](nil::*T);
+        ret ok[*T, str](nil::*T);
     }
 
+    # check for size overflow (relies on unsigned wraparound behavior)
     val size:  usize = $size_of(T);
     val total: usize = size * count;
     if (size != 0 && total / size != count) {
-        ret err[*T, AllocError]("allocation size overflow");
+        ret err[*T, str]("allocation size overflow");
     }
 
-    val r: Result[ptr, AllocError] = allocator_alloc_bytes(this, total, $align_of(T));
-    if (!r.tag) {
-        ret err[*T, AllocError](r.value.err);
+    val res_allocate_raw: Result[ptr, str] = allocate_raw(a, total, $align_of(T));
+    if (is_err[ptr, str](res_allocate_raw)) {
+        ret err[*T, str](unwrap_err[ptr, str](res_allocate_raw));
     }
 
-    ret ok[*T, AllocError](r.value.ok::*T);
+    ret ok[*T, str](unwrap_ok[ptr, str](res_allocate_raw)::*T);
 }
 
-# allocator_zalloc: allocate and zero-initialize count elements of T.
+# zallocate: allocate and zero-initialize count elements of T
 # ---
-# this:  allocator to use for this allocation.
-# count: number of elements to allocate.
-# ret:   Ok(*T) pointer (nil for count == 0) or Err(AllocError) on OOM or overflow.
-pub fun allocator_zalloc[T](this: *Allocator, count: usize) Result[*T, AllocError] {
-    val r: Result[*T, AllocError] = allocator_alloc[T](this, count);
-    if (!r.tag) {
-        ret r;
+# a:     Allocator to use for this allocation
+# count: number of elements to allocate
+# ret:   pointer to allocated and zero-initialized memory or error on OOM or overflow (nil for count == 0)
+pub fun zallocate[T](a: &Allocator, count: usize) Result[*T, str] {
+    # attempt initial allocation using allocate
+    val res_allocate: Result[*T, str] = allocate[T](a, count);
+    if (is_err[*T, str](res_allocate)) {
+        ret res_allocate;
     }
 
-    val p: *T = r.value.ok;
-    if (p != nil && count != 0) {
-        val total: usize = $size_of(T) * count;
-        val bytes: *u8 = p::ptr::*u8;
-        var i: usize = 0;
-        for (i < total) {
-            bytes[i] = 0;
-            i = i + 1;
-        }
-    }
+    val p: *T = unwrap_ok[*T, str](res_allocate);
 
-    ret ok[*T, AllocError](p);
+    mem.zero[T](p, count);
+
+    ret ok[*T, str](p);
 }
 
-# allocator_free: free memory previously returned by alloc/zalloc for count elements.
+# reallocate: reallocate an allocation of T elements
 # ---
-# this:  allocator to use for this operation.
-# p:     pointer returned by alloc/zalloc (may be nil).
-# count: number of elements to free.
-# ret:   true on success; no-op for nil pointer or count == 0.
-pub fun allocator_free[T](this: *Allocator, p: *T, count: usize) bool {
-    if (p == nil || count == 0) {
-        ret true;
-    }
-
-    ret allocator_free_bytes(this, p::ptr, $size_of(T) * count, $align_of(T));
-}
-
-# allocator_resize: resize an allocation of T elements.
-# ---
-# this:      allocator to use for this operation.
-# p:         existing pointer (may be nil to allocate new).
-# old_count: previous number of elements.
-# new_count: desired number of elements (0 frees).
-# ret:       Ok(*T) with new pointer or Err(AllocError) on error.
-pub fun allocator_resize[T](this: *Allocator, p: *T, old_count: usize, new_count: usize) Result[*T, AllocError] {
-    if (new_count == 0) {
-        val ok_free: bool = allocator_free[T](this, p, old_count);
-        ret ok[*T, AllocError](nil::*T);
-    }
-
+# a:         Allocator to use for this operation
+# p:         existing pointer
+# old_count: previous number of elements
+# new_count: desired number of elements (0 frees)
+# ret:       pointer to reallocated memory (same as p if in-place) or error on OOM or overflow (nil for new_count == 0)
+pub fun reallocate[T](a: &Allocator, p: &T, old_count: usize, new_count: usize) Result[*T, str] {
+    # check for size overflow (relies on unsigned wraparound behavior)
     val elem_size: usize = $size_of(T);
     val old_size:  usize = elem_size * old_count;
     val new_size:  usize = elem_size * new_count;
-
     if (elem_size != 0 && new_size / elem_size != new_count) {
-        ret err[*T, AllocError]("allocation size overflow");
+        ret err[*T, str]("allocation size overflow");
     }
 
-    val r: Result[ptr, AllocError] = allocator_resize_bytes(this, p::ptr, old_size, new_size, $align_of(T));
-    if (!r.tag) {
-        ret err[*T, AllocError](r.value.err);
+    val res_reallocate_raw: Result[ptr, str] = reallocate_raw(a, p::ptr, old_size, new_size, $align_of(T));
+    if (is_err[ptr, str](res_reallocate_raw)) {
+        ret err[*T, str](unwrap_err[ptr, str](res_reallocate_raw));
     }
 
-    ret ok[*T, AllocError](r.value.ok::*T);
+    ret ok[*T, str](unwrap_ok[ptr, str](res_reallocate_raw)::*T);
 }
 
-fun page_alloc(ctx: ptr, size: usize, align: usize) ptr {
-    ret heap.allocate(size);
-}
-
-fun page_resize(ctx: ptr, p: ptr, old_size: usize, new_size: usize, align: usize) ptr {
-    ret heap.reallocate(p, old_size, new_size);
-}
-
-fun page_free(ctx: ptr, p: ptr, size: usize, align: usize) bool {
-    ret heap.deallocate(p, size);
-}
-
-# heap_allocator: allocator backed by brk-based bump allocator.
+# deallocate: deallocate memory previously returned by alloc/zalloc for count elements.
 # ---
-# uses brk for small allocations, mmap for >128KB. free is no-op for brk-backed.
-# ret: Allocator backed by brk heap.
-pub fun heap_allocator() Allocator {
-    var a: Allocator;
-    a.ctx = nil;
-    a.alloc_fn  = page_alloc;
-    a.resize_fn = page_resize;
-    a.free_fn   = page_free;
-    ret a;
-}
+# p:     pointer returned by alloc/zalloc (may be nil)
+# count: number of elements to deallocate
+# ret:   0 on success, or negative errno; no-op for nil pointer or count == 0.
+pub fun deallocate[T](a: &Allocator, p: &T, count: usize) i64 {
+    if (p == nil || count == 0) {
+        ret 0;
+    }
 
-# page_allocator: allocator backed by platform page allocator (coarse-grained).
-# ---
-# ret: Allocator backed by platform page allocator (coarse-grained).
-pub fun page_allocator() Allocator {
-    var a: Allocator;
-    a.ctx = nil;
-    a.alloc_fn = page_alloc;
-    a.resize_fn = page_resize;
-    a.free_fn = page_free;
-    ret a;
+    ret deallocate_raw(a, p::ptr, $size_of(T) * count, $align_of(T));
 }

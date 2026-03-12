@@ -177,7 +177,7 @@ pub fun get_reader(f: &File, r: *reader.Reader) {
 # a:   allocator for the result buffer
 # p:   file path
 # ret: file contents as a string, or an error message
-pub fun read_all(a: *allocator.Allocator, p: str) Result[str, str] {
+pub fun read_all(a: &allocator.Allocator, p: str) Result[str, str] {
     val open_res: Result[File, str] = open(p);
     if (is_err[File, str](open_res)) {
         ret err[str, str](unwrap_err[File, str](open_res));
@@ -191,7 +191,7 @@ pub fun read_all(a: *allocator.Allocator, p: str) Result[str, str] {
     }
     val fi: FileInfo = unwrap_ok[FileInfo, str](info_res);
 
-    val alloc_res: Result[*u8, str] = allocator.allocator_alloc[u8](a, fi.size + 1);
+    val alloc_res: Result[*u8, str] = allocator.allocate[u8](a, fi.size + 1);
     if (is_err[*u8, str](alloc_res)) {
         close(?f);
         ret err[str, str](unwrap_err[*u8, str](alloc_res));
@@ -329,7 +329,7 @@ pub fun create_dir(p: str, mode: i32) Result[bool, str] {
 # p:    directory path
 # mode: permission bits
 # ret:  true on success, or an error message
-pub fun create_dir_all(a: *allocator.Allocator, p: str, mode: i32) Result[bool, str] {
+pub fun create_dir_all(a: &allocator.Allocator, p: str, mode: i32) Result[bool, str] {
     if (p == nil)         { ret err[bool, str]("path is nil"); }
     if (path.is_empty(p)) { ret err[bool, str]("path is empty"); }
     if (path.is_root(p))  { ret ok[bool, str](true); }
@@ -347,7 +347,7 @@ pub fun create_dir_all(a: *allocator.Allocator, p: str, mode: i32) Result[bool, 
     val parent_create: Result[bool, str] = create_dir_all(a, parent_path, mode);
 
     val parent_len: usize = str_len(parent_path);
-    allocator.allocator_free[u8](a, parent_path::ptr::*u8, parent_len + 1);
+    allocator.deallocate[u8](a, parent_path::ptr::*u8, parent_len + 1);
 
     if (is_err[bool, str](parent_create)) { ret parent_create; }
 
@@ -362,7 +362,7 @@ pub fun create_dir_all(a: *allocator.Allocator, p: str, mode: i32) Result[bool, 
 # a:      allocator for the path
 # prefix: name prefix (e.g. "test" → "/tmp/test_<n>")
 # ret:    the created TempFile, or an error message
-pub fun temp_create(a: *allocator.Allocator, prefix: str) Result[TempFile, str] {
+pub fun temp_create(a: &allocator.Allocator, prefix: str) Result[TempFile, str] {
     var attempt: usize = 0;
     for (attempt < TEMP_MAX_ATTEMPTS) {
         var rnd: [8]u8;
@@ -384,7 +384,7 @@ pub fun temp_create(a: *allocator.Allocator, prefix: str) Result[TempFile, str] 
         }
 
         val p_len: usize = str_len(p);
-        allocator.allocator_free[u8](a, p::ptr::*u8, p_len + 1);
+        allocator.deallocate[u8](a, p::ptr::*u8, p_len + 1);
 
         if (raw != os.EEXIST) {
             ret err[TempFile, str](os.message(raw));
@@ -435,7 +435,7 @@ fun file_read_cb(ctx: ptr, buf: *u8, len: usize) Result[usize, str] {
     ret read(ctx::*File, buf, len);
 }
 
-fun temp_build_path(a: *allocator.Allocator, prefix: str, rnd: &u8) Result[path.Path, str] {
+fun temp_build_path(a: &allocator.Allocator, prefix: str, rnd: &u8) Result[path.Path, str] {
     var buf: [256]u8;
     var off: usize = 0;
 
@@ -474,7 +474,7 @@ fun temp_build_path(a: *allocator.Allocator, prefix: str, rnd: &u8) Result[path.
 
     buf[off] = 0;
 
-    val r: Result[*u8, str] = allocator.allocator_alloc[u8](a, off + 1);
+    val r: Result[*u8, str] = allocator.allocate[u8](a, off + 1);
     if (is_err[*u8, str](r)) {
         ret err[path.Path, str](unwrap_err[*u8, str](r));
     }

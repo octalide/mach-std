@@ -10,7 +10,7 @@ use page: std.allocator.page;
 
 # Vector: resizable vector backed by an allo.
 pub rec Vector[T] {
-    alloc: *allo.Allocator;
+    alloc: &allo.Allocator;
     data:  *T;
     len:   usize;
     cap:   usize;
@@ -20,7 +20,7 @@ pub rec Vector[T] {
 # ---
 # alloc: allocator to use for allocations
 # ret:   a new empty Vector[T]
-pub fun init[T](alloc: *allo.Allocator) Vector[T] {
+pub fun init[T](alloc: &allo.Allocator) Vector[T] {
     var v: Vector[T];
     v.alloc = alloc;
     v.data = nil;
@@ -40,14 +40,14 @@ pub fun dnit[T](vec: *Vector[T]) bool {
         ret true;
     }
 
-    val res: bool = allo.allocator_free[T](vec.alloc, vec.data, vec.cap);
-    if (res) {
+    val res: i64 = allo.deallocate[T](vec.alloc, vec.data, vec.cap);
+    if (res == 0) {
         vec.data = nil;
         vec.len = 0;
         vec.cap = 0;
     }
 
-    ret res;
+    ret res == 0;
 }
 
 # is_empty: check if the vector is empty.
@@ -111,7 +111,7 @@ pub fun reserve[T](vec: *Vector[T], additional: usize) Result[usize, str] {
         }
     }
 
-    val r: Result[*T, str] = allo.allocator_resize[T](vec.alloc, vec.data, vec.cap, new_cap);
+    val r: Result[*T, str] = allo.reallocate[T](vec.alloc, vec.data, vec.cap, new_cap);
     if (is_err[*T, str](r)) {
         ret err[usize, str](unwrap_err[*T, str](r));
     }
