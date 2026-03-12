@@ -80,7 +80,7 @@ pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
         }
 
         val pre_len: usize = pos - start;
-        val alloc_result: Result[ptr, str] = allo.allocate_raw(a, pre_len + 1, 1);
+        val alloc_result: Result[ptr, str] = allo.allocator_alloc_bytes(a, pre_len + 1, 1);
         if (is_err[ptr, str](alloc_result)) {
             ret err[Semver, str]("out of memory");
         }
@@ -103,7 +103,7 @@ pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
         }
 
         val bld_len: usize = pos - start;
-        val alloc_result: Result[ptr, str] = allo.allocate_raw(a, bld_len + 1, 1);
+        val alloc_result: Result[ptr, str] = allo.allocator_alloc_bytes(a, bld_len + 1, 1);
         if (is_err[ptr, str](alloc_result)) {
             ret err[Semver, str]("out of memory");
         }

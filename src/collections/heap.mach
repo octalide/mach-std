@@ -8,7 +8,7 @@ use allo: std.allocator;
 use page: std.allocator.page;
 
 pub rec Heap[T] {
-    alloc: &allo.Allocator;
+    alloc: *allo.Allocator;
     data:  *T;
     len:   usize;
     cap:   usize;
@@ -20,7 +20,7 @@ pub rec Heap[T] {
 # alloc: allocator to use for allocations
 # cmp:   comparison function (negative if a < b, 0 if equal, positive if a > b)
 # ret:   a new empty Heap[T]
-pub fun init[T](alloc: &allo.Allocator, cmp: fun(*T, *T) i64) Heap[T] {
+pub fun init[T](alloc: *allo.Allocator, cmp: fun(*T, *T) i64) Heap[T] {
     var h: Heap[T];
     h.alloc = alloc;
     h.data = nil;
@@ -41,14 +41,14 @@ pub fun dnit[T](h: *Heap[T]) bool {
         ret true;
     }
 
-    val res: i64 = allo.deallocate[T](h.alloc, h.data, h.cap);
-    if (res == 0) {
+    val res: bool = allo.allocator_free[T](h.alloc, h.data, h.cap);
+    if (res) {
         h.data = nil;
         h.len = 0;
         h.cap = 0;
     }
 
-    ret res == 0;
+    ret res;
 }
 
 # check if the heap is empty.
@@ -76,7 +76,7 @@ fun grow[T](h: *Heap[T]) Result[usize, str] {
         new_cap = h.cap * 2;
     }
 
-    val r: Result[*T, str] = allo.reallocate[T](h.alloc, h.data, h.cap, new_cap);
+    val r: Result[*T, str] = allo.allocator_resize[T](h.alloc, h.data, h.cap, new_cap);
     if (is_err[*T, str](r)) {
         ret err[usize, str](unwrap_err[*T, str](r));
     }
