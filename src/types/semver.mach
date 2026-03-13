@@ -30,7 +30,7 @@ pub rec Semver {
 # input: version string (major.minor.patch[-prerelease][+build])
 # a:     allocator for prerelease/build substring copies
 # ret:   the parsed version, or an error message
-pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
+pub fun semver_parse(input: str, a: &allo.Allocator) Result[Semver, str] {
     if (input == nil || str_len(input) == 0) {
         ret err[Semver, str]("empty version string");
     }

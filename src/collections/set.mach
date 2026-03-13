@@ -22,7 +22,7 @@ pub rec Set[K] {
 # hash_fn: hash function for keys
 # eq_fn:   equality function for keys
 # ret:     a new empty Set[K]
-pub fun init[K](alloc: *allocator.Allocator, hash_fn: fun(ptr) u64, eq_fn: fun(ptr, ptr) bool) Set[K] {
+pub fun init[K](alloc: &allocator.Allocator, hash_fn: fun(ptr) u64, eq_fn: fun(ptr, ptr) bool) Set[K] {
     var s: Set[K];
     s.inner = map.init[K, u8](alloc, hash_fn, eq_fn);
     ret s;

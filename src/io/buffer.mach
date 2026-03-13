@@ -19,7 +19,7 @@ use mem:       std.memory;
 # len:   bytes written
 # cap:   allocated capacity
 pub rec WriteBuf {
-    alloc: *allocator.Allocator;
+    alloc: &allocator.Allocator;
     data:  *u8;
     len:   usize;
     cap:   usize;
@@ -29,7 +29,7 @@ pub rec WriteBuf {
 # ---
 # a:   allocator for buffer memory
 # ret: a new empty WriteBuf
-pub fun wbuf_make(a: *allocator.Allocator) WriteBuf {
+pub fun wbuf_make(a: &allocator.Allocator) WriteBuf {
     var buf: WriteBuf;
     buf.alloc = a;
     buf.data = nil;

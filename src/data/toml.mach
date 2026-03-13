@@ -85,7 +85,7 @@ fun table_make() Table {
 # key:  key string
 # val_: value to store
 # ret:  true on success, or an error message
-fun table_set(a: *Allocator, t: *Table, key: str, val_: Value) Result[bool, str] {
+fun table_set(a: &Allocator, t: *Table, key: str, val_: Value) Result[bool, str] {
     if (a == nil || t == nil) {
         ret err[bool, str]("nil argument");
     }
@@ -158,7 +158,7 @@ fun table_find(t: &Table, key: str) *Value {
 # t:   parent table
 # key: key for the sub-table
 # ret: pointer to the sub-table, or an error
-fun table_ensure_subtable(a: *Allocator, t: *Table, key: str) Result[*Table, str] {
+fun table_ensure_subtable(a: &Allocator, t: *Table, key: str) Result[*Table, str] {
     val existing: *Value = table_find(t, key);
     if (existing != nil) {
         if (existing.tag != TYPE_TABLE) {
@@ -191,7 +191,7 @@ fun array_make() Array {
 # arr:  target array
 # val_: value to append
 # ret:  true on success, or an error message
-fun array_push(a: *Allocator, arr: *Array, val_: Value) Result[bool, str] {
+fun array_push(a: &Allocator, arr: *Array, val_: Value) Result[bool, str] {
     if (a == nil || arr == nil) {
         ret err[bool, str]("nil argument");
     }
@@ -233,7 +233,7 @@ fun keysegs_make() KeySegs {
 # ks:  target key segments
 # seg: segment string to append
 # ret: true on success, or an error message
-fun keysegs_push(a: *Allocator, ks: *KeySegs, seg: str) Result[bool, str] {
+fun keysegs_push(a: &Allocator, ks: *KeySegs, seg: str) Result[bool, str] {
     if (ks.len >= ks.cap) {
         var new_cap: usize = ks.cap * 2;
         if (ks.cap == 0) { new_cap = 4; }
@@ -529,7 +529,7 @@ fun skip_to_newline(src: str, i: *usize) {
 # start: byte offset into src
 # len:   number of bytes to copy
 # ret:   null-terminated copy, or an error
-fun alloc_str(a: *Allocator, src: str, start: usize, len: usize) Result[str, str] {
+fun alloc_str(a: &Allocator, src: str, start: usize, len: usize) Result[str, str] {
     val r: Result[*u8, str] = allocate[u8](a, len + 1);
     if (is_err[*u8, str](r)) {
         ret err[str, str](unwrap_err[*u8, str](r));
@@ -645,7 +645,7 @@ fun encode_utf8(buf: *u8, di: usize, code: u32) usize {
 # src: source text
 # i:   cursor position (updated past closing '"')
 # ret: the parsed string, or an error
-fun parse_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
+fun parse_basic_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
     @i = @i + 1;
 
     if (src[@i] == '"' && src[@i + 1] == '"') {
@@ -706,7 +706,7 @@ fun parse_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
 # src: source text
 # i:   cursor position
 # ret: the parsed string, or an error
-fun parse_ml_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
+fun parse_ml_basic_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
     # skip immediate newline after opening """
     if (src[@i] == '\n') { @i = @i + 1; }
     or (src[@i] == '\r' && src[@i + 1] == '\n') { @i = @i + 2; }
@@ -767,7 +767,7 @@ fun parse_ml_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
 # src: source text
 # i:   cursor position
 # ret: the parsed string, or an error
-fun parse_literal_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
+fun parse_literal_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
     @i = @i + 1;
 
     if (src[@i] == '\'' && src[@i + 1] == '\'') {
@@ -793,7 +793,7 @@ fun parse_literal_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
 # src: source text
 # i:   cursor position
 # ret: the parsed string, or an error
-fun parse_ml_literal_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
+fun parse_ml_literal_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
     if (src[@i] == '\n') { @i = @i + 1; }
     or (src[@i] == '\r' && src[@i + 1] == '\n') { @i = @i + 2; }
 
@@ -1069,7 +1069,7 @@ fun parse_bool_val(src: str, i: *usize) Result[Value, str] {
 # src: source text
 # i:   cursor position
 # ret: the key string, or an error
-fun parse_key_segment(a: *Allocator, src: str, i: *usize) Result[str, str] {
+fun parse_key_segment(a: &Allocator, src: str, i: *usize) Result[str, str] {
     if (src[@i] == '"') {
         ret parse_basic_string(a, src, i);
     }
@@ -1095,7 +1095,7 @@ fun parse_key_segment(a: *Allocator, src: str, i: *usize) Result[str, str] {
 # src: source text
 # i:   cursor position
 # ret: key segments, or an error
-fun parse_key_path(a: *Allocator, src: str, i: *usize) Result[KeySegs, str] {
+fun parse_key_path(a: &Allocator, src: str, i: *usize) Result[KeySegs, str] {
     var ks: KeySegs = keysegs_make();
 
     val first: Result[str, str] = parse_key_segment(a, src, i);
@@ -1123,7 +1123,7 @@ fun parse_key_path(a: *Allocator, src: str, i: *usize) Result[KeySegs, str] {
 # t:  starting table
 # ks: key segments (navigates all but the last)
 # ret: target table, or an error
-fun navigate_segs(a: *Allocator, t: *Table, ks: &KeySegs) Result[*Table, str] {
+fun navigate_segs(a: &Allocator, t: *Table, ks: &KeySegs) Result[*Table, str] {
     var current: *Table = t;
     var i: usize = 0;
     for (i < ks.len - 1) {
@@ -1141,7 +1141,7 @@ fun navigate_segs(a: *Allocator, t: *Table, ks: &KeySegs) Result[*Table, str] {
 # src: source text
 # i:   cursor position
 # ret: parsed Value, or an error
-fun parse_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
+fun parse_value(a: &Allocator, src: str, i: *usize) Result[Value, str] {
     skip_ws(src, i);
 
     val b: u8 = src[@i];
@@ -1183,7 +1183,7 @@ fun parse_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
 # src: source text
 # i:   cursor position (on the '[')
 # ret: parsed array Value, or an error
-fun parse_array_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
+fun parse_array_value(a: &Allocator, src: str, i: *usize) Result[Value, str] {
     @i = @i + 1;
     var arr: Array = array_make();
 
@@ -1216,7 +1216,7 @@ fun parse_array_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
 # src: source text
 # i:   cursor position (on the '{')
 # ret: parsed table Value, or an error
-fun parse_inline_table(a: *Allocator, src: str, i: *usize) Result[Value, str] {
+fun parse_inline_table(a: &Allocator, src: str, i: *usize) Result[Value, str] {
     @i = @i + 1;
     var t: Table = table_make();
 
@@ -1272,7 +1272,7 @@ fun parse_inline_table(a: *Allocator, src: str, i: *usize) Result[Value, str] {
 # root: document root table
 # ks:   key segments from the [[...]] header
 # ret:  pointer to the newly appended table, or an error
-fun navigate_for_array_table(a: *Allocator, root: *Table, ks: &KeySegs) Result[*Table, str] {
+fun navigate_for_array_table(a: &Allocator, root: *Table, ks: &KeySegs) Result[*Table, str] {
     var parent: *Table = root;
     var i: usize = 0;
 
@@ -1346,7 +1346,7 @@ fun navigate_for_array_table(a: *Allocator, root: *Table, ks: &KeySegs) Result[*
 # a:   allocator for all internal allocations
 # src: null-terminated TOML source string
 # ret: the root table, or an error message
-pub fun parse(a: *Allocator, src: str) Result[Table, str] {
+pub fun parse(a: &Allocator, src: str) Result[Table, str] {
     if (a == nil) {
         ret err[Table, str]("allocator is nil");
     }

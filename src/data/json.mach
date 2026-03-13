@@ -49,7 +49,7 @@ rec Parser {
     src:   &u8;
     len:   usize;
     pos:   usize;
-    alloc: *allo.Allocator;
+    alloc: &allo.Allocator;
 }
 
 rec Emitter {
@@ -64,7 +64,7 @@ rec Emitter {
 # src_len: length of source in bytes
 # alloc:   allocator for array/object storage
 # ret:     root Value on success, or error message
-pub fun parse(src: &u8, src_len: usize, alloc: *allo.Allocator) Result[Value, str] {
+pub fun parse(src: &u8, src_len: usize, alloc: &allo.Allocator) Result[Value, str] {
     if (src == nil) {
         ret err[Value, str]("source is nil");
     }
