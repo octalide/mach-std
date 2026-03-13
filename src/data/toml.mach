@@ -105,7 +105,13 @@ fun table_set(a: &Allocator, t: *Table, key: str, val_: Value) Result[bool, str]
     # grow parallel arrays if at capacity
     if (t.len >= t.cap) {
         var new_cap: usize = t.cap * 2;
-        if (t.cap == 0) { new_cap = 8; }
+        if (t.cap == 0) {
+            new_cap = 8;
+        } or {
+            if (new_cap < t.cap) {
+                ret err[bool, str]("capacity overflow");
+            }
+        }
 
         val kr: Result[*u8, str] = allocate[u8](a, new_cap * 8);
         if (is_err[*u8, str](kr)) { ret err[bool, str](unwrap_err[*u8, str](kr)); }
@@ -198,7 +204,13 @@ fun array_push(a: &Allocator, arr: *Array, val_: Value) Result[bool, str] {
 
     if (arr.len >= arr.cap) {
         var new_cap: usize = arr.cap * 2;
-        if (arr.cap == 0) { new_cap = 4; }
+        if (arr.cap == 0) {
+            new_cap = 4;
+        } or {
+            if (new_cap < arr.cap) {
+                ret err[bool, str]("capacity overflow");
+            }
+        }
 
         val r: Result[*u8, str] = allocate[u8](a, new_cap * VALUE_SIZE);
         if (is_err[*u8, str](r)) { ret err[bool, str](unwrap_err[*u8, str](r)); }
@@ -236,7 +248,13 @@ fun keysegs_make() KeySegs {
 fun keysegs_push(a: &Allocator, ks: *KeySegs, seg: str) Result[bool, str] {
     if (ks.len >= ks.cap) {
         var new_cap: usize = ks.cap * 2;
-        if (ks.cap == 0) { new_cap = 4; }
+        if (ks.cap == 0) {
+            new_cap = 4;
+        } or {
+            if (new_cap < ks.cap) {
+                ret err[bool, str]("capacity overflow");
+            }
+        }
 
         val r: Result[*u8, str] = allocate[u8](a, new_cap * 8);
         if (is_err[*u8, str](r)) { ret err[bool, str](unwrap_err[*u8, str](r)); }

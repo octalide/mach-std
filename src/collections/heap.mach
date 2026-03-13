@@ -74,6 +74,9 @@ fun grow[T](h: *Heap[T]) Result[usize, str] {
         new_cap = 8;
     } or {
         new_cap = h.cap * 2;
+        if (new_cap < h.cap) {
+            ret err[usize, str]("capacity overflow");
+        }
     }
 
     val r: Result[*T, str] = allo.reallocate[T](h.alloc, h.data, h.cap, new_cap);
