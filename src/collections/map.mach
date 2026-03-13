@@ -31,7 +31,7 @@ val LOAD_FACTOR_PERCENT: usize = 70;
 # hash_fn:    hash function taking a ptr, returning u64
 # eq_fn:      equality function taking two ptrs, returning bool
 pub rec Map[K, V] {
-    alloc:      *allocator.Allocator;
+    alloc:      &allocator.Allocator;
     keys:       *K;
     values:     *V;
     states:     *u8;
@@ -48,7 +48,7 @@ pub rec Map[K, V] {
 # hash_fn: hash function for keys
 # eq_fn:   equality function for keys
 # ret:     a new empty Map[K, V]
-pub fun init[K, V](alloc: *allocator.Allocator, hash_fn: fun(ptr) u64, eq_fn: fun(ptr, ptr) bool) Map[K, V] {
+pub fun init[K, V](alloc: &allocator.Allocator, hash_fn: fun(ptr) u64, eq_fn: fun(ptr, ptr) bool) Map[K, V] {
     var m: Map[K, V];
     m.alloc      = alloc;
     m.keys       = nil;

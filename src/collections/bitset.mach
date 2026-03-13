@@ -17,7 +17,7 @@ use page:      std.allocator.page;
 # nbits:  number of bits
 # nwords: number of u64 words
 pub rec Bitset {
-    alloc:  *allocator.Allocator;
+    alloc:  &allocator.Allocator;
     words:  *u64;
     nbits:  usize;
     nwords: usize;
@@ -28,7 +28,7 @@ pub rec Bitset {
 # alloc: allocator for backing storage
 # nbits: number of bits
 # ret:   a new zeroed Bitset, or an error
-pub fun init(alloc: *allocator.Allocator, nbits: usize) Result[Bitset, str] {
+pub fun init(alloc: &allocator.Allocator, nbits: usize) Result[Bitset, str] {
     var bs: Bitset;
     bs.alloc  = alloc;
     bs.nbits  = nbits;
