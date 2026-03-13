@@ -76,6 +76,9 @@ fun grow[T](dq: *Deque[T]) Result[usize, str] {
         new_cap = 8;
     } or {
         new_cap = dq.cap * 2;
+        if (new_cap < dq.cap) {
+            ret err[usize, str]("capacity overflow");
+        }
     }
 
     val r: Result[*T, str] = allo.allocate[T](dq.alloc, new_cap);

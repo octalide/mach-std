@@ -255,7 +255,11 @@ fun ensure_capacity[K, V](m: *Map[K, V]) Result[usize, str] {
 
     val threshold: usize = (m.cap * LOAD_FACTOR_PERCENT) / 100;
     if ((m.len + m.tombstones) >= threshold) {
-        ret grow[K, V](m, m.cap * 2);
+        val new_cap: usize = m.cap * 2;
+        if (new_cap < m.cap) {
+            ret err[usize, str]("capacity overflow");
+        }
+        ret grow[K, V](m, new_cap);
     }
 
     if (m.tombstones > m.len) {

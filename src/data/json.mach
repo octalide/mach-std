@@ -381,7 +381,13 @@ fun parse_string(p: *Parser) Result[Value, str] {
 
 fun children_grow(p: *Parser, v: *Value) Result[bool, str] {
     var new_cap: usize = v.cap * 2;
-    if (v.cap == 0) { new_cap = 4; }
+    if (v.cap == 0) {
+        new_cap = 4;
+    } or {
+        if (new_cap < v.cap) {
+            ret err[bool, str]("capacity overflow");
+        }
+    }
 
     val cr: Result[*u8, str] = allo.allocate[u8](p.alloc, new_cap * VALUE_SIZE);
     if (is_err[*u8, str](cr)) { ret err[bool, str](unwrap_err[*u8, str](cr)); }
