@@ -181,7 +181,7 @@ fun find_slot[K, V](m: &Map[K, V], key: &K) rec { idx: usize; found: bool; } {
 # new_cap: target capacity
 # ret:     the new capacity, or an error message
 fun grow[K, V](m: *Map[K, V], new_cap: usize) Result[usize, str] {
-    if (new_cap <= m.cap) {
+    if (new_cap < m.cap) {
         ret ok[usize, str](m.cap);
     }
 
@@ -256,6 +256,10 @@ fun ensure_capacity[K, V](m: *Map[K, V]) Result[usize, str] {
     val threshold: usize = (m.cap * LOAD_FACTOR_PERCENT) / 100;
     if ((m.len + m.tombstones) >= threshold) {
         ret grow[K, V](m, m.cap * 2);
+    }
+
+    if (m.tombstones > m.len) {
+        ret grow[K, V](m, m.cap);
     }
 
     ret ok[usize, str](m.cap);
