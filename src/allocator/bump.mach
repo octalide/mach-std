@@ -1,8 +1,10 @@
-# std.allocator.heap: heap allocator adapter
+# std.allocator.bump: brk-based bump allocator
 #
-# brk-based bump allocator for small allocations, falls back to mmap for
-# allocations larger than MMAP_THRESHOLD. deallocate is a no-op for
-# brk-backed allocations (memory is only reclaimed on program exit).
+# monotonically advances a brk pointer for small allocations (< 128KB),
+# falls back to mmap for large allocations. deallocate is a no-op for
+# brk-backed memory — individual small allocations cannot be freed, only
+# reclaimed on program exit. use an arena allocator for bulk-freeable
+# allocation patterns, or a real heap allocator for general-purpose use.
 
 use       std.types.bool;
 use       std.types.option;
@@ -16,22 +18,22 @@ use pmem: std.system.os;
 val MMAP_THRESHOLD: usize = 131072;
 val MIN_BRK_EXTEND: usize = 65536;
 
-# HeapState: brk heap tracking state.
+# BumpState: brk bump allocator tracking state.
 # ---
 # current: current bump pointer position
 # end:     current end of the brk region
-pub rec HeapState {
+pub rec BumpState {
     current: usize;
     end:     usize;
 }
 
-# make: initialize a heap-backed Allocator and its HeapState.
+# make: initialize a bump-backed Allocator and its BumpState.
 # ---
 # a:     Allocator to initialize
-# state: HeapState to initialize (must outlive the Allocator)
-pub fun make(a: *allo.Allocator, state: *HeapState) Option[str] {
+# state: BumpState to initialize (must outlive the Allocator)
+pub fun make(a: *allo.Allocator, state: *BumpState) Option[str] {
     if (a == nil)     { ret some[str]("backing allocator nil"); }
-    if (state == nil) { ret some[str]("heap state nil"); }
+    if (state == nil) { ret some[str]("bump state nil"); }
 
     val base: usize = pmem.heap_region_base();
     state.current = base;
@@ -53,7 +55,7 @@ fun align_up(value: usize, align: usize) usize {
 
 # allocate: allocate size bytes from the brk heap, or fall back to mmap for large allocations.
 # ---
-# ctx:   HeapState pointer
+# ctx:   BumpState pointer
 # size:  number of bytes to allocate
 # align: requested alignment in bytes
 # ret:   allocated pointer or none on failure
@@ -70,7 +72,7 @@ fun allocate(ctx: ptr, size: usize, align: usize) Option[ptr] {
         ret some[ptr](p);
     }
 
-    val state: *HeapState = ctx::*HeapState;
+    val state: *BumpState = ctx::*BumpState;
     val aligned: usize = align_up(state.current, align);
     val needed: usize = aligned + size;
 
@@ -96,7 +98,7 @@ fun allocate(ctx: ptr, size: usize, align: usize) Option[ptr] {
 
 # reallocate: reallocate a heap allocation, copying data to a new location if needed.
 # ---
-# ctx:      HeapState pointer
+# ctx:      BumpState pointer
 # p:        pointer to existing allocation
 # old_size: current size in bytes
 # new_size: desired size in bytes
@@ -138,7 +140,7 @@ fun reallocate(ctx: ptr, p: ptr, old_size: usize, new_size: usize, align: usize)
 
 # deallocate: deallocate a heap allocation. no-op for brk-backed memory.
 # ---
-# ctx:   HeapState pointer
+# ctx:   BumpState pointer
 # p:     pointer to deallocate
 # size:  size of allocation in bytes
 # align: alignment (unused)

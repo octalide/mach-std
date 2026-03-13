@@ -19,7 +19,7 @@ use std.collections.heap;
 
 use std.allocator;
 use std.allocator.arena;
-use std.allocator.heap;
+use std.allocator.bump;
 use std.allocator.page;
 use std.memory;
 use std.io.writer;
