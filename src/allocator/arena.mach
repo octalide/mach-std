@@ -74,7 +74,7 @@ fun chunk_data(c: *Chunk) ptr {
 }
 
 # alloc_chunk: allocate a new chunk with at least min_cap data bytes.
-fun alloc_chunk(ar: &Arena, min_cap: usize) *Chunk {
+fun alloc_chunk(ar: *Arena, min_cap: usize) *Chunk {
     val total: usize = CHUNK_HDR + min_cap;
     val res: Result[ptr, str] = allo.allocate_raw(?ar.backing, total, CHUNK_HDR);
     if (is_err[ptr, str](res)) { ret nil; }
@@ -86,7 +86,7 @@ fun alloc_chunk(ar: &Arena, min_cap: usize) *Chunk {
 }
 
 # free_chunk: deallocate a chunk through the backing allocator.
-fun free_chunk(ar: &Arena, c: *Chunk) i64 {
+fun free_chunk(ar: *Arena, c: *Chunk) i64 {
     val total: usize = CHUNK_HDR + c.cap;
     ret allo.deallocate_raw(?ar.backing, c::ptr, total, CHUNK_HDR);
 }
@@ -118,7 +118,7 @@ fun grow(ar: *Arena, min_size: usize) bool {
 # backing: allocator used to provide backing storage
 # cap:     initial chunk capacity in bytes (0 = lazy allocation on first use)
 # ret:     none on success, error string on failure
-pub fun init(ar: *Arena, backing: &allo.Allocator, cap: usize) Option[str] {
+pub fun init(ar: *Arena, backing: *allo.Allocator, cap: usize) Option[str] {
     if (ar == nil)      { ret some[str]("arena nil"); }
     if (backing == nil) { ret some[str]("backing allocator nil"); }
 

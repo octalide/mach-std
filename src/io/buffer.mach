@@ -19,7 +19,7 @@ use mem:       std.memory;
 # len:   bytes written
 # cap:   allocated capacity
 pub rec WriteBuf {
-    alloc: &allocator.Allocator;
+    alloc: *allocator.Allocator;
     data:  *u8;
     len:   usize;
     cap:   usize;
@@ -29,7 +29,7 @@ pub rec WriteBuf {
 # ---
 # a:   allocator for buffer memory
 # ret: a new empty WriteBuf
-pub fun wbuf_make(a: &allocator.Allocator) WriteBuf {
+pub fun wbuf_make(a: *allocator.Allocator) WriteBuf {
     var buf: WriteBuf;
     buf.alloc = a;
     buf.data = nil;
@@ -113,7 +113,7 @@ pub fun wbuf_write[T](buf: *WriteBuf, value: T) Result[usize, str] {
 # p:   pointer to source bytes
 # len: number of bytes to write
 # ret: new length, or an error
-pub fun wbuf_write_bytes(buf: *WriteBuf, p: &u8, len: usize) Result[usize, str] {
+pub fun wbuf_write_bytes(buf: *WriteBuf, p: *u8, len: usize) Result[usize, str] {
     if (len == 0) { ret ok[usize, str](buf.len); }
 
     val r: Result[usize, str] = wbuf_reserve(buf, len);
@@ -181,7 +181,7 @@ pub fun wbuf_patch[T](buf: *WriteBuf, offset: usize, value: T) Result[usize, str
 # len:  total length in bytes
 # pos:  current read position
 pub rec ReadBuf {
-    data: &u8;
+    data: *u8;
     len:  usize;
     pos:  usize;
 }
@@ -191,7 +191,7 @@ pub rec ReadBuf {
 # data: pointer to byte data
 # len:  length in bytes
 # ret:  a new ReadBuf positioned at offset 0
-pub fun rbuf_make(data: &u8, len: usize) ReadBuf {
+pub fun rbuf_make(data: *u8, len: usize) ReadBuf {
     var buf: ReadBuf;
     buf.data = data;
     buf.len = len;
@@ -218,12 +218,12 @@ pub fun rbuf_read[T](buf: *ReadBuf) Result[T, str] {
 # buf: buffer to read from
 # len: number of bytes to consume
 # ret: pointer to the data, or an error
-pub fun rbuf_read_bytes(buf: *ReadBuf, len: usize) Result[&u8, str] {
-    if (buf.pos + len > buf.len) { ret err[&u8, str]("eof"); }
+pub fun rbuf_read_bytes(buf: *ReadBuf, len: usize) Result[*u8, str] {
+    if (buf.pos + len > buf.len) { ret err[*u8, str]("eof"); }
 
-    val p: &u8 = (buf.data::usize + buf.pos)::&u8;
+    val p: *u8 = (buf.data::usize + buf.pos)::*u8;
     buf.pos = buf.pos + len;
-    ret ok[&u8, str](p);
+    ret ok[*u8, str](p);
 }
 
 # rbuf_read_str: read a null-terminated string and advance past the NUL.
@@ -270,7 +270,7 @@ pub fun rbuf_align(buf: *ReadBuf, boundary: usize) Result[usize, str] {
 # ---
 # buf: buffer to query
 # ret: bytes between pos and len
-pub fun rbuf_remaining(buf: &ReadBuf) usize {
+pub fun rbuf_remaining(buf: *ReadBuf) usize {
     ret buf.len - buf.pos;
 }
 
@@ -382,9 +382,9 @@ test "buffer: write_bytes and read_bytes round-trip" {
     if (wb.len != 4) { ret 0; }
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
-    val rr: Result[&u8, str] = rbuf_read_bytes(?rb, 4);
-    if (is_err[&u8, str](rr)) { ret 0; }
-    val p: &u8 = unwrap_ok[&u8, str](rr);
+    val rr: Result[*u8, str] = rbuf_read_bytes(?rb, 4);
+    if (is_err[*u8, str](rr)) { ret 0; }
+    val p: *u8 = unwrap_ok[*u8, str](rr);
     if (p[0] != 10) { ret 0; }
     if (p[1] != 20) { ret 0; }
     if (p[2] != 30) { ret 0; }

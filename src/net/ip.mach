@@ -176,7 +176,7 @@ pub fun to_sockaddr(ep: Endpoint, sa: *u8) {
 # ---
 # sa: pointer to the sockaddr_in buffer
 # ep: pointer to the Endpoint to fill
-pub fun from_sockaddr(sa: &u8, ep: *Endpoint) {
+pub fun from_sockaddr(sa: *u8, ep: *Endpoint) {
     os.sock_addr_read(sa, ?ep.port, ?ep.addr.octets[0]);
 }
 

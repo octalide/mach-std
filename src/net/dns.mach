@@ -133,7 +133,7 @@ pub fun resolve(hostname: str, addr: *ip.IPv4) bool {
     ret query(hostname, addr);
 }
 
-fun region_eq(a: &u8, b: &u8, len: usize) bool {
+fun region_eq(a: *u8, b: *u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
         var ca: u8 = a[i];
@@ -146,7 +146,7 @@ fun region_eq(a: &u8, b: &u8, len: usize) bool {
     ret true;
 }
 
-fun parse_ipv4(buf: &u8, len: usize, addr: *ip.IPv4) bool {
+fun parse_ipv4(buf: *u8, len: usize, addr: *ip.IPv4) bool {
     var octet: u16 = 0;
     var idx: usize = 0;
     var i: usize = 0;
@@ -189,13 +189,13 @@ fun build_query(hostname: str, buf: *u8, cap: usize, qid: u16) usize {
     var label_len: usize = 0;
     var i: usize = 0;
     for (i < host_len) {
-        if ((hostname::&u8)[i] == '.') {
+        if ((hostname::*u8)[i] == '.') {
             buf[label_start] = label_len::u8;
             label_start = pos;
             label_len = 0;
             pos = pos + 1;
         } or {
-            buf[pos] = (hostname::&u8)[i];
+            buf[pos] = (hostname::*u8)[i];
             pos = pos + 1;
             label_len = label_len + 1;
         }
@@ -214,7 +214,7 @@ fun build_query(hostname: str, buf: *u8, cap: usize, qid: u16) usize {
     ret pos;
 }
 
-fun parse_response(buf: &u8, len: usize, addr: *ip.IPv4, qid: u16) bool {
+fun parse_response(buf: *u8, len: usize, addr: *ip.IPv4, qid: u16) bool {
     if (len < DNS_HEADER_LEN) { ret false; }
 
     val resp_id: u16 = (buf[0]::u16 << 8) | buf[1]::u16;

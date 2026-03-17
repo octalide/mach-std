@@ -24,7 +24,7 @@ pub val ERR_EOF: str = "eof";
 # buf: buffer to read into
 # len: maximum number of bytes to read
 # ret: Ok(got) on success or Err(str) on failure
-pub fun read(r: &Reader, buf: *u8, len: usize) Result[usize, str] {
+pub fun read(r: *Reader, buf: *u8, len: usize) Result[usize, str] {
     ret r.fn_read(r.ctx, buf, len);
 }
 
@@ -34,7 +34,7 @@ pub fun read(r: &Reader, buf: *u8, len: usize) Result[usize, str] {
 # buf: buffer to fill
 # len: number of bytes to read
 # ret: Ok(total) on success or Err(ERR_EOF) on premature EOF
-pub fun read_exact(r: &Reader, buf: *u8, len: usize) Result[usize, str] {
+pub fun read_exact(r: *Reader, buf: *u8, len: usize) Result[usize, str] {
     if (len == 0) { ret ok[usize, str](0); }
     var total: usize = 0;
     for (total < len) {

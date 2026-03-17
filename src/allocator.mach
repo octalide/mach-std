@@ -30,7 +30,7 @@ pub rec Allocator {
 # size:  number of bytes (0 returns nil).
 # align: requested alignment in bytes.
 # ret:   ptr to allocated memory or error on OOM
-pub fun allocate_raw(a: &Allocator, size: usize, align: usize) Result[ptr, str] {
+pub fun allocate_raw(a: *Allocator, size: usize, align: usize) Result[ptr, str] {
     if (size == 0) {
         ret ok[ptr, str](nil);
     }
@@ -51,7 +51,7 @@ pub fun allocate_raw(a: &Allocator, size: usize, align: usize) Result[ptr, str] 
 # new_size: desired size in bytes (0 frees the allocation)
 # align:    alignment in bytes
 # ret:      ptr to reallocated memory (same as p if in-place) or error on OOM
-pub fun reallocate_raw(a: &Allocator, p: ptr, old_size: usize, new_size: usize, align: usize) Result[ptr, str] {
+pub fun reallocate_raw(a: *Allocator, p: ptr, old_size: usize, new_size: usize, align: usize) Result[ptr, str] {
     if (new_size == 0) {
         val res_deallocate: i64 = deallocate_raw(a, p, old_size, align);
         if (res_deallocate == 0) {
@@ -76,7 +76,7 @@ pub fun reallocate_raw(a: &Allocator, p: ptr, old_size: usize, new_size: usize, 
 # size:  size in bytes that was allocated
 # align: alignment in bytes
 # ret:   0 on success, or negative errno
-pub fun deallocate_raw(a: &Allocator, p: ptr, size: usize, align: usize) i64 {
+pub fun deallocate_raw(a: *Allocator, p: ptr, size: usize, align: usize) i64 {
     ret a.fn_deallocate(a.ctx, p, size, align);
 }
 
@@ -85,7 +85,7 @@ pub fun deallocate_raw(a: &Allocator, p: ptr, size: usize, align: usize) i64 {
 # a:     Allocator to use for this allocation
 # count: number of elements to allocate
 # ret:   pointer to allocated memory or error on OOM or overflow (nil for count == 0)
-pub fun allocate[T](a: &Allocator, count: usize) Result[*T, str] {
+pub fun allocate[T](a: *Allocator, count: usize) Result[*T, str] {
     if (count == 0) {
         ret ok[*T, str](nil::*T);
     }
@@ -110,7 +110,7 @@ pub fun allocate[T](a: &Allocator, count: usize) Result[*T, str] {
 # a:     Allocator to use for this allocation
 # count: number of elements to allocate
 # ret:   pointer to allocated and zero-initialized memory or error on OOM or overflow (nil for count == 0)
-pub fun zallocate[T](a: &Allocator, count: usize) Result[*T, str] {
+pub fun zallocate[T](a: *Allocator, count: usize) Result[*T, str] {
     # attempt initial allocation using allocate
     val res_allocate: Result[*T, str] = allocate[T](a, count);
     if (is_err[*T, str](res_allocate)) {
@@ -131,7 +131,7 @@ pub fun zallocate[T](a: &Allocator, count: usize) Result[*T, str] {
 # old_count: previous number of elements
 # new_count: desired number of elements (0 frees)
 # ret:       pointer to reallocated memory (same as p if in-place) or error on OOM or overflow (nil for new_count == 0)
-pub fun reallocate[T](a: &Allocator, p: &T, old_count: usize, new_count: usize) Result[*T, str] {
+pub fun reallocate[T](a: *Allocator, p: *T, old_count: usize, new_count: usize) Result[*T, str] {
     # check for size overflow (relies on unsigned wraparound behavior)
     val elem_size: usize = $size_of(T);
     val old_size:  usize = elem_size * old_count;
@@ -153,7 +153,7 @@ pub fun reallocate[T](a: &Allocator, p: &T, old_count: usize, new_count: usize) 
 # p:     pointer returned by alloc/zalloc (may be nil)
 # count: number of elements to deallocate
 # ret:   0 on success, or negative errno; no-op for nil pointer or count == 0.
-pub fun deallocate[T](a: &Allocator, p: &T, count: usize) i64 {
+pub fun deallocate[T](a: *Allocator, p: *T, count: usize) i64 {
     if (p == nil || count == 0) {
         ret 0;
     }

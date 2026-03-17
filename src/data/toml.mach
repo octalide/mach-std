@@ -85,7 +85,7 @@ fun table_make() Table {
 # key:  key string
 # val_: value to store
 # ret:  true on success, or an error message
-fun table_set(a: &Allocator, t: *Table, key: str, val_: Value) Result[bool, str] {
+fun table_set(a: *Allocator, t: *Table, key: str, val_: Value) Result[bool, str] {
     if (a == nil || t == nil) {
         ret err[bool, str]("nil argument");
     }
@@ -144,9 +144,9 @@ fun table_set(a: &Allocator, t: *Table, key: str, val_: Value) Result[bool, str]
 # t:   table to search
 # key: key string to match
 # ret: pointer to the value, or nil if not found
-fun table_find(t: &Table, key: str) *Value {
+fun table_find(t: *Table, key: str) *Value {
     if (t == nil || t.len == 0) { ret nil; }
-    val keys: &str = t.keys::&str;
+    val keys: *str = t.keys::*str;
     val vals: *Value = t.values::*Value;
     var i: usize = 0;
     for (i < t.len) {
@@ -164,7 +164,7 @@ fun table_find(t: &Table, key: str) *Value {
 # t:   parent table
 # key: key for the sub-table
 # ret: pointer to the sub-table, or an error
-fun table_ensure_subtable(a: &Allocator, t: *Table, key: str) Result[*Table, str] {
+fun table_ensure_subtable(a: *Allocator, t: *Table, key: str) Result[*Table, str] {
     val existing: *Value = table_find(t, key);
     if (existing != nil) {
         if (existing.tag != TYPE_TABLE) {
@@ -197,7 +197,7 @@ fun array_make() Array {
 # arr:  target array
 # val_: value to append
 # ret:  true on success, or an error message
-fun array_push(a: &Allocator, arr: *Array, val_: Value) Result[bool, str] {
+fun array_push(a: *Allocator, arr: *Array, val_: Value) Result[bool, str] {
     if (a == nil || arr == nil) {
         ret err[bool, str]("nil argument");
     }
@@ -245,7 +245,7 @@ fun keysegs_make() KeySegs {
 # ks:  target key segments
 # seg: segment string to append
 # ret: true on success, or an error message
-fun keysegs_push(a: &Allocator, ks: *KeySegs, seg: str) Result[bool, str] {
+fun keysegs_push(a: *Allocator, ks: *KeySegs, seg: str) Result[bool, str] {
     if (ks.len >= ks.cap) {
         var new_cap: usize = ks.cap * 2;
         if (ks.cap == 0) {
@@ -320,10 +320,10 @@ fun value_array(a: Array) Value {
 # t:    root table
 # path: dotted key path (e.g. "project.name")
 # ret:  pointer to the value, or nil if not found
-pub fun get(t: &Table, path: str) &Value {
+pub fun get(t: *Table, path: str) *Value {
     if (t == nil || path == nil) { ret nil; }
 
-    var current: &Table = t;
+    var current: *Table = t;
     var start: usize = 0;
     var i: usize = 0;
 
@@ -346,9 +346,9 @@ pub fun get(t: &Table, path: str) &Value {
 # seg:     start of the key segment (not null-terminated)
 # seg_len: length of the segment
 # ret:     pointer to the value, or nil
-fun find_by_seg(t: &Table, seg: str, seg_len: usize) *Value {
+fun find_by_seg(t: *Table, seg: str, seg_len: usize) *Value {
     if (t == nil || t.len == 0) { ret nil; }
-    val keys: &str = t.keys::&str;
+    val keys: *str = t.keys::*str;
     val vals: *Value = t.values::*Value;
     var i: usize = 0;
     for (i < t.len) {
@@ -375,8 +375,8 @@ fun str_eq_n(a: str, b: str, n: usize) bool {
 # t:    root table
 # path: dotted key path
 # ret:  the string value, or nil if not found or wrong type
-pub fun get_str(t: &Table, path: str) str {
-    val v: &Value = get(t, path);
+pub fun get_str(t: *Table, path: str) str {
+    val v: *Value = get(t, path);
     if (v == nil || v.tag != TYPE_STRING) { ret nil; }
     ret v.data.string;
 }
@@ -386,8 +386,8 @@ pub fun get_str(t: &Table, path: str) str {
 # t:    root table
 # path: dotted key path
 # ret:  the integer value, or None if not found or wrong type
-pub fun get_int(t: &Table, path: str) Option[i64] {
-    val v: &Value = get(t, path);
+pub fun get_int(t: *Table, path: str) Option[i64] {
+    val v: *Value = get(t, path);
     if (v == nil || v.tag != TYPE_INTEGER) { ret none[i64](); }
     ret some[i64](v.data.integer);
 }
@@ -397,8 +397,8 @@ pub fun get_int(t: &Table, path: str) Option[i64] {
 # t:    root table
 # path: dotted key path
 # ret:  the float value, or None if not found or wrong type
-pub fun get_float(t: &Table, path: str) Option[f64] {
-    val v: &Value = get(t, path);
+pub fun get_float(t: *Table, path: str) Option[f64] {
+    val v: *Value = get(t, path);
     if (v == nil || v.tag != TYPE_FLOAT) { ret none[f64](); }
     ret some[f64](v.data.float);
 }
@@ -408,8 +408,8 @@ pub fun get_float(t: &Table, path: str) Option[f64] {
 # t:    root table
 # path: dotted key path
 # ret:  the boolean value, or None if not found or wrong type
-pub fun get_bool(t: &Table, path: str) Option[bool] {
-    val v: &Value = get(t, path);
+pub fun get_bool(t: *Table, path: str) Option[bool] {
+    val v: *Value = get(t, path);
     if (v == nil || v.tag != TYPE_BOOL) { ret none[bool](); }
     ret some[bool](v.data.boolean);
 }
@@ -419,8 +419,8 @@ pub fun get_bool(t: &Table, path: str) Option[bool] {
 # t:    root table
 # path: dotted key path
 # ret:  pointer to the sub-table, or nil if not found or wrong type
-pub fun get_table(t: &Table, path: str) &Table {
-    val v: &Value = get(t, path);
+pub fun get_table(t: *Table, path: str) *Table {
+    val v: *Value = get(t, path);
     if (v == nil || v.tag != TYPE_TABLE) { ret nil; }
     ret ?v.data.table;
 }
@@ -430,8 +430,8 @@ pub fun get_table(t: &Table, path: str) &Table {
 # t:    root table
 # path: dotted key path
 # ret:  pointer to the array, or nil if not found or wrong type
-pub fun get_array(t: &Table, path: str) &Array {
-    val v: &Value = get(t, path);
+pub fun get_array(t: *Table, path: str) *Array {
+    val v: *Value = get(t, path);
     if (v == nil || v.tag != TYPE_ARRAY) { ret nil; }
     ret ?v.data.array;
 }
@@ -441,9 +441,9 @@ pub fun get_array(t: &Table, path: str) &Array {
 # arr:   array to index
 # index: element index
 # ret:   pointer to the value, or nil if out of bounds
-pub fun array_get(arr: &Array, index: usize) &Value {
+pub fun array_get(arr: *Array, index: usize) *Value {
     if (arr == nil || index >= arr.len) { ret nil; }
-    val items: &Value = arr.items::&Value;
+    val items: *Value = arr.items::*Value;
     ret ?items[index];
 }
 
@@ -451,7 +451,7 @@ pub fun array_get(arr: &Array, index: usize) &Value {
 # ---
 # t:   table to query
 # ret: number of key-value pairs
-pub fun table_len(t: &Table) usize {
+pub fun table_len(t: *Table) usize {
     if (t == nil) { ret 0; }
     ret t.len;
 }
@@ -461,9 +461,9 @@ pub fun table_len(t: &Table) usize {
 # t:     table to query
 # index: position (0-based)
 # ret:   key string, or nil if out of bounds
-pub fun table_key(t: &Table, index: usize) str {
+pub fun table_key(t: *Table, index: usize) str {
     if (t == nil || index >= t.len) { ret nil; }
-    val keys: &str = t.keys::&str;
+    val keys: *str = t.keys::*str;
     ret keys[index];
 }
 
@@ -472,9 +472,9 @@ pub fun table_key(t: &Table, index: usize) str {
 # t:     table to query
 # index: position (0-based)
 # ret:   pointer to the value, or nil if out of bounds
-pub fun table_value(t: &Table, index: usize) &Value {
+pub fun table_value(t: *Table, index: usize) *Value {
     if (t == nil || index >= t.len) { ret nil; }
-    val vals: &Value = t.values::&Value;
+    val vals: *Value = t.values::*Value;
     ret ?vals[index];
 }
 
@@ -482,7 +482,7 @@ pub fun table_value(t: &Table, index: usize) &Value {
 # ---
 # arr: array to query
 # ret: number of elements
-pub fun array_len(arr: &Array) usize {
+pub fun array_len(arr: *Array) usize {
     if (arr == nil) { ret 0; }
     ret arr.len;
 }
@@ -547,7 +547,7 @@ fun skip_to_newline(src: str, i: *usize) {
 # start: byte offset into src
 # len:   number of bytes to copy
 # ret:   null-terminated copy, or an error
-fun alloc_str(a: &Allocator, src: str, start: usize, len: usize) Result[str, str] {
+fun alloc_str(a: *Allocator, src: str, start: usize, len: usize) Result[str, str] {
     val r: Result[*u8, str] = allocate[u8](a, len + 1);
     if (is_err[*u8, str](r)) {
         ret err[str, str](unwrap_err[*u8, str](r));
@@ -555,7 +555,7 @@ fun alloc_str(a: &Allocator, src: str, start: usize, len: usize) Result[str, str
     val buf: *u8 = unwrap_ok[*u8, str](r);
     mem.raw_copy(buf::ptr, (src::usize + start)::ptr, len);
     buf[len] = 0;
-    ret ok[str, str](buf::&u8);
+    ret ok[str, str](buf::*u8);
 }
 
 # hex_digit: return the numeric value of a hex character, or -1.
@@ -663,7 +663,7 @@ fun encode_utf8(buf: *u8, di: usize, code: u32) usize {
 # src: source text
 # i:   cursor position (updated past closing '"')
 # ret: the parsed string, or an error
-fun parse_basic_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
+fun parse_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
     @i = @i + 1;
 
     if (src[@i] == '"' && src[@i + 1] == '"') {
@@ -714,7 +714,7 @@ fun parse_basic_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
 
     buf[out_len] = 0;
     @i = @i + 1;
-    ret ok[str, str](buf::&u8);
+    ret ok[str, str](buf::*u8);
 }
 
 # parse_ml_basic_string: parse a triple-quoted basic string.
@@ -724,7 +724,7 @@ fun parse_basic_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
 # src: source text
 # i:   cursor position
 # ret: the parsed string, or an error
-fun parse_ml_basic_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
+fun parse_ml_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
     # skip immediate newline after opening """
     if (src[@i] == '\n') { @i = @i + 1; }
     or (src[@i] == '\r' && src[@i + 1] == '\n') { @i = @i + 2; }
@@ -775,7 +775,7 @@ fun parse_ml_basic_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
 
     buf[out_len] = 0;
     @i = @i + 3;
-    ret ok[str, str](buf::&u8);
+    ret ok[str, str](buf::*u8);
 }
 
 # parse_literal_string: parse a single-quoted string (no escapes).
@@ -785,7 +785,7 @@ fun parse_ml_basic_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
 # src: source text
 # i:   cursor position
 # ret: the parsed string, or an error
-fun parse_literal_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
+fun parse_literal_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
     @i = @i + 1;
 
     if (src[@i] == '\'' && src[@i + 1] == '\'') {
@@ -811,7 +811,7 @@ fun parse_literal_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
 # src: source text
 # i:   cursor position
 # ret: the parsed string, or an error
-fun parse_ml_literal_string(a: &Allocator, src: str, i: *usize) Result[str, str] {
+fun parse_ml_literal_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
     if (src[@i] == '\n') { @i = @i + 1; }
     or (src[@i] == '\r' && src[@i + 1] == '\n') { @i = @i + 2; }
 
@@ -1087,7 +1087,7 @@ fun parse_bool_val(src: str, i: *usize) Result[Value, str] {
 # src: source text
 # i:   cursor position
 # ret: the key string, or an error
-fun parse_key_segment(a: &Allocator, src: str, i: *usize) Result[str, str] {
+fun parse_key_segment(a: *Allocator, src: str, i: *usize) Result[str, str] {
     if (src[@i] == '"') {
         ret parse_basic_string(a, src, i);
     }
@@ -1113,7 +1113,7 @@ fun parse_key_segment(a: &Allocator, src: str, i: *usize) Result[str, str] {
 # src: source text
 # i:   cursor position
 # ret: key segments, or an error
-fun parse_key_path(a: &Allocator, src: str, i: *usize) Result[KeySegs, str] {
+fun parse_key_path(a: *Allocator, src: str, i: *usize) Result[KeySegs, str] {
     var ks: KeySegs = keysegs_make();
 
     val first: Result[str, str] = parse_key_segment(a, src, i);
@@ -1141,7 +1141,7 @@ fun parse_key_path(a: &Allocator, src: str, i: *usize) Result[KeySegs, str] {
 # t:  starting table
 # ks: key segments (navigates all but the last)
 # ret: target table, or an error
-fun navigate_segs(a: &Allocator, t: *Table, ks: &KeySegs) Result[*Table, str] {
+fun navigate_segs(a: *Allocator, t: *Table, ks: *KeySegs) Result[*Table, str] {
     var current: *Table = t;
     var i: usize = 0;
     for (i < ks.len - 1) {
@@ -1159,7 +1159,7 @@ fun navigate_segs(a: &Allocator, t: *Table, ks: &KeySegs) Result[*Table, str] {
 # src: source text
 # i:   cursor position
 # ret: parsed Value, or an error
-fun parse_value(a: &Allocator, src: str, i: *usize) Result[Value, str] {
+fun parse_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
     skip_ws(src, i);
 
     val b: u8 = src[@i];
@@ -1201,7 +1201,7 @@ fun parse_value(a: &Allocator, src: str, i: *usize) Result[Value, str] {
 # src: source text
 # i:   cursor position (on the '[')
 # ret: parsed array Value, or an error
-fun parse_array_value(a: &Allocator, src: str, i: *usize) Result[Value, str] {
+fun parse_array_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
     @i = @i + 1;
     var arr: Array = array_make();
 
@@ -1234,7 +1234,7 @@ fun parse_array_value(a: &Allocator, src: str, i: *usize) Result[Value, str] {
 # src: source text
 # i:   cursor position (on the '{')
 # ret: parsed table Value, or an error
-fun parse_inline_table(a: &Allocator, src: str, i: *usize) Result[Value, str] {
+fun parse_inline_table(a: *Allocator, src: str, i: *usize) Result[Value, str] {
     @i = @i + 1;
     var t: Table = table_make();
 
@@ -1290,7 +1290,7 @@ fun parse_inline_table(a: &Allocator, src: str, i: *usize) Result[Value, str] {
 # root: document root table
 # ks:   key segments from the [[...]] header
 # ret:  pointer to the newly appended table, or an error
-fun navigate_for_array_table(a: &Allocator, root: *Table, ks: &KeySegs) Result[*Table, str] {
+fun navigate_for_array_table(a: *Allocator, root: *Table, ks: *KeySegs) Result[*Table, str] {
     var parent: *Table = root;
     var i: usize = 0;
 
@@ -1364,7 +1364,7 @@ fun navigate_for_array_table(a: &Allocator, root: *Table, ks: &KeySegs) Result[*
 # a:   allocator for all internal allocations
 # src: null-terminated TOML source string
 # ret: the root table, or an error message
-pub fun parse(a: &Allocator, src: str) Result[Table, str] {
+pub fun parse(a: *Allocator, src: str) Result[Table, str] {
     if (a == nil) {
         ret err[Table, str]("allocator is nil");
     }

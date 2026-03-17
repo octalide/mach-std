@@ -8,7 +8,7 @@ use std.types.char;
 
 
 # str: a pointer to a null-terminated sequence of char.
-pub def str: &char;
+pub def str: *char;
 
 # str_len: calculate the length of a null-terminated string.
 # ---

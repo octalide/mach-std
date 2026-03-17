@@ -10,7 +10,7 @@ use page: std.allocator.page;
 
 # Vector: resizable vector backed by an allo.
 pub rec Vector[T] {
-    alloc: &allo.Allocator;
+    alloc: *allo.Allocator;
     data:  *T;
     len:   usize;
     cap:   usize;
@@ -20,7 +20,7 @@ pub rec Vector[T] {
 # ---
 # alloc: allocator to use for allocations
 # ret:   a new empty Vector[T]
-pub fun init[T](alloc: &allo.Allocator) Vector[T] {
+pub fun init[T](alloc: *allo.Allocator) Vector[T] {
     var v: Vector[T];
     v.alloc = alloc;
     v.data = nil;
@@ -154,7 +154,7 @@ pub fun pop[T](vec: *Vector[T]) Result[T, str] {
 # ---
 # index: element index
 # ret:   pointer to the element, or an error message
-pub fun get[T](vec: &Vector[T], index: usize) Result[*T, str] {
+pub fun get[T](vec: *Vector[T], index: usize) Result[*T, str] {
     if (vec == nil) { ret err[*T, str]("vector is nil"); }
     if (index >= vec.len) {
         ret err[*T, str]("index out of bounds");
@@ -166,11 +166,11 @@ pub fun get[T](vec: &Vector[T], index: usize) Result[*T, str] {
 # ---
 # index: element index
 # ret:   reference to the element, or an error message
-pub fun get_ref[T](vec: Vector[T], index: usize) Result[&T, str] {
+pub fun get_ref[T](vec: Vector[T], index: usize) Result[*T, str] {
     if (index >= vec.len) {
-        ret err[&T, str]("index out of bounds");
+        ret err[*T, str]("index out of bounds");
     }
-    ret ok[&T, str](?vec.data[index]);
+    ret ok[*T, str](?vec.data[index]);
 }
 
 test "vector: init creates empty vector" {
@@ -313,9 +313,9 @@ test "vector: get_ref returns immutable reference" {
     push[i64](?v, 555);
     push[i64](?v, 666);
 
-    val r: Result[&i64, str] = get_ref[i64](v, 1);
-    if (is_err[&i64, str](r)) { ret 0; }
-    val ref: &i64 = unwrap_ok[&i64, str](r);
+    val r: Result[*i64, str] = get_ref[i64](v, 1);
+    if (is_err[*i64, str](r)) { ret 0; }
+    val ref: *i64 = unwrap_ok[*i64, str](r);
     if (@ref != 666) { ret 0; }
 
     val ok: bool = dnit[i64](?v);
@@ -330,8 +330,8 @@ test "vector: get_ref out of bounds returns error" {
 
     push[i64](?v, 42);
 
-    val r: Result[&i64, str] = get_ref[i64](v, 10);
-    if (is_ok[&i64, str](r)) { ret 0; }
+    val r: Result[*i64, str] = get_ref[i64](v, 10);
+    if (is_ok[*i64, str](r)) { ret 0; }
 
     val ok: bool = dnit[i64](?v);
     if (!ok) { ret 0; }
@@ -420,9 +420,9 @@ test "vector: push triggers capacity growth" {
     # verify all values
     var j: usize = 0;
     for (j < 100) {
-        val r: Result[&i64, str] = get_ref[i64](v, j);
-        if (is_err[&i64, str](r)) { ret 0; }
-        if (@unwrap_ok[&i64, str](r) != j::i64) { ret 0; }
+        val r: Result[*i64, str] = get_ref[i64](v, j);
+        if (is_err[*i64, str](r)) { ret 0; }
+        if (@unwrap_ok[*i64, str](r) != j::i64) { ret 0; }
         j = j + 1;
     }
 

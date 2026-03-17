@@ -18,7 +18,7 @@
 #
 # user code must define:
 #   $main.symbol = "main";
-#   fun main(argc: i64, argv: &&u8) i64 { ... }
+#   fun main(argc: i64, argv: &*u8) i64 { ... }
 
 use os: std.system.os.linux.x86_64;
 

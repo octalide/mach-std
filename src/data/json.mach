@@ -46,10 +46,10 @@ pub rec Value {
 }
 
 rec Parser {
-    src:   &u8;
+    src:   *u8;
     len:   usize;
     pos:   usize;
-    alloc: &allo.Allocator;
+    alloc: *allo.Allocator;
 }
 
 rec Emitter {
@@ -64,7 +64,7 @@ rec Emitter {
 # src_len: length of source in bytes
 # alloc:   allocator for array/object storage
 # ret:     root Value on success, or error message
-pub fun parse(src: &u8, src_len: usize, alloc: &allo.Allocator) Result[Value, str] {
+pub fun parse(src: *u8, src_len: usize, alloc: *allo.Allocator) Result[Value, str] {
     if (src == nil) {
         ret err[Value, str]("source is nil");
     }
@@ -93,44 +93,44 @@ pub fun parse(src: &u8, src_len: usize, alloc: &allo.Allocator) Result[Value, st
 }
 
 # value_is_null: check if a value is null.
-pub fun value_is_null(v: &Value) bool {
+pub fun value_is_null(v: *Value) bool {
     ret v.kind == NULL;
 }
 
 # value_is_bool: check if a value is a boolean.
-pub fun value_is_bool(v: &Value) bool {
+pub fun value_is_bool(v: *Value) bool {
     ret v.kind == BOOL;
 }
 
 # value_is_number: check if a value is a number.
-pub fun value_is_number(v: &Value) bool {
+pub fun value_is_number(v: *Value) bool {
     ret v.kind == NUMBER;
 }
 
 # value_is_string: check if a value is a string.
-pub fun value_is_string(v: &Value) bool {
+pub fun value_is_string(v: *Value) bool {
     ret v.kind == STRING;
 }
 
 # value_is_array: check if a value is an array.
-pub fun value_is_array(v: &Value) bool {
+pub fun value_is_array(v: *Value) bool {
     ret v.kind == ARRAY;
 }
 
 # value_is_object: check if a value is an object.
-pub fun value_is_object(v: &Value) bool {
+pub fun value_is_object(v: *Value) bool {
     ret v.kind == OBJECT;
 }
 
 # value_bool: get the boolean value.
 # ---
 # ret: true if bool_val is nonzero
-pub fun value_bool(v: &Value) bool {
+pub fun value_bool(v: *Value) bool {
     ret v.bool_val != 0;
 }
 
 # value_number: get the integer value.
-pub fun value_number(v: &Value) i64 {
+pub fun value_number(v: *Value) i64 {
     ret v.num_val;
 }
 
@@ -138,13 +138,13 @@ pub fun value_number(v: &Value) i64 {
 # ---
 # len: receives the byte length of the string
 # ret: pointer to the first byte of the string content
-pub fun value_string(v: &Value, len: *usize) &u8 {
+pub fun value_string(v: *Value, len: *usize) *u8 {
     @len = v.str_len;
-    ret v.str_val::&u8;
+    ret v.str_val::*u8;
 }
 
 # value_count: get the number of children (array elements or object entries).
-pub fun value_count(v: &Value) usize {
+pub fun value_count(v: *Value) usize {
     ret v.count;
 }
 
@@ -152,7 +152,7 @@ pub fun value_count(v: &Value) usize {
 # ---
 # index: zero-based index
 # ret:   pointer to the child Value, or nil if out of bounds
-pub fun value_get(v: &Value, index: usize) *Value {
+pub fun value_get(v: *Value, index: usize) *Value {
     if (index >= v.count) { ret nil; }
     ret ?v.children[index];
 }
@@ -161,7 +161,7 @@ pub fun value_get(v: &Value, index: usize) *Value {
 # ---
 # index: zero-based index
 # ret:   key string (null-terminated), or nil if out of bounds
-pub fun value_key(v: &Value, index: usize) str {
+pub fun value_key(v: *Value, index: usize) str {
     if (v.kind != OBJECT || index >= v.count) { ret nil; }
     ret v.keys[index];
 }
@@ -170,7 +170,7 @@ pub fun value_key(v: &Value, index: usize) str {
 # ---
 # key: null-terminated key to search for
 # ret: pointer to the Value, or nil if not found
-pub fun value_find(v: &Value, key: str) *Value {
+pub fun value_find(v: *Value, key: str) *Value {
     if (v.kind != OBJECT) { ret nil; }
     var i: usize = 0;
     for (i < v.count) {
@@ -188,7 +188,7 @@ pub fun value_find(v: &Value, key: str) *Value {
 # buf: destination buffer
 # len: size of destination buffer in bytes
 # ret: number of bytes written (may exceed len if buffer too small)
-pub fun emit(v: &Value, buf: *u8, len: usize) usize {
+pub fun emit(v: *Value, buf: *u8, len: usize) usize {
     var e: Emitter;
     e.buf = buf;
     e.len = len;
@@ -518,7 +518,7 @@ fun emit_byte(e: *Emitter, c: u8) {
     e.pos = e.pos + 1;
 }
 
-fun emit_bytes(e: *Emitter, s: &u8, slen: usize) {
+fun emit_bytes(e: *Emitter, s: *u8, slen: usize) {
     var i: usize = 0;
     for (i < slen) {
         emit_byte(e, s[i]);
@@ -565,7 +565,7 @@ fun emit_u64(e: *Emitter, n: u64) {
     }
 }
 
-fun emit_value(e: *Emitter, v: &Value) {
+fun emit_value(e: *Emitter, v: *Value) {
     if (v.kind == NULL) {
         emit_str(e, "null");
         ret;
@@ -587,7 +587,7 @@ fun emit_value(e: *Emitter, v: &Value) {
 
     if (v.kind == STRING) {
         emit_byte(e, '"');
-        emit_bytes(e, v.str_val::&u8, v.str_len);
+        emit_bytes(e, v.str_val::*u8, v.str_len);
         emit_byte(e, '"');
         ret;
     }
@@ -627,7 +627,7 @@ test "json: parse null" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "null";
-    val r: Result[Value, str] = parse(src::&u8, 4, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 4, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != NULL) { ret 0; }
@@ -638,7 +638,7 @@ test "json: parse true" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "true";
-    val r: Result[Value, str] = parse(src::&u8, 4, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 4, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != BOOL) { ret 0; }
@@ -650,7 +650,7 @@ test "json: parse false" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "false";
-    val r: Result[Value, str] = parse(src::&u8, 5, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 5, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != BOOL) { ret 0; }
@@ -662,7 +662,7 @@ test "json: parse positive number" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "42";
-    val r: Result[Value, str] = parse(src::&u8, 2, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 2, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != NUMBER) { ret 0; }
@@ -674,7 +674,7 @@ test "json: parse negative number" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "-7";
-    val r: Result[Value, str] = parse(src::&u8, 2, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 2, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != NUMBER) { ret 0; }
@@ -686,7 +686,7 @@ test "json: parse zero" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "0";
-    val r: Result[Value, str] = parse(src::&u8, 1, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 1, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != NUMBER) { ret 0; }
@@ -698,12 +698,12 @@ test "json: parse string" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "\"hello\"";
-    val r: Result[Value, str] = parse(src::&u8, 7, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 7, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != STRING) { ret 0; }
     if (v.str_len != 5) { ret 0; }
-    val sp: &u8 = v.str_val::&u8;
+    val sp: *u8 = v.str_val::*u8;
     if (sp[0] != 'h') { ret 0; }
     if (sp[4] != 'o') { ret 0; }
     ret 1;
@@ -713,7 +713,7 @@ test "json: parse empty array" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "[]";
-    val r: Result[Value, str] = parse(src::&u8, 2, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 2, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != ARRAY) { ret 0; }
@@ -725,7 +725,7 @@ test "json: parse array with elements" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "[1,2,3]";
-    val r: Result[Value, str] = parse(src::&u8, 7, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 7, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != ARRAY) { ret 0; }
@@ -740,7 +740,7 @@ test "json: parse empty object" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "{}";
-    val r: Result[Value, str] = parse(src::&u8, 2, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 2, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != OBJECT) { ret 0; }
@@ -752,7 +752,7 @@ test "json: parse object with entry" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "{\"a\":1}";
-    val r: Result[Value, str] = parse(src::&u8, 7, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 7, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != OBJECT) { ret 0; }
@@ -765,7 +765,7 @@ test "json: parse nested object with array" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "{\"x\":[1,2]}";
-    val r: Result[Value, str] = parse(src::&u8, 11, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 11, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != OBJECT) { ret 0; }
@@ -782,7 +782,7 @@ test "json: value_find on object" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "{\"a\":1,\"b\":2}";
-    val r: Result[Value, str] = parse(src::&u8, 13, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 13, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     val found: *Value = value_find(?v, "b");
@@ -797,7 +797,7 @@ test "json: emit null" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "null";
-    val r: Result[Value, str] = parse(src::&u8, 4, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 4, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     var buf: [16]u8;
@@ -814,7 +814,7 @@ test "json: emit number" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "123";
-    val r: Result[Value, str] = parse(src::&u8, 3, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 3, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     var buf: [16]u8;
@@ -830,7 +830,7 @@ test "json: emit true" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "true";
-    val r: Result[Value, str] = parse(src::&u8, 4, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 4, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     var buf: [16]u8;
@@ -845,7 +845,7 @@ test "json: roundtrip array" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "[1,2,3]";
-    val r: Result[Value, str] = parse(src::&u8, 7, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 7, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     var buf: [32]u8;
@@ -863,7 +863,7 @@ test "json: whitespace tolerance" {
     var a: allo.Allocator;
     page.make(?a);
     val src: str = "  { \"a\" : 1 } ";
-    val r: Result[Value, str] = parse(src::&u8, 14, ?a);
+    val r: Result[Value, str] = parse(src::*u8, 14, ?a);
     if (is_err[Value, str](r)) { ret 0; }
     val v: Value = unwrap_ok[Value, str](r);
     if (v.kind != OBJECT) { ret 0; }

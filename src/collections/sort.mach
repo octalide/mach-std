@@ -35,7 +35,7 @@ pub fun reverse[T](data: *T, len: usize) {
 # data: pointer to the array
 # len:  number of elements
 # cmp:  comparator returning negative if a < b, zero if equal, positive if a > b
-pub fun sort[T](data: *T, len: usize, cmp: fun(&T, &T) i64) {
+pub fun sort[T](data: *T, len: usize, cmp: fun(*T, *T) i64) {
     if (len < 2) { ret; }
 
     var gi: usize = 0;
@@ -79,7 +79,7 @@ fun gap_at(idx: usize) usize {
 # len:  number of elements
 # cmp:  comparator
 # ret:  true if sorted in non-descending order
-pub fun is_sorted[T](data: &T, len: usize, cmp: fun(&T, &T) i64) bool {
+pub fun is_sorted[T](data: *T, len: usize, cmp: fun(*T, *T) i64) bool {
     if (len < 2) { ret true; }
     var i: usize = 1;
     for (i < len) {
@@ -98,7 +98,7 @@ pub fun is_sorted[T](data: &T, len: usize, cmp: fun(&T, &T) i64) bool {
 # target: pointer to the value to find
 # cmp:    comparator
 # ret:    ok(index) if found, err(insert_position) if not
-pub fun binary_search[T](data: &T, len: usize, target: &T, cmp: fun(&T, &T) i64) Result[usize, usize] {
+pub fun binary_search[T](data: *T, len: usize, target: *T, cmp: fun(*T, *T) i64) Result[usize, usize] {
     if (len == 0) {
         ret err[usize, usize](0);
     }
@@ -121,7 +121,7 @@ pub fun binary_search[T](data: &T, len: usize, target: &T, cmp: fun(&T, &T) i64)
     ret err[usize, usize](lo);
 }
 
-fun cmp_i64(a: &i64, b: &i64) i64 {
+fun cmp_i64(a: *i64, b: *i64) i64 {
     if (@a < @b) { ret -1; }
     if (@a > @b) { ret 1; }
     ret 0;

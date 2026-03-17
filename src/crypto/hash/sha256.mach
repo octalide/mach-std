@@ -69,7 +69,7 @@ fun gamma1(x: u32) u32 {
     ret rotr(x, 17) ^ rotr(x, 19) ^ (x >> 10);
 }
 
-fun read_u32_be(buf: &u8, off: usize) u32 {
+fun read_u32_be(buf: *u8, off: usize) u32 {
     ret (buf[off]::u32 << 24) | (buf[off + 1]::u32 << 16) |
         (buf[off + 2]::u32 << 8) | buf[off + 3]::u32;
 }
@@ -81,7 +81,7 @@ fun write_u32_be(buf: *u8, off: usize, v: u32) {
     buf[off + 3] = v::u8;
 }
 
-fun process_block(s: *State, block: &u8) {
+fun process_block(s: *State, block: *u8) {
     var w: [64]u32;
 
     var i: usize = 0;
@@ -151,7 +151,7 @@ pub fun init() State {
 # s:    pointer to hash state
 # data: pointer to input bytes
 # len:  number of bytes to process
-pub fun update(s: *State, data: &u8, len: usize) {
+pub fun update(s: *State, data: *u8, len: usize) {
     var off: usize = 0;
     s.total = s.total + len::u64;
 
@@ -229,7 +229,7 @@ pub fun final(s: *State, digest: *u8) {
 # data:   pointer to input bytes
 # len:    number of bytes to hash
 # digest: pointer to 32-byte output buffer
-pub fun hash(data: &u8, len: usize, digest: *u8) {
+pub fun hash(data: *u8, len: usize, digest: *u8) {
     var s: State = init();
     update(?s, data, len);
     final(?s, digest);
@@ -237,7 +237,7 @@ pub fun hash(data: &u8, len: usize, digest: *u8) {
 
 test "sha256: empty string" {
     var digest: [32]u8;
-    hash(""::&u8, 0, ?digest[0]);
+    hash(""::*u8, 0, ?digest[0]);
     if (digest[0] != 0xe3) { ret 0; }
     if (digest[1] != 0xb0) { ret 0; }
     if (digest[2] != 0xc4) { ret 0; }
@@ -251,7 +251,7 @@ test "sha256: empty string" {
 
 test "sha256: abc" {
     var digest: [32]u8;
-    hash("abc"::&u8, 3, ?digest[0]);
+    hash("abc"::*u8, 3, ?digest[0]);
     if (digest[0] != 0xba) { ret 0; }
     if (digest[1] != 0x78) { ret 0; }
     if (digest[2] != 0x16) { ret 0; }
@@ -266,10 +266,10 @@ test "sha256: abc" {
 test "sha256: streaming matches oneshot" {
     var d1: [32]u8;
     var d2: [32]u8;
-    hash("abcdef"::&u8, 6, ?d1[0]);
+    hash("abcdef"::*u8, 6, ?d1[0]);
     var s: State = init();
-    update(?s, "abc"::&u8, 3);
-    update(?s, "def"::&u8, 3);
+    update(?s, "abc"::*u8, 3);
+    update(?s, "def"::*u8, 3);
     final(?s, ?d2[0]);
     var i: usize = 0;
     for (i < 32) {

@@ -13,7 +13,7 @@ use std.types.string;
 # fn_write: write callback (ctx, buf, len) -> Result[usize, str]
 pub rec Writer {
     ctx:      ptr;
-    fn_write: fun(ptr, &u8, usize) Result[usize, str];
+    fn_write: fun(ptr, *u8, usize) Result[usize, str];
 }
 
 pub val ERR_SHORT_WRITE: str = "short write";
@@ -24,7 +24,7 @@ pub val ERR_SHORT_WRITE: str = "short write";
 # buf: buffer to write from
 # len: number of bytes to attempt to write
 # ret: Ok(wrote) on success or Err(str) on failure
-pub fun write(w: &Writer, buf: &u8, len: usize) Result[usize, str] {
+pub fun write(w: *Writer, buf: *u8, len: usize) Result[usize, str] {
     ret w.fn_write(w.ctx, buf, len);
 }
 
@@ -34,11 +34,11 @@ pub fun write(w: &Writer, buf: &u8, len: usize) Result[usize, str] {
 # buf: buffer to write from
 # len: number of bytes to write
 # ret: Ok(total) on success or Err(str) on failure
-pub fun write_all(w: &Writer, buf: &u8, len: usize) Result[usize, str] {
+pub fun write_all(w: *Writer, buf: *u8, len: usize) Result[usize, str] {
     if (len == 0) { ret ok[usize, str](0); }
     var total: usize = 0;
     for (total < len) {
-        val p: &u8 = (buf::usize + total)::&u8;
+        val p: *u8 = (buf::usize + total)::*u8;
         val r: Result[usize, str] = w.fn_write(w.ctx, p, len - total);
         if (is_err[usize, str](r)) { ret r; }
 

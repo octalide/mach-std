@@ -40,19 +40,19 @@ pub fun set_level(level: Level) {
 # must be called before spawning threads that log.
 # ---
 # w: writer to use for output
-pub fun set_writer(w: &writer.Writer) {
+pub fun set_writer(w: *writer.Writer) {
     out_ctx = w.ctx;
     out_fn = w.fn_write::usize;
     atomic.store(?writer_set, 1);
 }
 
-fun write_stderr(buf: &u8, len: usize) {
+fun write_stderr(buf: *u8, len: usize) {
     os.write(os.STDERR_FD, buf, len);
 }
 
-fun write_piece(buf: &u8, len: usize) {
+fun write_piece(buf: *u8, len: usize) {
     if (atomic.load(?writer_set) != 0) {
-        val f: fun(ptr, &u8, usize) Result[usize, str] = out_fn::fun(ptr, &u8, usize) Result[usize, str];
+        val f: fun(ptr, *u8, usize) Result[usize, str] = out_fn::fun(ptr, *u8, usize) Result[usize, str];
         f(out_ctx, buf, len);
     }
     or {

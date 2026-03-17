@@ -106,7 +106,7 @@ pub fun extension(p: Path) str {
 # a:   allocator for the result
 # p:   path to extract stem from
 # ret: the stem, or an error message
-pub fun stem(a: &allocator.Allocator, p: Path) Result[Path, str] {
+pub fun stem(a: *allocator.Allocator, p: Path) Result[Path, str] {
     if (a == nil) { ret err[Path, str]("allocator is nil"); }
 
     val name: str = filename(p);
@@ -130,7 +130,7 @@ pub fun stem(a: &allocator.Allocator, p: Path) Result[Path, str] {
     mem.raw_copy(buf::ptr, name::ptr, stem_len);
     buf[stem_len] = 0;
 
-    ret ok[Path, str](buf::&u8);
+    ret ok[Path, str](buf::*u8);
 }
 
 # clone: duplicate a path using the provided allocator.
@@ -138,7 +138,7 @@ pub fun stem(a: &allocator.Allocator, p: Path) Result[Path, str] {
 # a:   allocator for the new path
 # p:   path to clone (nil returns nil)
 # ret: the cloned path, or an error message
-pub fun clone(a: &allocator.Allocator, p: Path) Result[Path, str] {
+pub fun clone(a: *allocator.Allocator, p: Path) Result[Path, str] {
     if (a == nil) { ret err[Path, str]("allocator is nil"); }
     if (p == nil) { ret ok[Path, str](nil); }
 
@@ -152,7 +152,7 @@ pub fun clone(a: &allocator.Allocator, p: Path) Result[Path, str] {
     mem.raw_copy(buf::ptr, p::ptr, n);
     buf[n] = 0;
 
-    ret ok[Path, str](buf::&u8);
+    ret ok[Path, str](buf::*u8);
 }
 
 # join: join two path segments with the platform separator.
@@ -161,7 +161,7 @@ pub fun clone(a: &allocator.Allocator, p: Path) Result[Path, str] {
 # left:  left path segment
 # right: right path segment
 # ret:   the joined path, or an error message
-pub fun join(a: &allocator.Allocator, left: Path, right: Path) Result[Path, str] {
+pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str] {
     if (a == nil) { ret err[Path, str]("allocator is nil"); }
     if (is_empty(left))  { ret clone(a, right); }
     if (is_empty(right)) { ret clone(a, left); }
@@ -192,7 +192,7 @@ pub fun join(a: &allocator.Allocator, left: Path, right: Path) Result[Path, str]
     mem.raw_copy((buf::usize + off)::ptr, right::ptr, right_len);
     buf[out_len] = 0;
 
-    ret ok[Path, str](buf::&u8);
+    ret ok[Path, str](buf::*u8);
 }
 
 # parent: return the parent directory of a path.
@@ -200,7 +200,7 @@ pub fun join(a: &allocator.Allocator, left: Path, right: Path) Result[Path, str]
 # a:   allocator for the resulting path
 # p:   path to get parent of
 # ret: the parent path, or an error message
-pub fun parent(a: &allocator.Allocator, p: Path) Result[Path, str] {
+pub fun parent(a: *allocator.Allocator, p: Path) Result[Path, str] {
     if (a == nil)    { ret err[Path, str]("allocator is nil"); }
     if (is_empty(p)) { ret clone(a, "."); }
 
@@ -237,10 +237,10 @@ pub fun parent(a: &allocator.Allocator, p: Path) Result[Path, str] {
     mem.raw_copy(buf::ptr, p::ptr, parent_end);
     buf[parent_end] = 0;
 
-    ret ok[Path, str](buf::&u8);
+    ret ok[Path, str](buf::*u8);
 }
 
-fun clone_sep(a: &allocator.Allocator, sep: u8) Result[Path, str] {
+fun clone_sep(a: *allocator.Allocator, sep: u8) Result[Path, str] {
     val r: Result[*u8, str] = allocator.allocate[u8](a, 2);
     if (is_err[*u8, str](r)) {
         ret err[Path, str](unwrap_err[*u8, str](r));
@@ -250,7 +250,7 @@ fun clone_sep(a: &allocator.Allocator, sep: u8) Result[Path, str] {
     buf[0] = sep;
     buf[1] = 0;
 
-    ret ok[Path, str](buf::&u8);
+    ret ok[Path, str](buf::*u8);
 }
 
 test "path: is_abs with absolute path" {

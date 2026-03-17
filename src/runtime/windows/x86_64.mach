@@ -11,7 +11,7 @@
 #
 # user code must define:
 #   $main.symbol = "main";
-#   fun main(argc: i64, argv: &&u8) i64 { ... }
+#   fun main(argc: i64, argv: &*u8) i64 { ... }
 
 $if ($mach.build.target.os.id != $mach.os.windows.id) {
     $error("std.runtime.windows.x86_64: requires windows target");
@@ -22,7 +22,7 @@ $if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
 }
 
 $GetCommandLineA.symbol = "GetCommandLineA";
-ext GetCommandLineA: fun() &u8;
+ext GetCommandLineA: fun() *u8;
 
 $ExitProcess.symbol = "ExitProcess";
 ext ExitProcess: fun(u32);
@@ -61,7 +61,7 @@ pub fun _start() {
 # copies the command line into cmdline_buf, splits on whitespace,
 # handles double-quote grouping (quotes are stripped from the result).
 # populates argv_ptrs and argc.
-fun parse_cmdline(cmdline: &u8) {
+fun parse_cmdline(cmdline: *u8) {
     if (cmdline == nil) {
         argc = 0;
         ret;

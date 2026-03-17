@@ -53,7 +53,7 @@ pub fun bind(ep: ip.Endpoint) Result[Socket, str] {
 # len: number of bytes to send
 # ep:  destination endpoint
 # ret: number of bytes sent, or negative on error
-pub fun send_to(s: &Socket, buf: &u8, len: usize, ep: ip.Endpoint) i64 {
+pub fun send_to(s: *Socket, buf: *u8, len: usize, ep: ip.Endpoint) i64 {
     var sa: [16]u8;
     ip.to_sockaddr(ep, ?sa[0]);
     ret os.sock_sendto(s.fd, buf, len, 0, ?sa[0], os.SOCKADDR_IN_SIZE);
@@ -66,7 +66,7 @@ pub fun send_to(s: &Socket, buf: &u8, len: usize, ep: ip.Endpoint) i64 {
 # len: maximum bytes to receive
 # ep:  pointer to an Endpoint to fill with the source address
 # ret: number of bytes received, or negative on error
-pub fun recv_from(s: &Socket, buf: *u8, len: usize, ep: *ip.Endpoint) i64 {
+pub fun recv_from(s: *Socket, buf: *u8, len: usize, ep: *ip.Endpoint) i64 {
     var sa: [16]u8;
     var sa_len: u32 = os.SOCKADDR_IN_SIZE::u32;
     val n: i64 = os.sock_recvfrom(s.fd, buf, len, 0, ?sa[0], ?sa_len);

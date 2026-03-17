@@ -6,7 +6,7 @@
 #   use std.runtime;
 #
 #   $main.symbol = "main";
-#   fun main(argc: i64, argv: &&u8) i64 {
+#   fun main(argc: i64, argv: &*u8) i64 {
 #       ret 0;
 #   }
 #

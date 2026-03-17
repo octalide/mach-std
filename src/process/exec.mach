@@ -27,7 +27,7 @@ pub rec Child {
 # argv:     null-terminated argument array
 # envp:     null-terminated environment array
 # ret:      exit status, or an error message
-pub fun run(pathname: str, argv: &&u8, envp: &&u8) Result[ExitStatus, str] {
+pub fun run(pathname: str, argv: &*u8, envp: &*u8) Result[ExitStatus, str] {
     val pid: i64 = os.spawn(pathname, argv, envp);
     if (pid < 0) { ret err[ExitStatus, str]("spawn failed"); }
 
@@ -44,7 +44,7 @@ pub fun run(pathname: str, argv: &&u8, envp: &&u8) Result[ExitStatus, str] {
 # argv:     null-terminated argument array
 # envp:     null-terminated environment array
 # ret:      child handle, or an error message
-pub fun spawn(pathname: str, argv: &&u8, envp: &&u8) Result[Child, str] {
+pub fun spawn(pathname: str, argv: &*u8, envp: &*u8) Result[Child, str] {
     val pid: i64 = os.spawn(pathname, argv, envp);
     if (pid < 0) { ret err[Child, str]("spawn failed"); }
     ret ok[Child, str](Child{pid: pid});
@@ -109,7 +109,7 @@ fun make_argv1(prog: str) [2]usize {
 
 test "exec: run /bin/true exits 0" {
     var argv: [2]usize = make_argv1("/bin/true");
-    val r: Result[ExitStatus, str] = run("/bin/true", (?argv[0])::&&u8, nil);
+    val r: Result[ExitStatus, str] = run("/bin/true", (?argv[0])::&*u8, nil);
     if (is_err[ExitStatus, str](r)) { ret 0; }
     val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
     if (!exited(s)) { ret 0; }
@@ -119,7 +119,7 @@ test "exec: run /bin/true exits 0" {
 
 test "exec: run /bin/false exits 1" {
     var argv: [2]usize = make_argv1("/bin/false");
-    val r: Result[ExitStatus, str] = run("/bin/false", (?argv[0])::&&u8, nil);
+    val r: Result[ExitStatus, str] = run("/bin/false", (?argv[0])::&*u8, nil);
     if (is_err[ExitStatus, str](r)) { ret 0; }
     val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
     if (!exited(s)) { ret 0; }
@@ -129,7 +129,7 @@ test "exec: run /bin/false exits 1" {
 
 test "exec: spawn and wait matches run" {
     var argv: [2]usize = make_argv1("/bin/true");
-    val sr: Result[Child, str] = spawn("/bin/true", (?argv[0])::&&u8, nil);
+    val sr: Result[Child, str] = spawn("/bin/true", (?argv[0])::&*u8, nil);
     if (is_err[Child, str](sr)) { ret 0; }
     val child: Child = unwrap_ok[Child, str](sr);
     val wr: Result[ExitStatus, str] = wait(child);

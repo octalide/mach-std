@@ -167,21 +167,21 @@ ext HeapFree: fun(isize, u32, ptr) i32;
 ext HeapReAlloc: fun(isize, u32, ptr, usize) ptr;
 ext GetSystemInfo: fun(*u8);
 
-ext CreateFileA: fun(&u8, u32, u32, ptr, u32, u32, isize) isize;
+ext CreateFileA: fun(*u8, u32, u32, ptr, u32, u32, isize) isize;
 ext ReadFile: fun(isize, *u8, u32, *u32, ptr) i32;
-ext WriteFile: fun(isize, &u8, u32, *u32, ptr) i32;
+ext WriteFile: fun(isize, *u8, u32, *u32, ptr) i32;
 ext SetFilePointerEx: fun(isize, i64, *i64, u32) i32;
 ext GetFileInformationByHandle: fun(isize, *u8) i32;
 ext CreateFileMappingA: fun(isize, ptr, u32, u32, u32, ptr) isize;
 ext MapViewOfFile: fun(isize, u32, u32, u32, usize) ptr;
 ext UnmapViewOfFile: fun(ptr) i32;
 ext FlushViewOfFile: fun(ptr, usize) i32;
-ext DeleteFileA: fun(&u8) i32;
-ext MoveFileA: fun(&u8, &u8) i32;
-ext CreateDirectoryA: fun(&u8, ptr) i32;
-ext RemoveDirectoryA: fun(&u8) i32;
-ext GetFileAttributesA: fun(&u8) u32;
-ext FindFirstFileA: fun(&u8, *u8) isize;
+ext DeleteFileA: fun(*u8) i32;
+ext MoveFileA: fun(*u8, *u8) i32;
+ext CreateDirectoryA: fun(*u8, ptr) i32;
+ext RemoveDirectoryA: fun(*u8) i32;
+ext GetFileAttributesA: fun(*u8) u32;
+ext FindFirstFileA: fun(*u8, *u8) isize;
 ext FindNextFileA: fun(isize, *u8) i32;
 ext FindClose: fun(isize) i32;
 ext GetFinalPathNameByHandleA: fun(isize, *u8, u32, u32) u32;
@@ -208,7 +208,7 @@ ext ws2_accept: fun(usize, *u8, *i32) usize;
 $ws2_accept.symbol = "accept";
 ext ws2_connect: fun(usize, *u8, i32) i32;
 $ws2_connect.symbol = "connect";
-ext ws2_sendto: fun(usize, &u8, i32, i32, *u8, i32) i32;
+ext ws2_sendto: fun(usize, *u8, i32, i32, *u8, i32) i32;
 $ws2_sendto.symbol = "sendto";
 ext ws2_recvfrom: fun(usize, *u8, i32, i32, *u8, *i32) i32;
 $ws2_recvfrom.symbol = "recvfrom";
@@ -216,7 +216,7 @@ ext ws2_shutdown: fun(usize, i32) i32;
 $ws2_shutdown.symbol = "shutdown";
 ext ws2_setsockopt: fun(usize, i32, i32, *u8, i32) i32;
 $ws2_setsockopt.symbol = "setsockopt";
-ext ws2_send: fun(usize, &u8, i32, i32) i32;
+ext ws2_send: fun(usize, *u8, i32, i32) i32;
 $ws2_send.symbol = "send";
 ext ws2_recv: fun(usize, *u8, i32, i32) i32;
 $ws2_recv.symbol = "recv";
@@ -227,7 +227,7 @@ ext SystemFunction036: fun(*u8, u32) i32;
 
 ext GetCurrentProcessId: fun() u32;
 ext TerminateProcess: fun(isize, u32) i32;
-ext CreateProcessA: fun(&u8, *u8, ptr, ptr, i32, u32, ptr, ptr, *u8, *u8) i32;
+ext CreateProcessA: fun(*u8, *u8, ptr, ptr, i32, u32, ptr, ptr, *u8, *u8) i32;
 ext WaitForSingleObject: fun(isize, u32) u32;
 ext WaitForMultipleObjects: fun(u32, ptr, i32, u32) u32;
 ext GetExitCodeProcess: fun(isize, *u32) i32;
@@ -235,7 +235,7 @@ ext CreatePipe: fun(*isize, *isize, ptr, u32) i32;
 ext SleepW: fun(u32);
 $SleepW.symbol = "Sleep";
 ext GetCurrentDirectoryA: fun(u32, *u8) u32;
-ext GetEnvironmentVariableA: fun(&u8, *u8, u32) u32;
+ext GetEnvironmentVariableA: fun(*u8, *u8, u32) u32;
 
 # Win32 structures
 
@@ -579,7 +579,7 @@ fun filetime_to_unix(ft: FILETIME, sec: *i64, nsec: *i64) {
 # argv: null-terminated array of null-terminated strings
 # buf:  destination buffer
 # cap:  size of buf in bytes
-fun build_cmdline(argv: &&u8, buf: *u8, cap: usize) {
+fun build_cmdline(argv: &*u8, buf: *u8, cap: usize) {
     var off: usize = 0;
     var i: usize = 0;
     for (argv[i]::usize != 0 && off < cap - 1) {
@@ -587,7 +587,7 @@ fun build_cmdline(argv: &&u8, buf: *u8, cap: usize) {
             buf[off] = 32;
             off = off + 1;
         }
-        val arg: &u8 = argv[i];
+        val arg: *u8 = argv[i];
         var needs_quote: u8 = 0;
         var j: usize = 0;
         for (arg[j] != 0) {
@@ -699,7 +699,7 @@ pub fun reallocate(p: ptr, old_size: usize, new_size: usize) ptr {
     }
     var i: usize = 0;
     for (i < copy_size) {
-        @(new_p::usize + i)::*u8 = @(p::usize + i)::&u8;
+        @(new_p::usize + i)::*u8 = @(p::usize + i)::*u8;
         i = i + 1;
     }
     deallocate(p, old_size);
@@ -836,7 +836,7 @@ pub fun read(fd: i32, buf: *u8, count: usize) i64 {
     ret bytes_read::i64;
 }
 
-pub fun write(fd: i32, buf: &u8, count: usize) i64 {
+pub fun write(fd: i32, buf: *u8, count: usize) i64 {
     val h: isize = get_handle(fd);
     if (h == INVALID_HANDLE_VALUE) {
         ret EBADF;
@@ -849,7 +849,7 @@ pub fun write(fd: i32, buf: &u8, count: usize) i64 {
     ret bytes_written::i64;
 }
 
-pub fun open(dirfd: i32, path: &u8, flags: i32, mode: i32) i64 {
+pub fun open(dirfd: i32, path: *u8, flags: i32, mode: i32) i64 {
     if (dirfd != AT_FDCWD) {
         ret ENOTSUP;
     }
@@ -952,7 +952,7 @@ pub fun stat(fd: i32, st: *stat_t) i64 {
 }
 
 # stub: dirfd is ignored — path must be absolute or relative to cwd
-pub fun stat_path(dirfd: i32, path: &u8, st: *stat_t, flags: i32) i64 {
+pub fun stat_path(dirfd: i32, path: *u8, st: *stat_t, flags: i32) i64 {
     val attr: u32 = GetFileAttributesA(path);
     if (attr == 0xFFFFFFFF) {
         ret last_error();
@@ -972,7 +972,7 @@ pub fun stat_path(dirfd: i32, path: &u8, st: *stat_t, flags: i32) i64 {
 }
 
 # stub: dirfd is ignored — path must be absolute or relative to cwd
-pub fun unlink(dirfd: i32, path: &u8, flags: i32) i64 {
+pub fun unlink(dirfd: i32, path: *u8, flags: i32) i64 {
     if ((flags & AT_REMOVEDIR) != 0) {
         if (RemoveDirectoryA(path) == 0) {
             ret last_error();
@@ -986,14 +986,14 @@ pub fun unlink(dirfd: i32, path: &u8, flags: i32) i64 {
 }
 
 # stub: olddir/newdir are ignored — paths must be absolute or relative to cwd
-pub fun rename(olddir: i32, oldpath: &u8, newdir: i32, newpath: &u8) i64 {
+pub fun rename(olddir: i32, oldpath: *u8, newdir: i32, newpath: *u8) i64 {
     if (MoveFileA(oldpath, newpath) == 0) {
         ret last_error();
     }
     ret 0;
 }
 
-pub fun make_dir(dirfd: i32, path: &u8, mode: i32) i64 {
+pub fun make_dir(dirfd: i32, path: *u8, mode: i32) i64 {
     if (CreateDirectoryA(path, nil) == 0) {
         ret last_error();
     }
@@ -1026,7 +1026,7 @@ pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
         path_buf[path_len] = '\\'::u8;
         path_buf[path_len + 1] = '*'::u8;
         path_buf[path_len + 2] = 0;
-        fh = FindFirstFileA(?path_buf[0]::&u8, ?data::*u8);
+        fh = FindFirstFileA(?path_buf[0]::*u8, ?data::*u8);
         if (fh == INVALID_HANDLE_VALUE) {
             ret last_error();
         }
@@ -1069,7 +1069,7 @@ pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
     ret written::i64;
 }
 
-pub fun access(dirfd: i32, path: &u8, mode: i32, flags: i32) i64 {
+pub fun access(dirfd: i32, path: *u8, mode: i32, flags: i32) i64 {
     val attr: u32 = GetFileAttributesA(path);
     if (attr == 0xFFFFFFFF) {
         ret last_error();
@@ -1116,7 +1116,7 @@ pub fun abort() {
 # argv:     null-terminated argument array
 # envp:     null-terminated environment array (ignored on windows)
 # ret:      child PID on success, or negative errno
-pub fun spawn(pathname: &u8, argv: &&u8, envp: &&u8) i64 {
+pub fun spawn(pathname: *u8, argv: &*u8, envp: &*u8) i64 {
     var cmdline: [32768]u8;
     build_cmdline(argv, ?cmdline[0], 32768);
 
@@ -1212,7 +1212,7 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
 # buf:  destination buffer for the value
 # cap:  buffer capacity in bytes
 # ret:  length of value on success, or NOT_FOUND
-pub fun getenv(name: &u8, buf: *u8, cap: usize) i64 {
+pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     val len: u32 = GetEnvironmentVariableA(name, buf, cap::u32);
     if (len == 0) {
         val err: u32 = GetLastError();
@@ -1419,7 +1419,7 @@ pub val SHUT_RDWR:    i32 = 2;
 
 pub val SOCKADDR_IN_SIZE: usize = 16;
 
-pub fun sock_addr_init(sa: *u8, port: u16, addr: &u8) {
+pub fun sock_addr_init(sa: *u8, port: u16, addr: *u8) {
     var i: usize = 0;
     for (i < SOCKADDR_IN_SIZE) { sa[i] = 0; i = i + 1; }
     sa[0] = AF_INET::u8;
@@ -1432,7 +1432,7 @@ pub fun sock_addr_init(sa: *u8, port: u16, addr: &u8) {
     sa[7] = addr[3];
 }
 
-pub fun sock_addr_read(sa: &u8, port: *u16, addr: *u8) {
+pub fun sock_addr_read(sa: *u8, port: *u16, addr: *u8) {
     @port = (sa[2]::u16 << 8) | sa[3]::u16;
     addr[0] = sa[4];
     addr[1] = sa[5];
@@ -1440,7 +1440,7 @@ pub fun sock_addr_read(sa: &u8, port: *u16, addr: *u8) {
     addr[3] = sa[7];
 }
 
-pub fun sock_send(fd: i32, buf: &u8, len: usize) i64 {
+pub fun sock_send(fd: i32, buf: *u8, len: usize) i64 {
     if (!ensure_wsa()) { ret EIO; }
     val res: i32 = ws2_send(fd::usize, buf, len::i32, 0);
     if (res == SOCKET_ERROR) { ret wsa_last_error(); }
@@ -1519,7 +1519,7 @@ pub fun sock_connect(fd: i32, addr: *u8, addrlen: usize) i64 {
     ret 0;
 }
 
-pub fun sock_sendto(fd: i32, buf: &u8, len: usize, flags: i32, addr: *u8, addrlen: usize) i64 {
+pub fun sock_sendto(fd: i32, buf: *u8, len: usize, flags: i32, addr: *u8, addrlen: usize) i64 {
     val res: i32 = ws2_sendto(fd::usize, buf, len::i32, flags, addr, addrlen::i32);
     if (res == SOCKET_ERROR) { ret wsa_last_error(); }
     ret res::i64;

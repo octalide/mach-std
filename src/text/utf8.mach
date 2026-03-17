@@ -90,7 +90,7 @@ pub fun encode(cp: Codepoint, buf: *u8, len: usize) usize {
 # len: number of bytes available
 # cp:  pointer to write the decoded codepoint
 # ret: bytes consumed (0 if invalid or empty; sets *cp to REPLACEMENT on error)
-pub fun decode(buf: &u8, len: usize, cp: *Codepoint) usize {
+pub fun decode(buf: *u8, len: usize, cp: *Codepoint) usize {
     if (len == 0) {
         @cp = REPLACEMENT;
         ret 0;
@@ -175,7 +175,7 @@ pub fun decode(buf: &u8, len: usize, cp: *Codepoint) usize {
 # buf: source buffer
 # len: number of bytes
 # ret: true if the entire buffer is valid UTF-8
-pub fun validate(buf: &u8, len: usize) bool {
+pub fun validate(buf: *u8, len: usize) bool {
     var i: usize = 0;
     for (i < len) {
         val b0: u8 = @((buf::usize + i)::*u8);
@@ -233,7 +233,7 @@ pub fun validate(buf: &u8, len: usize) bool {
 # buf: source buffer
 # len: number of bytes
 # ret: number of codepoints (counts sequence starts, not bytes)
-pub fun count(buf: &u8, len: usize) usize {
+pub fun count(buf: *u8, len: usize) usize {
     var n: usize = 0;
     var i: usize = 0;
     for (i < len) {

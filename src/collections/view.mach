@@ -10,7 +10,7 @@ use std.types.string;
 # data: pointer to the first element
 # size: number of elements in the view
 pub rec View[T] {
-    data: &T;
+    data: *T;
     size: usize;
 }
 
@@ -19,7 +19,7 @@ pub rec View[T] {
 # data: pointer to the data
 # size: number of elements
 # ret:  a View[T] over the data
-pub fun make[T](data: &T, size: usize) View[T] {
+pub fun make[T](data: *T, size: usize) View[T] {
     var v: View[T];
     v.data = data;
     v.size = size;

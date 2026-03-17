@@ -73,7 +73,7 @@ fun gamma1(x: u64) u64 {
     ret rotr(x, 19) ^ rotr(x, 61) ^ (x >> 6);
 }
 
-fun read_u64_be(buf: &u8, off: usize) u64 {
+fun read_u64_be(buf: *u8, off: usize) u64 {
     ret (buf[off]::u64 << 56) | (buf[off + 1]::u64 << 48) |
         (buf[off + 2]::u64 << 40) | (buf[off + 3]::u64 << 32) |
         (buf[off + 4]::u64 << 24) | (buf[off + 5]::u64 << 16) |
@@ -91,7 +91,7 @@ fun write_u64_be(buf: *u8, off: usize, v: u64) {
     buf[off + 7] = v::u8;
 }
 
-fun process_block(s: *State, block: &u8) {
+fun process_block(s: *State, block: *u8) {
     var w: [80]u64;
 
     var i: usize = 0;
@@ -161,7 +161,7 @@ pub fun init() State {
 # s:    pointer to hash state
 # data: pointer to input bytes
 # len:  number of bytes to process
-pub fun update(s: *State, data: &u8, len: usize) {
+pub fun update(s: *State, data: *u8, len: usize) {
     var off: usize = 0;
     s.total = s.total + len::u64;
 
@@ -248,7 +248,7 @@ pub fun final(s: *State, digest: *u8) {
 # data:   pointer to input bytes
 # len:    number of bytes to hash
 # digest: pointer to 64-byte output buffer
-pub fun hash(data: &u8, len: usize, digest: *u8) {
+pub fun hash(data: *u8, len: usize, digest: *u8) {
     var s: State = init();
     update(?s, data, len);
     final(?s, digest);
@@ -256,7 +256,7 @@ pub fun hash(data: &u8, len: usize, digest: *u8) {
 
 test "sha512: empty string" {
     var digest: [64]u8;
-    hash(""::&u8, 0, ?digest[0]);
+    hash(""::*u8, 0, ?digest[0]);
     if (digest[0] != 0xcf) { ret 0; }
     if (digest[1] != 0x83) { ret 0; }
     if (digest[2] != 0xe1) { ret 0; }
@@ -270,7 +270,7 @@ test "sha512: empty string" {
 
 test "sha512: abc" {
     var digest: [64]u8;
-    hash("abc"::&u8, 3, ?digest[0]);
+    hash("abc"::*u8, 3, ?digest[0]);
     if (digest[0] != 0xdd) { ret 0; }
     if (digest[1] != 0xaf) { ret 0; }
     if (digest[2] != 0x35) { ret 0; }
@@ -285,10 +285,10 @@ test "sha512: abc" {
 test "sha512: streaming matches oneshot" {
     var d1: [64]u8;
     var d2: [64]u8;
-    hash("abcdef"::&u8, 6, ?d1[0]);
+    hash("abcdef"::*u8, 6, ?d1[0]);
     var s: State = init();
-    update(?s, "abc"::&u8, 3);
-    update(?s, "def"::&u8, 3);
+    update(?s, "abc"::*u8, 3);
+    update(?s, "def"::*u8, 3);
     final(?s, ?d2[0]);
     var i: usize = 0;
     for (i < 64) {

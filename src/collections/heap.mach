@@ -8,7 +8,7 @@ use allo: std.allocator;
 use page: std.allocator.page;
 
 pub rec Heap[T] {
-    alloc: &allo.Allocator;
+    alloc: *allo.Allocator;
     data:  *T;
     len:   usize;
     cap:   usize;
@@ -20,7 +20,7 @@ pub rec Heap[T] {
 # alloc: allocator to use for allocations
 # cmp:   comparison function (negative if a < b, 0 if equal, positive if a > b)
 # ret:   a new empty Heap[T]
-pub fun init[T](alloc: &allo.Allocator, cmp: fun(*T, *T) i64) Heap[T] {
+pub fun init[T](alloc: *allo.Allocator, cmp: fun(*T, *T) i64) Heap[T] {
     var h: Heap[T];
     h.alloc = alloc;
     h.data = nil;
@@ -177,7 +177,7 @@ pub fun pop[T](h: *Heap[T]) Result[T, str] {
 # return a pointer to the minimum element without removing it.
 # ---
 # ret: pointer to the minimum element, or an error if empty
-pub fun peek[T](h: &Heap[T]) Result[*T, str] {
+pub fun peek[T](h: *Heap[T]) Result[*T, str] {
     if (h.len == 0) {
         ret err[*T, str]("peek on empty heap");
     }

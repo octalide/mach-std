@@ -9,7 +9,7 @@ use std.types.size;
 # panic: write a null-terminated message to stderr and abort.
 # ---
 # msg: pointer to null-terminated error message
-pub fun panic(msg: &u8) {
+pub fun panic(msg: *u8) {
     var len: usize = 0;
     for (msg[len] != 0) { len = len + 1; }
 

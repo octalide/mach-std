@@ -30,7 +30,7 @@ pub rec Semver {
 # input: version string (major.minor.patch[-prerelease][+build])
 # a:     allocator for prerelease/build substring copies
 # ret:   the parsed version, or an error message
-pub fun semver_parse(input: str, a: &allo.Allocator) Result[Semver, str] {
+pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
     if (input == nil || str_len(input) == 0) {
         ret err[Semver, str]("empty version string");
     }
@@ -117,7 +117,7 @@ pub fun semver_parse(input: str, a: &allo.Allocator) Result[Semver, str] {
 }
 
 # validate that a Semver is well-formed
-pub fun semver_is_valid(v: &Semver) bool {
+pub fun semver_is_valid(v: *Semver) bool {
     if (!(v.prerelease == nil || str_len(v.prerelease) == 0)) {
         var i: usize = 0;
         for (v.prerelease[i] != 0) {
@@ -146,7 +146,7 @@ pub fun semver_is_valid(v: &Semver) bool {
 # v:     first version
 # other: version to compare against
 # ret:   <0 if v < other, 0 if equal, >0 if v > other
-pub fun semver_compare(v: &Semver, other: &Semver) i64 {
+pub fun semver_compare(v: *Semver, other: *Semver) i64 {
     if (v.major < other.major) { ret -1; }
     if (v.major > other.major) { ret 1; }
 
@@ -170,32 +170,32 @@ pub fun semver_compare(v: &Semver, other: &Semver) i64 {
 }
 
 # check if v is less than other
-pub fun semver_is_less(v: &Semver, other: &Semver) bool {
+pub fun semver_is_less(v: *Semver, other: *Semver) bool {
     ret semver_compare(v, other) < 0;
 }
 
 # check if v is greater than other
-pub fun semver_is_greater(v: &Semver, other: &Semver) bool {
+pub fun semver_is_greater(v: *Semver, other: *Semver) bool {
     ret semver_compare(v, other) > 0;
 }
 
 # check if two versions are equal (ignoring build metadata)
-pub fun semver_equals(v: &Semver, other: &Semver) bool {
+pub fun semver_equals(v: *Semver, other: *Semver) bool {
     ret semver_compare(v, other) == 0;
 }
 
 # check whether v is a stable release
-pub fun semver_is_stable(v: &Semver) bool {
+pub fun semver_is_stable(v: *Semver) bool {
     ret v.prerelease == nil || str_len(v.prerelease) == 0;
 }
 
 # check whether v is a prerelease
-pub fun semver_is_prerelease(v: &Semver) bool {
+pub fun semver_is_prerelease(v: *Semver) bool {
     ret !(v.prerelease == nil || str_len(v.prerelease) == 0);
 }
 
 # check whether v has build metadata
-pub fun semver_has_build(v: &Semver) bool {
+pub fun semver_has_build(v: *Semver) bool {
     ret !(v.build == nil || str_len(v.build) == 0);
 }
 

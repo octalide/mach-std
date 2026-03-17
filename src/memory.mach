@@ -99,7 +99,7 @@ pub fun fill[T](p: *T, value: T, count: usize) {
 # dst:   pointer to the destination memory block
 # src:   pointer to the source memory block
 # count: number of elements to copy
-pub fun copy[T](dst: *T, src: &T, count: usize) {
+pub fun copy[T](dst: *T, src: *T, count: usize) {
     if (dst == nil || src == nil || count == 0) {
         ret;
     }

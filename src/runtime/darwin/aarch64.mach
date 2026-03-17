@@ -16,7 +16,7 @@
 #
 # user code must define:
 #   $main.symbol = "main";
-#   fun main(argc: i64, argv: &&u8) i64 { ... }
+#   fun main(argc: i64, argv: &*u8) i64 { ... }
 
 $if ($mach.build.target.os.id != $mach.os.darwin.id) {
     $error("std.runtime.darwin.aarch64: requires darwin target");

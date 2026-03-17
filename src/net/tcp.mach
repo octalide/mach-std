@@ -58,7 +58,7 @@ pub fun listen(ep: ip.Endpoint, backlog: i32) Result[Listener, str] {
 # ---
 # ln:  the listener to accept on
 # ret: a connected Stream, or an error message
-pub fun accept(ln: &Listener) Result[Stream, str] {
+pub fun accept(ln: *Listener) Result[Stream, str] {
     var sa: [16]u8;
     var sa_len: u32 = os.SOCKADDR_IN_SIZE::u32;
     val fd: i64 = os.sock_accept(ln.fd, ?sa[0], ?sa_len);
@@ -71,7 +71,7 @@ pub fun accept(ln: &Listener) Result[Stream, str] {
 # ln:  the listener to accept on
 # ep:  pointer to an Endpoint to fill with the remote address
 # ret: a connected Stream, or an error message
-pub fun accept_ep(ln: &Listener, ep: *ip.Endpoint) Result[Stream, str] {
+pub fun accept_ep(ln: *Listener, ep: *ip.Endpoint) Result[Stream, str] {
     var sa: [16]u8;
     var sa_len: u32 = os.SOCKADDR_IN_SIZE::u32;
     val fd: i64 = os.sock_accept(ln.fd, ?sa[0], ?sa_len);
@@ -106,7 +106,7 @@ pub fun connect(ep: ip.Endpoint) Result[Stream, str] {
 # buf: destination buffer
 # len: maximum bytes to read
 # ret: number of bytes read, or negative on error
-pub fun stream_read(s: &Stream, buf: *u8, len: usize) i64 {
+pub fun stream_read(s: *Stream, buf: *u8, len: usize) i64 {
     ret os.sock_recv(s.fd, buf, len);
 }
 
@@ -116,7 +116,7 @@ pub fun stream_read(s: &Stream, buf: *u8, len: usize) i64 {
 # buf: source buffer
 # len: number of bytes to write
 # ret: number of bytes written, or negative on error
-pub fun stream_write(s: &Stream, buf: &u8, len: usize) i64 {
+pub fun stream_write(s: *Stream, buf: *u8, len: usize) i64 {
     ret os.sock_send(s.fd, buf, len);
 }
 
@@ -124,7 +124,7 @@ pub fun stream_write(s: &Stream, buf: &u8, len: usize) i64 {
 # ---
 # s:   the stream to shut down
 # how: SHUT_RD (0), SHUT_WR (1), or SHUT_RDWR (2)
-pub fun stream_shutdown(s: &Stream, how: i32) i64 {
+pub fun stream_shutdown(s: *Stream, how: i32) i64 {
     ret os.sock_shutdown(s.fd, how);
 }
 

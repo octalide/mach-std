@@ -9,7 +9,7 @@ use allo: std.allocator;
 use page: std.allocator.page;
 
 pub rec Deque[T] {
-    alloc: &allo.Allocator;
+    alloc: *allo.Allocator;
     data:  *T;
     head:  usize;
     len:   usize;
@@ -20,7 +20,7 @@ pub rec Deque[T] {
 # ---
 # alloc: allocator to use for allocations
 # ret:   a new empty Deque[T]
-pub fun init[T](alloc: &allo.Allocator) Deque[T] {
+pub fun init[T](alloc: *allo.Allocator) Deque[T] {
     var dq: Deque[T];
     dq.alloc = alloc;
     dq.data = nil;
@@ -177,7 +177,7 @@ pub fun pop_front[T](dq: *Deque[T]) Result[T, str] {
 # ---
 # index: logical index (0 = front)
 # ret:   pointer to element, or an error
-pub fun get[T](dq: &Deque[T], index: usize) Result[*T, str] {
+pub fun get[T](dq: *Deque[T], index: usize) Result[*T, str] {
     if (dq == nil) { ret err[*T, str]("deque is nil"); }
     if (index >= dq.len) {
         ret err[*T, str]("index out of bounds");

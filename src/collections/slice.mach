@@ -37,9 +37,9 @@ pub fun is_empty[T](s: Slice[T]) bool {
 # s:     slice to access
 # index: element index
 # ret:   reference to the element, or an error if out of bounds
-pub fun get[T](s: Slice[T], index: usize) Result[&T, str] {
-    if (index >= s.size) { ret err[&T, str]("index out of bounds"); }
-    ret ok[&T, str](?s.data[index]);
+pub fun get[T](s: Slice[T], index: usize) Result[*T, str] {
+    if (index >= s.size) { ret err[*T, str]("index out of bounds"); }
+    ret ok[*T, str](?s.data[index]);
 }
 
 # set: update the element at the given index.

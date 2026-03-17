@@ -31,7 +31,7 @@ val LOAD_FACTOR_PERCENT: usize = 70;
 # hash_fn:    hash function taking a ptr, returning u64
 # eq_fn:      equality function taking two ptrs, returning bool
 pub rec Map[K, V] {
-    alloc:      &allocator.Allocator;
+    alloc:      *allocator.Allocator;
     keys:       *K;
     values:     *V;
     states:     *u8;
@@ -48,7 +48,7 @@ pub rec Map[K, V] {
 # hash_fn: hash function for keys
 # eq_fn:   equality function for keys
 # ret:     a new empty Map[K, V]
-pub fun init[K, V](alloc: &allocator.Allocator, hash_fn: fun(ptr) u64, eq_fn: fun(ptr, ptr) bool) Map[K, V] {
+pub fun init[K, V](alloc: *allocator.Allocator, hash_fn: fun(ptr) u64, eq_fn: fun(ptr, ptr) bool) Map[K, V] {
     var m: Map[K, V];
     m.alloc      = alloc;
     m.keys       = nil;
@@ -124,7 +124,7 @@ pub fun clear[K, V](m: *Map[K, V]) {
 # ---
 # key: pointer to the key to find
 # ret: (idx, found) where found indicates an exact match
-fun find_slot[K, V](m: &Map[K, V], key: &K) rec { idx: usize; found: bool; } {
+fun find_slot[K, V](m: *Map[K, V], key: *K) rec { idx: usize; found: bool; } {
     var result: rec { idx: usize; found: bool; };
     result.found = false;
     result.idx   = 0;
@@ -303,7 +303,7 @@ pub fun insert[K, V](m: *Map[K, V], key: K, value: V) Result[bool, str] {
 # ---
 # key: pointer to the key to look up
 # ret: pointer to the value, or an error message
-pub fun get[K, V](m: &Map[K, V], key: &K) Result[*V, str] {
+pub fun get[K, V](m: *Map[K, V], key: *K) Result[*V, str] {
     if (m == nil) { ret err[*V, str]("map is nil"); }
     if (m.cap == 0) {
         ret err[*V, str]("key not found");
@@ -321,7 +321,7 @@ pub fun get[K, V](m: &Map[K, V], key: &K) Result[*V, str] {
 # ---
 # key: pointer to the key to check
 # ret: true if the key exists
-pub fun contains[K, V](m: &Map[K, V], key: &K) bool {
+pub fun contains[K, V](m: *Map[K, V], key: *K) bool {
     if (m == nil) { ret false; }
     if (m.cap == 0) { ret false; }
     val slot: rec { idx: usize; found: bool; } = find_slot[K, V](m, key);
@@ -332,7 +332,7 @@ pub fun contains[K, V](m: &Map[K, V], key: &K) bool {
 # ---
 # key: pointer to the key to remove
 # ret: true if removed, false if the key was not found
-pub fun remove[K, V](m: *Map[K, V], key: &K) Result[bool, str] {
+pub fun remove[K, V](m: *Map[K, V], key: *K) Result[bool, str] {
     if (m == nil) { ret err[bool, str]("map is nil"); }
     if (m.cap == 0) {
         ret ok[bool, str](false);
@@ -352,7 +352,7 @@ pub fun remove[K, V](m: *Map[K, V], key: &K) Result[bool, str] {
 
 # hash_str: FNV-1a hash for strings.
 pub fun hash_str(p: ptr) u64 {
-    val s: &str = p::&str;
+    val s: *str = p::*str;
     val FNV_OFFSET: u64 = 14695981039346656037;
     val FNV_PRIME:  u64 = 1099511628211;
 
@@ -374,14 +374,14 @@ pub fun hash_str(p: ptr) u64 {
 
 # eq_str: equality function for strings.
 pub fun eq_str(pa: ptr, pb: ptr) bool {
-    val a: &str = pa::&str;
-    val b: &str = pb::&str;
+    val a: *str = pa::*str;
+    val b: *str = pb::*str;
     ret str_equals(@a, @b);
 }
 
 # hash_i64: splitmix64 hash for i64.
 pub fun hash_i64(p: ptr) u64 {
-    val n: &i64 = p::&i64;
+    val n: *i64 = p::*i64;
     var x: u64 = (@n)::u64;
     x = x ^ (x >> 33);
     x = x * 0xff51afd7ed558ccd;
@@ -393,14 +393,14 @@ pub fun hash_i64(p: ptr) u64 {
 
 # eq_i64: equality function for i64.
 pub fun eq_i64(pa: ptr, pb: ptr) bool {
-    val a: &i64 = pa::&i64;
-    val b: &i64 = pb::&i64;
+    val a: *i64 = pa::*i64;
+    val b: *i64 = pb::*i64;
     ret @a == @b;
 }
 
 # hash_u64: splitmix64 hash for u64.
 pub fun hash_u64(p: ptr) u64 {
-    val n: &u64 = p::&u64;
+    val n: *u64 = p::*u64;
     var x: u64 = @n;
     x = x ^ (x >> 33);
     x = x * 0xff51afd7ed558ccd;
@@ -412,8 +412,8 @@ pub fun hash_u64(p: ptr) u64 {
 
 # eq_u64: equality function for u64.
 pub fun eq_u64(pa: ptr, pb: ptr) bool {
-    val a: &u64 = pa::&u64;
-    val b: &u64 = pb::&u64;
+    val a: *u64 = pa::*u64;
+    val b: *u64 = pb::*u64;
     ret @a == @b;
 }
 
