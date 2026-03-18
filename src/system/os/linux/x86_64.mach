@@ -29,33 +29,30 @@ fun thread_trampoline() {
     var done_addr: usize = 0;
     var stack_base: usize = 0;
     var stack_size: usize = 0;
-    asm {
-        x86_64 {
-            mov rax, [rbp+8]
-            mov [fn_addr], rax
-            mov rax, [rbp+16]
-            mov [done_addr], rax
-            mov rax, [rbp+24]
-            mov [stack_base], rax
-            mov rax, [rbp+32]
-            mov [stack_size], rax
-        }
+    asm x86_64 {
+        mov rax, [rbp+8]
+        mov [fn_addr], rax
+        mov rax, [rbp+16]
+        mov [done_addr], rax
+        mov rax, [rbp+24]
+        mov [stack_base], rax
+        mov rax, [rbp+32]
+        mov [stack_size], rax
     }
     val fn_ptr: fun() = fn_addr::fun();
     fn_ptr();
     val done: *i64 = done_addr::*i64;
     @done = 1;
     shared.syscall6(shared.SYS_FUTEX, done_addr, shared.FUTEX_WAKE, 1, 0, 0, 0);
-    asm {
-        x86_64 {
-            mov rdi, [stack_base]
-            mov rsi, [stack_size]
-            mov rax, 11
-            syscall
-            mov rdi, 0
-            mov rax, 60
-            syscall
-        }
+    asm x86_64 {
+        # munmap stack then exit
+        mov rdi, [stack_base]
+        mov rsi, [stack_size]
+        mov rax, 11           # SYS_munmap
+        syscall
+        mov rdi, 0
+        mov rax, 60           # SYS_exit
+        syscall
     }
     asm { trap }
 }
@@ -87,21 +84,19 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
     var result: i64 = 0;
 
     asm { fence.seq_cst }
-    asm {
-        x86_64 {
-            mov rdi, [flags]
-            mov rsi, [stack_ptr]
-            xor rdx, rdx
-            xor r10, r10
-            xor r8, r8
-            mov rax, 56
-            syscall
-            mov [result], rax
-        }
+    asm x86_64 {
+        mov rdi, [flags]
+        mov rsi, [stack_ptr]
+        xor rdx, rdx
+        xor r10, r10
+        xor r8, r8
+        mov rax, 56           # SYS_clone
+        syscall
+        mov [result], rax
     }
 
     if (result == 0) {
-        asm { x86_64 { ret } }
+        asm x86_64 { ret }
     }
 
     ret result;

@@ -579,7 +579,7 @@ fun filetime_to_unix(ft: FILETIME, sec: *i64, nsec: *i64) {
 # argv: null-terminated array of null-terminated strings
 # buf:  destination buffer
 # cap:  size of buf in bytes
-fun build_cmdline(argv: &*u8, buf: *u8, cap: usize) {
+fun build_cmdline(argv: **u8, buf: *u8, cap: usize) {
     var off: usize = 0;
     var i: usize = 0;
     for (argv[i]::usize != 0 && off < cap - 1) {
@@ -1116,7 +1116,7 @@ pub fun abort() {
 # argv:     null-terminated argument array
 # envp:     null-terminated environment array (ignored on windows)
 # ret:      child PID on success, or negative errno
-pub fun spawn(pathname: *u8, argv: &*u8, envp: &*u8) i64 {
+pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
     var cmdline: [32768]u8;
     build_cmdline(argv, ?cmdline[0], 32768);
 

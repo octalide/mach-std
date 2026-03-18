@@ -11,7 +11,7 @@
 #
 # user code must define:
 #   $main.symbol = "main";
-#   fun main(argc: i64, argv: &*u8) i64 { ... }
+#   fun main(argc: i64, argv: **u8) i64 { ... }
 
 $if ($mach.build.target.os.id != $mach.os.windows.id) {
     $error("std.runtime.windows.x86_64: requires windows target");
@@ -36,23 +36,21 @@ var argc: i64 = 0;
 
 $_start.symbol = "mainCRTStartup";
 pub fun _start() {
-    asm {
-        x86_64 {
-            and rsp, -16      # align stack to 16 bytes
-            sub rsp, 32       # shadow space
+    asm x86_64 {
+        and rsp, -16      # align stack to 16 bytes
+        sub rsp, 32       # shadow space
 
-            call GetCommandLineA
+        call GetCommandLineA
 
-            mov rcx, rax      # cmdline -> 1st arg
-            call parse_cmdline
+        mov rcx, rax      # cmdline -> 1st arg
+        call parse_cmdline
 
-            mov rcx, [argc]
-            lea rdx, [argv_ptrs]
-            call main
+        mov rcx, [argc]
+        lea rdx, [argv_ptrs]
+        call main
 
-            mov ecx, eax      # exit code -> rcx (1st argument, Windows convention)
-            call ExitProcess
-        }
+        mov ecx, eax      # exit code -> rcx (1st argument, Windows convention)
+        call ExitProcess
     }
 }
 

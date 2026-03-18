@@ -16,7 +16,7 @@
 #
 # user code must define:
 #   $main.symbol = "main";
-#   fun main(argc: i64, argv: &*u8) i64 { ... }
+#   fun main(argc: i64, argv: **u8) i64 { ... }
 
 $if ($mach.build.target.os.id != $mach.os.darwin.id) {
     $error("std.runtime.darwin.aarch64: requires darwin target");
@@ -39,33 +39,31 @@ fun _rt_init() {
 
 $_start.symbol = "start";
 pub fun _start() {
-    asm {
-        aarch64 {
-            ldr x0, [sp]      # argc -> x0 (1st argument)
-            add x1, sp, #8    # argv -> x1 (2nd argument)
+    asm aarch64 {
+        ldr x0, [sp]      # argc -> x0 (1st argument)
+        add x1, sp, #8    # argv -> x1 (2nd argument)
 
-            # envp = argv + (argc + 1) * 8
-            add x2, x0, #1
-            add x2, x1, x2, lsl #3
+        # envp = argv + (argc + 1) * 8
+        add x2, x0, #1
+        add x2, x1, x2, lsl #3
 
-            adrp x3, _rt_argc
-            str x0, [x3, :lo12:_rt_argc]
-            adrp x3, _rt_argv
-            str x1, [x3, :lo12:_rt_argv]
-            adrp x3, _rt_envp
-            str x2, [x3, :lo12:_rt_envp]
+        adrp x3, _rt_argc
+        str x0, [x3, :lo12:_rt_argc]
+        adrp x3, _rt_argv
+        str x1, [x3, :lo12:_rt_argv]
+        adrp x3, _rt_envp
+        str x2, [x3, :lo12:_rt_envp]
 
-            and sp, sp, #-16  # align stack to 16 bytes
-            bl _rt_init
+        and sp, sp, #-16  # align stack to 16 bytes
+        bl _rt_init
 
-            adrp x3, _rt_argc
-            ldr x0, [x3, :lo12:_rt_argc]
-            adrp x3, _rt_argv
-            ldr x1, [x3, :lo12:_rt_argv]
-            bl main
+        adrp x3, _rt_argc
+        ldr x0, [x3, :lo12:_rt_argc]
+        adrp x3, _rt_argv
+        ldr x1, [x3, :lo12:_rt_argv]
+        bl main
 
-            mov x16, #1       # SYS_exit
-            svc #0x80
-        }
+        mov x16, #1       # SYS_exit
+        svc #0x80
     }
 }

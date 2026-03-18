@@ -69,6 +69,7 @@ pub fun str_compare(s: str, other: str) i64 {
 
         i = i + 1;
     }
+    ret 0;
 }
 
 # str_starts_with: check if the string starts with the given prefix.

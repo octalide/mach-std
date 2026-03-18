@@ -26,21 +26,19 @@ pub fun page_size() usize {
 # ret: 0 on success, or negative errno
 pub fun pipe(fds: *i32) i64 {
     var result: i64 = 0;
-    asm {
-        x86_64 {
-            mov r8, rdi
-            mov eax, 0x200002A
-            syscall
-            jc 1f
-            mov [r8], eax
-            mov [r8+4], edx
-            xor eax, eax
-            jmp 2f
-        1:
-            neg rax
-        2:
-            mov [result], rax
-        }
+    asm x86_64 {
+        mov r8, rdi
+        mov eax, 0x200002A
+        syscall
+        jc 1f
+        mov [r8], eax
+        mov [r8+4], edx
+        xor eax, eax
+        jmp 2f
+    1:
+        neg rax
+    2:
+        mov [result], rax
     }
     ret result;
 }

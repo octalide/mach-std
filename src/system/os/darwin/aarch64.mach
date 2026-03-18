@@ -26,21 +26,19 @@ pub fun page_size() usize {
 # ret: 0 on success, or negative errno
 pub fun pipe(fds: *i32) i64 {
     var result: i64 = 0;
-    asm {
-        aarch64 {
-            mov x9, x0
-            mov x16, 42
-            svc 0x80
-            b.cs 1f
-            str w0, [x9]
-            str w1, [x9, 4]
-            mov x0, 0
-            b 2f
-        1:
-            neg x0, x0
-        2:
-            str x0, [result]
-        }
+    asm aarch64 {
+        mov x9, x0
+        mov x16, 42
+        svc 0x80
+        b.cs 1f
+        str w0, [x9]
+        str w1, [x9, 4]
+        mov x0, 0
+        b 2f
+    1:
+        neg x0, x0
+    2:
+        str x0, [result]
     }
     ret result;
 }

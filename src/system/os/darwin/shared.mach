@@ -489,7 +489,7 @@ pub fun vfork() i64 {
     ret syscall0(SYS_VFORK);
 }
 
-pub fun exec(pathname: *u8, argv: &*u8, envp: &*u8) i64 {
+pub fun exec(pathname: *u8, argv: **u8, envp: **u8) i64 {
     ret syscall3(SYS_EXECVE, pathname::usize, argv::usize, envp::usize);
 }
 
@@ -525,7 +525,7 @@ pub fwd os_shared.was_continued;
 # argv:     null-terminated argument array
 # envp:     null-terminated environment array
 # ret:      child PID on success, or negative errno
-pub fun spawn(pathname: *u8, argv: &*u8, envp: &*u8) i64 {
+pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
     val pid: i64 = fork();
     if (pid < 0) {
         ret pid;
@@ -590,7 +590,7 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
 # ret:  length of value on success, or NOT_FOUND
 pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     if (_envp == 0) { ret os_shared.NOT_FOUND; }
-    val envp: &*u8 = _envp::&*u8;
+    val envp: **u8 = _envp::**u8;
     val name_len: usize = str_len(name);
     var i: usize = 0;
     for (envp[i]::usize != 0) {
