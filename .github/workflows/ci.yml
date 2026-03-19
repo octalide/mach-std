@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Install mach
+        run: |
+          curl -fsSL "https://github.com/octalide/mach/releases/latest/download/mach" -o /usr/local/bin/mach
+          chmod +x /usr/local/bin/mach
+
+      - name: Build
+        run: mach build .
+
+      - name: Test
+        run: mach test .
