@@ -12,7 +12,7 @@ use std.types.size;
 # ret: loaded value
 pub fun load(ptr: *i64) i64 {
     var result: i64 = 0;
-    asm { atomic.load.seq_cst result, ptr }
+    asm { atomic.load.seq_cst {result}, {ptr} }
     ret result;
 }
 
@@ -21,7 +21,7 @@ pub fun load(ptr: *i64) i64 {
 # ptr: address to store to
 # v:   value to store
 pub fun store(ptr: *i64, v: i64) {
-    asm { atomic.store.seq_cst ptr, v }
+    asm { atomic.store.seq_cst {ptr}, {v} }
 }
 
 # atomic compare-and-swap.
@@ -35,7 +35,7 @@ pub fun store(ptr: *i64, v: i64) {
 pub fun cas(ptr: *i64, expected: *i64, desired: i64) bool {
     var old: i64 = 0;
     val exp: i64 = @expected;
-    asm { atomic.cas.seq_cst old, ptr, exp, desired }
+    asm { atomic.cas.seq_cst {old}, {ptr}, {exp}, {desired} }
     if (old == exp) { ret true; }
     @expected = old;
     ret false;
@@ -48,7 +48,7 @@ pub fun cas(ptr: *i64, expected: *i64, desired: i64) bool {
 # ret: previous value
 pub fun fetch_add(ptr: *i64, v: i64) i64 {
     var old: i64 = 0;
-    asm { atomic.rmw.add.seq_cst old, ptr, v }
+    asm { atomic.rmw.add.seq_cst {old}, {ptr}, {v} }
     ret old;
 }
 
@@ -59,7 +59,7 @@ pub fun fetch_add(ptr: *i64, v: i64) i64 {
 # ret: previous value
 pub fun fetch_sub(ptr: *i64, v: i64) i64 {
     var old: i64 = 0;
-    asm { atomic.rmw.sub.seq_cst old, ptr, v }
+    asm { atomic.rmw.sub.seq_cst {old}, {ptr}, {v} }
     ret old;
 }
 
@@ -70,7 +70,7 @@ pub fun fetch_sub(ptr: *i64, v: i64) i64 {
 # ret: previous value
 pub fun exchange(ptr: *i64, v: i64) i64 {
     var old: i64 = 0;
-    asm { atomic.rmw.xchg.seq_cst old, ptr, v }
+    asm { atomic.rmw.xchg.seq_cst {old}, {ptr}, {v} }
     ret old;
 }
 
