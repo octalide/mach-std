@@ -38,7 +38,7 @@ pub fun pipe(fds: *i32) i64 {
     1:
         neg x0, x0
     2:
-        str x0, [result]
+        str x0, {result}
     }
     ret result;
 }

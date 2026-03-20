@@ -31,13 +31,13 @@ fun thread_trampoline() {
     var stack_size: usize = 0;
     asm x86_64 {
         mov rax, [rbp+8]
-        mov [fn_addr], rax
+        mov {fn_addr}, rax
         mov rax, [rbp+16]
-        mov [done_addr], rax
+        mov {done_addr}, rax
         mov rax, [rbp+24]
-        mov [stack_base], rax
+        mov {stack_base}, rax
         mov rax, [rbp+32]
-        mov [stack_size], rax
+        mov {stack_size}, rax
     }
     val fn_ptr: fun() = fn_addr::fun();
     fn_ptr();
@@ -46,8 +46,8 @@ fun thread_trampoline() {
     shared.syscall6(shared.SYS_FUTEX, done_addr, shared.FUTEX_WAKE, 1, 0, 0, 0);
     asm x86_64 {
         # munmap stack then exit
-        mov rdi, [stack_base]
-        mov rsi, [stack_size]
+        mov rdi, {stack_base}
+        mov rsi, {stack_size}
         mov rax, 11           # SYS_munmap
         syscall
         mov rdi, 0
@@ -85,14 +85,14 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
 
     asm { fence.seq_cst }
     asm x86_64 {
-        mov rdi, [flags]
-        mov rsi, [stack_ptr]
+        mov rdi, {flags}
+        mov rsi, {stack_ptr}
         xor rdx, rdx
         xor r10, r10
         xor r8, r8
         mov rax, 56           # SYS_clone
         syscall
-        mov [result], rax
+        mov {result}, rax
     }
 
     if (result == 0) {

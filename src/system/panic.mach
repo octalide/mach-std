@@ -17,8 +17,8 @@ pub fun panic(msg: *u8) {
         asm x86_64 {
             mov eax, 1        # SYS_write
             mov edi, 2        # fd = stderr
-            mov rsi, [msg]
-            mov rdx, [len]
+            mov rsi, {msg}
+            mov rdx, {len}
             syscall
         }
     }
@@ -27,8 +27,8 @@ pub fun panic(msg: *u8) {
             asm x86_64 {
                 mov eax, 0x2000004  # SYS_write (darwin)
                 mov edi, 2          # fd = stderr
-                mov rsi, [msg]
-                mov rdx, [len]
+                mov rsi, {msg}
+                mov rdx, {len}
                 syscall
             }
         }
@@ -36,8 +36,8 @@ pub fun panic(msg: *u8) {
             asm aarch64 {
                 mov x16, 4    # SYS_write (darwin aarch64)
                 mov x0, 2     # fd = stderr
-                ldr x1, [msg]
-                ldr x2, [len]
+                ldr x1, {msg}
+                ldr x2, {len}
                 svc 0x80
             }
         }
