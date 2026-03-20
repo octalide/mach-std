@@ -227,7 +227,7 @@ pub val EINTR_MAX_RETRIES: usize = 8;
 pub fun syscall0(n: usize) i64 {
     var out: i64;
     asm {
-        syscall out, n
+        syscall {out}, {n}
     }
     ret out;
 }
@@ -240,7 +240,7 @@ pub fun syscall0(n: usize) i64 {
 pub fun syscall1(n: usize, a0: usize) i64 {
     var out: i64;
     asm {
-        syscall out, n, a0
+        syscall {out}, {n}, {a0}
     }
     ret out;
 }
@@ -254,7 +254,7 @@ pub fun syscall1(n: usize, a0: usize) i64 {
 pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
     var out: i64;
     asm {
-        syscall out, n, a0, a1
+        syscall {out}, {n}, {a0}, {a1}
     }
     ret out;
 }
@@ -269,7 +269,7 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
 pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
     var out: i64;
     asm {
-        syscall out, n, a0, a1, a2
+        syscall {out}, {n}, {a0}, {a1}, {a2}
     }
     ret out;
 }
@@ -285,7 +285,7 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
 pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
     var out: i64;
     asm {
-        syscall out, n, a0, a1, a2, a3
+        syscall {out}, {n}, {a0}, {a1}, {a2}, {a3}
     }
     ret out;
 }
@@ -302,7 +302,7 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
 pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
     var out: i64;
     asm {
-        syscall out, n, a0, a1, a2, a3, a4
+        syscall {out}, {n}, {a0}, {a1}, {a2}, {a3}, {a4}
     }
     ret out;
 }
@@ -320,7 +320,7 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
 pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
     var out: i64;
     asm {
-        syscall out, n, a0, a1, a2, a3, a4, a5
+        syscall {out}, {n}, {a0}, {a1}, {a2}, {a3}, {a4}, {a5}
     }
     ret out;
 }
