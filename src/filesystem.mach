@@ -427,7 +427,7 @@ fun info_from_stat(st: *os.stat_t) FileInfo {
     };
 }
 
-fun file_write_cb(ctx: ptr, buf: *u8, len: usize) Result[usize, str] {
+pub fun file_write_cb(ctx: ptr, buf: *u8, len: usize) Result[usize, str] {
     ret write(ctx::*File, buf, len);
 }
 
