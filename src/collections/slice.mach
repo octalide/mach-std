@@ -1,12 +1,11 @@
-# mutable slice over a contiguous sequence of elements
+# slice over a contiguous sequence of elements
 
 use std.types.bool;
 use std.types.size;
 use std.types.result;
 use std.types.string;
-use std.collections.view;
 
-# Slice[T]: mutable view into a contiguous sequence of T
+# Slice[T]: pointer + length view over a contiguous sequence of T.
 # ---
 # data: pointer to the first element
 # size: number of elements in the slice
@@ -54,17 +53,6 @@ pub fun set[T](s: Slice[T], index: usize, value: T) Result[bool, str] {
     ret ok[bool, str](true);
 }
 
-# as_view: convert a mutable Slice[T] to a read-only View[T].
-# ---
-# s:   slice to convert
-# ret: a View[T] over the same data
-pub fun as_view[T](s: Slice[T]) View[T] {
-    var v: View[T];
-    v.data = s.data;
-    v.size = s.size;
-    ret v;
-}
-
 test "slice: make creates slice from pointer and size" {
     var arr: [4]i64 = [4]i64{10, 20, 30, 40};
     val s: Slice[i64] = make[i64](?arr[0], 4);
@@ -101,24 +89,6 @@ test "slice: data is mutable via slice" {
     val s: Slice[i64] = make[i64](?arr[0], 3);
     s.data[1] = 999;
     if (arr[1] != 999) { ret 0; }
-    ret 1;
-}
-
-test "slice: as_view converts to view" {
-    var arr: [3]i64 = [3]i64{5, 6, 7};
-    val s: Slice[i64] = make[i64](?arr[0], 3);
-    val v: View[i64] = as_view[i64](s);
-    if (v.size != 3) { ret 0; }
-    if (v.data == nil) { ret 0; }
-    ret 1;
-}
-
-test "slice: as_view preserves data reference" {
-    var arr: [2]i64 = [2]i64{42, 43};
-    val s: Slice[i64] = make[i64](?arr[0], 2);
-    val v: View[i64] = as_view[i64](s);
-    if (v.data[0] != 42) { ret 0; }
-    if (v.data[1] != 43) { ret 0; }
     ret 1;
 }
 

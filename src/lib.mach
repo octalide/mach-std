@@ -8,7 +8,6 @@ use std.types.path;
 use std.types.semver;
 
 use std.collections.slice;
-use std.collections.view;
 use std.collections.vector;
 use std.collections.map;
 use std.collections.sort;
