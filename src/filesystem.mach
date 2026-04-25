@@ -63,7 +63,7 @@ val HEX_CHARS:         str   = "0123456789abcdef";
 # p:   file path
 # ret: the opened File, or an error message
 pub fun open(p: str) Result[File, str] {
-    val raw: i64 = os.open(os.AT_FDCWD, p, os.O_RDONLY, 0);
+    val raw: i64 = os.open(os.AT_FDCWD, p.data, os.O_RDONLY, 0);
     if (raw < 0) { ret err[File, str](os.message(raw)); }
     ret ok[File, str](File{fd: raw::i32});
 }
@@ -75,7 +75,7 @@ pub fun open(p: str) Result[File, str] {
 # mode:  permission bits for creation
 # ret:   the opened File, or an error message
 pub fun open_with(p: str, flags: i32, mode: i32) Result[File, str] {
-    val raw: i64 = os.open(os.AT_FDCWD, p, flags, mode);
+    val raw: i64 = os.open(os.AT_FDCWD, p.data, flags, mode);
     if (raw < 0) { ret err[File, str](os.message(raw)); }
     ret ok[File, str](File{fd: raw::i32});
 }
@@ -87,7 +87,7 @@ pub fun open_with(p: str, flags: i32, mode: i32) Result[File, str] {
 # ret:  the created File, or an error message
 pub fun create(p: str, mode: i32) Result[File, str] {
     val flags: i32 = os.O_CREAT | os.O_TRUNC | os.O_WRONLY;
-    val raw: i64 = os.open(os.AT_FDCWD, p, flags, mode);
+    val raw: i64 = os.open(os.AT_FDCWD, p.data, flags, mode);
     if (raw < 0) { ret err[File, str](os.message(raw)); }
     ret ok[File, str](File{fd: raw::i32});
 }
@@ -212,7 +212,10 @@ pub fun read_all(a: *allocator.Allocator, p: str) Result[str, str] {
     close(?f);
 
     buf[total] = 0;
-    ret ok[str, str](buf::str);
+    var s: str;
+    s.len  = total::u32;
+    s.data = buf;
+    ret ok[str, str](s);
 }
 
 # write_file: write data to a file at path, creating or truncating it.
@@ -262,9 +265,9 @@ pub fun info_is_symlink(fi: *FileInfo) bool {
 # p:   path to query
 # ret: file metadata, or an error message
 pub fun info_path(p: str) Result[FileInfo, str] {
-    if (p == nil) { ret err[FileInfo, str]("path is nil"); }
+    if (path.is_empty(p)) { ret err[FileInfo, str]("path is empty"); }
     var st: os.stat_t;
-    val raw: i64 = os.stat_path(os.AT_FDCWD, p, ?st, 0);
+    val raw: i64 = os.stat_path(os.AT_FDCWD, p.data, ?st, 0);
     if (raw < 0) { ret err[FileInfo, str](os.message(raw)); }
     ret ok[FileInfo, str](info_from_stat(?st));
 }
@@ -295,7 +298,7 @@ pub fun exists(p: str) bool {
 # p:   path to remove
 # ret: true on success, or an error message
 pub fun unlink(p: str) Result[bool, str] {
-    val raw: i64 = os.unlink(os.AT_FDCWD, p, 0);
+    val raw: i64 = os.unlink(os.AT_FDCWD, p.data, 0);
     if (raw < 0) { ret err[bool, str](os.message(raw)); }
     ret ok[bool, str](true);
 }
@@ -306,7 +309,7 @@ pub fun unlink(p: str) Result[bool, str] {
 # to:   destination path
 # ret:  true on success, or an error message
 pub fun rename(from: str, to: str) Result[bool, str] {
-    val raw: i64 = os.rename(os.AT_FDCWD, from, os.AT_FDCWD, to);
+    val raw: i64 = os.rename(os.AT_FDCWD, from.data, os.AT_FDCWD, to.data);
     if (raw < 0) { ret err[bool, str](os.message(raw)); }
     ret ok[bool, str](true);
 }
@@ -317,8 +320,8 @@ pub fun rename(from: str, to: str) Result[bool, str] {
 # mode: permission bits
 # ret:  true on success, or an error message
 pub fun create_dir(p: str, mode: i32) Result[bool, str] {
-    if (p == nil) { ret err[bool, str]("path is nil"); }
-    val raw: i64 = os.make_dir(os.AT_FDCWD, p, mode);
+    if (path.is_empty(p)) { ret err[bool, str]("path is empty"); }
+    val raw: i64 = os.make_dir(os.AT_FDCWD, p.data, mode);
     if (raw < 0) { ret err[bool, str](os.message(raw)); }
     ret ok[bool, str](true);
 }
@@ -330,7 +333,6 @@ pub fun create_dir(p: str, mode: i32) Result[bool, str] {
 # mode: permission bits
 # ret:  true on success, or an error message
 pub fun create_dir_all(a: *allocator.Allocator, p: str, mode: i32) Result[bool, str] {
-    if (p == nil)         { ret err[bool, str]("path is nil"); }
     if (path.is_empty(p)) { ret err[bool, str]("path is empty"); }
     if (path.is_root(p))  { ret ok[bool, str](true); }
     if (is_dir(p))        { ret ok[bool, str](true); }
@@ -346,8 +348,8 @@ pub fun create_dir_all(a: *allocator.Allocator, p: str, mode: i32) Result[bool, 
     val parent_path: path.Path = unwrap_ok[path.Path, str](parent_res);
     val parent_create: Result[bool, str] = create_dir_all(a, parent_path, mode);
 
-    val parent_len: usize = str_len(parent_path);
-    allocator.deallocate[u8](a, parent_path::ptr::*u8, parent_len + 1);
+    val parent_len: usize = parent_path.len::usize;
+    allocator.deallocate[u8](a, parent_path.data, parent_len + 1);
 
     if (is_err[bool, str](parent_create)) { ret parent_create; }
 
@@ -378,13 +380,13 @@ pub fun temp_create(a: *allocator.Allocator, prefix: str) Result[TempFile, str] 
         val p: path.Path = unwrap_ok[path.Path, str](name_res);
 
         val flags: i32 = os.O_CREAT | os.O_EXCL | os.O_RDWR;
-        val raw: i64 = os.open(os.AT_FDCWD, p, flags, 384);
+        val raw: i64 = os.open(os.AT_FDCWD, p.data, flags, 384);
         if (raw >= 0) {
             ret ok[TempFile, str](TempFile{file: File{fd: raw::i32}, path: p});
         }
 
-        val p_len: usize = str_len(p);
-        allocator.deallocate[u8](a, p::ptr::*u8, p_len + 1);
+        val p_len: usize = p.len::usize;
+        allocator.deallocate[u8](a, p.data, p_len + 1);
 
         if (raw != os.EEXIST) {
             ret err[TempFile, str](os.message(raw));
@@ -439,31 +441,28 @@ fun temp_build_path(a: *allocator.Allocator, prefix: str, rnd: *u8) Result[path.
     var buf: [256]u8;
     var off: usize = 0;
 
-    val dir_len: usize = str_len(TEMP_DIR);
-    var prefix_len: usize = 0;
-    if (prefix != nil) {
-        prefix_len = str_len(prefix);
-    }
-    val needed: usize = dir_len + 1 + prefix_len + 1 + 16 + 1;
+    val dir_len:    usize = TEMP_DIR.len::usize;
+    val prefix_len: usize = prefix.len::usize;
+    val needed:     usize = dir_len + 1 + prefix_len + 1 + 16 + 1;
     if (needed > 256) {
         ret err[path.Path, str]("temp path too long");
     }
 
-    mem.raw_copy(?buf[0], TEMP_DIR, dir_len);
+    mem.raw_copy(?buf[0], TEMP_DIR.data::ptr, dir_len);
     off = dir_len;
 
     buf[off] = 47;
     off = off + 1;
 
-    if (prefix != nil) {
-        mem.raw_copy(?buf[off], prefix, prefix_len);
+    if (prefix_len > 0) {
+        mem.raw_copy(?buf[off], prefix.data::ptr, prefix_len);
         off = off + prefix_len;
     }
 
     buf[off] = 95;
     off = off + 1;
 
-    val hex: *u8 = HEX_CHARS::*u8;
+    val hex: *u8 = HEX_CHARS.data;
     var i: usize = 0;
     for (i < 8) {
         buf[off] = hex[rnd[i]::usize >> 4];
@@ -481,7 +480,11 @@ fun temp_build_path(a: *allocator.Allocator, prefix: str, rnd: *u8) Result[path.
     val out: *u8 = unwrap_ok[*u8, str](r);
     mem.raw_copy(out::ptr, ?buf[0], off);
     out[off] = 0;
-    ret ok[path.Path, str](out::str);
+
+    var p: str;
+    p.len  = off::u32;
+    p.data = out;
+    ret ok[path.Path, str](p);
 }
 
 fun write_u64(off: usize, buf: *u8, cap: usize, n: u64) usize {
@@ -521,7 +524,7 @@ test "filesystem: temp_create creates file" {
     if (is_err[TempFile, str](r)) { ret 0; }
     var tf: TempFile = unwrap_ok[TempFile, str](r);
     if (tf.file.fd < 0) { ret 2; }
-    if (tf.path == nil) { ret 3; }
+    if (tf.path.data == nil) { ret 3; }
     val cr: Result[bool, str] = temp_close_and_remove(?tf);
     if (is_err[bool, str](cr)) { ret 4; }
     ret 1;
@@ -536,7 +539,7 @@ test "filesystem: temp file write and read" {
     var tf: TempFile = unwrap_ok[TempFile, str](r);
 
     val data: str = "hello temp file";
-    val wr: Result[usize, str] = write(?tf.file, data, str_len(data));
+    val wr: Result[usize, str] = write(?tf.file, data.data, str_len(data));
     if (is_err[usize, str](wr)) { ret 2; }
     if (unwrap_ok[usize, str](wr) != str_len(data)) { ret 3; }
 
@@ -548,7 +551,10 @@ test "filesystem: temp file write and read" {
     if (is_err[usize, str](rr)) { ret 5; }
     if (unwrap_ok[usize, str](rr) != str_len(data)) { ret 6; }
 
-    if (!str_starts_with(?buf[0], "hello temp file")) { ret 7; }
+    var view: str;
+    view.len  = str_len(data)::u32;
+    view.data = ?buf[0];
+    if (!str_starts_with(view, "hello temp file")) { ret 7; }
 
     temp_close_and_remove(?tf);
     ret 1;
@@ -563,7 +569,7 @@ test "filesystem: info returns valid metadata" {
     var tf: TempFile = unwrap_ok[TempFile, str](cr);
 
     val data: str = "some content";
-    write(?tf.file, data, str_len(data));
+    write(?tf.file, data.data, str_len(data));
 
     val ir: Result[FileInfo, str] = info(?tf.file);
     if (is_err[FileInfo, str](ir)) { ret 2; }
@@ -583,7 +589,7 @@ test "filesystem: create write close open read" {
     var tf: TempFile = unwrap_ok[TempFile, str](cr);
 
     val data: str = "test data 12345";
-    val wr: Result[usize, str] = write(?tf.file, data, str_len(data));
+    val wr: Result[usize, str] = write(?tf.file, data.data, str_len(data));
     if (is_err[usize, str](wr)) { ret 2; }
 
     val clr: Result[bool, str] = temp_close(?tf);

@@ -897,11 +897,11 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
 pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     if (_envp == 0) { ret os_shared.NOT_FOUND; }
     val envp: **u8 = _envp::**u8;
-    val name_len: usize = str_len(name);
+    val name_len: usize = zstr_len(name);
     var i: usize = 0;
     for (envp[i]::usize != 0) {
         val entry: *u8 = envp[i];
-        if (str_starts_with(entry, name) && entry[name_len] == '='::u8) {
+        if (entry_starts_with(entry, name, name_len) && entry[name_len] == '='::u8) {
             if (cap == 0) { ret 0; }
             val val_start: usize = name_len + 1;
             var j: usize = 0;
@@ -917,6 +917,15 @@ pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
         i = i + 1;
     }
     ret os_shared.NOT_FOUND;
+}
+
+fun entry_starts_with(entry: *u8, name: *u8, name_len: usize) bool {
+    var i: usize = 0;
+    for (i < name_len) {
+        if (entry[i] != name[i]) { ret false; }
+        i = i + 1;
+    }
+    ret true;
 }
 
 # threads
@@ -1111,14 +1120,14 @@ pub fun sock_setopt(fd: i32, level: i32, opt: i32, value: *u8, vallen: usize) i6
 
 # dns
 
-pub val DNS_HOSTS_PATH: str = "/etc/hosts";
+pub val DNS_HOSTS_PATH: zstr = `/etc/hosts`;
 
 # dns_nameserver: read the first nameserver from /etc/resolv.conf.
 # ---
 # ns:  pointer to 4 bytes to fill with the IPv4 address
 # ret: 0 on success, or NOT_FOUND / negative errno
 pub fun dns_nameserver(ns: *u8) i64 {
-    val fd: i64 = open(AT_FDCWD, "/etc/resolv.conf", O_RDONLY, 0);
+    val fd: i64 = open(AT_FDCWD, `/etc/resolv.conf`, O_RDONLY, 0);
     if (fd < 0) { ret fd; }
 
     var buf: [2048]u8;
@@ -1133,7 +1142,7 @@ pub fun dns_nameserver(ns: *u8) i64 {
     for (pos < len) {
         for (pos < len && (buf[pos] == 32 || buf[pos] == 9)) { pos = pos + 1; }
 
-        if (pos + 10 < len && dns_prefix_match(?buf[pos], "nameserver", 10)) {
+        if (pos + 10 < len && dns_prefix_match(?buf[pos], `nameserver`, 10)) {
             pos = pos + 10;
             for (pos < len && (buf[pos] == 32 || buf[pos] == 9)) { pos = pos + 1; }
             var start: usize = pos;

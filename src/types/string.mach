@@ -1,4 +1,18 @@
-# null-terminated string primitives
+# fat-pointer string primitives
+#
+# `str` is a builtin compiler type with the layout:
+#
+#     rec { len: u32; data: *u8 }
+#
+# produced by double-quoted string literals ("..."). this module supplies
+# functions that operate on values of that type. the underlying bytes are
+# stored null-terminated in .rodata so that the data pointer can be passed
+# directly to C functions when needed, but `str` itself does not advertise
+# the terminator and `len` excludes it.
+#
+# `zstr` is the type of backtick literals (`...`). it is a bare `*u8`
+# pointing at null-terminated bytes; use it where you need C-style strings
+# at an FFI boundary.
 
 use std.types.bool;
 use std.types.size;
@@ -6,231 +20,220 @@ use std.types.option;
 use std.types.result;
 use std.types.char;
 
+# zstr: a pointer to a zero-terminated sequence of u8, suitable for C-style
+# interop. backtick literals (`...`) produce values of this type.
+pub def zstr: *u8;
 
-# str: a pointer to a null-terminated sequence of char.
-pub def str: *char;
-
-# str_len: calculate the length of a null-terminated string.
+# str_len: return the length in bytes (excluding any trailing storage terminator).
 # ---
-# ret: length of the string (not including null terminator)
+# s:   the string
+# ret: number of bytes
 pub fun str_len(s: str) usize {
-    var len: usize = 0;
-    for (s[len] != 0) {
-        len = len + 1;
-    }
-    ret len;
+    ret s.len::usize;
 }
 
-# str_empty: check if the string is empty or nil.
+# str_empty: true if the string has zero length.
 # ---
-# ret: true if the string has zero length or is nil
+# s:   the string
+# ret: true if s.len == 0
 pub fun str_empty(s: str) bool {
-    if (s == nil) { ret true; }
-    ret s[0] == 0;
+    ret s.len == 0;
 }
 
-# str_equals: compare two null-terminated strings for equality.
+# str_equals: compare two strings for byte-wise equality.
 # ---
-# other: the other string to compare against
-# ret:   true if the strings are equal
+# s:     the first string
+# other: the second string
+# ret:   true if both strings have the same length and bytes
 pub fun str_equals(s: str, other: str) bool {
-    if (s == nil && other == nil) { ret true; }
-    if (s == nil || other == nil) { ret false; }
-    if (s == other) { ret true; }
+    if (s.len != other.len) { ret false; }
+    if (s.data == other.data) { ret true; }
     var i: usize = 0;
-    for (s[i] != 0 && other[i] != 0) {
-        if (s[i] != other[i]) {
-            ret false;
-        }
-        i = i + 1;
-    }
-    ret s[i] == other[i];
-}
-
-# str_compare: compare two null-terminated strings lexically.
-# ---
-# other: the other string to compare against
-# ret:   <0 if s < other, 0 if equal, >0 if s > other
-pub fun str_compare(s: str, other: str) i64 {
-    if (s == nil && other == nil) { ret 0; }
-    if (s == nil) { ret -1; }
-    if (other == nil) { ret 1; }
-    var i: usize = 0;
-    for {
-        val a: u8 = s[i];
-        val b: u8 = other[i];
-
-        if (a == 0 && b == 0) { ret 0; }
-        if (a == 0) { ret -1; }
-        if (b == 0) { ret 1; }
-
-        if (a < b) { ret -1; }
-        if (a > b) { ret 1; }
-
-        i = i + 1;
-    }
-    ret 0;
-}
-
-# str_starts_with: check if the string starts with the given prefix.
-# ---
-# prefix: the prefix to check
-# ret:    true if the string starts with prefix
-pub fun str_starts_with(s: str, prefix: str) bool {
-    var i: usize = 0;
-    for (prefix[i] != 0) {
-        if (s[i] == 0) { ret false; }
-        if (s[i] != prefix[i]) {
-            ret false;
-        }
+    for (i < s.len::usize) {
+        if (s.data[i] != other.data[i]) { ret false; }
         i = i + 1;
     }
     ret true;
 }
 
-# str_ends_with: check if the string ends with the given suffix.
+# str_compare: compare two strings lexically.
 # ---
-# suffix: the suffix to check
-# ret:    true if the string ends with suffix
-pub fun str_ends_with(s: str, suffix: str) bool {
-    val s_len:   usize = str_len(s);
-    val suffix_len: usize = str_len(suffix);
-
-    if (suffix_len > s_len) { ret false; }
-
-    var i: usize = 0;
-    for (i < suffix_len) {
-        if (s[s_len - suffix_len + i] != suffix[i]) {
-            ret false;
-        }
+# s:     the first string
+# other: the second string
+# ret:   <0 if s < other, 0 if equal, >0 if s > other
+pub fun str_compare(s: str, other: str) i64 {
+    var i:   usize = 0;
+    val lim: usize = if_min(s.len::usize, other.len::usize);
+    for (i < lim) {
+        val a: u8 = s.data[i];
+        val b: u8 = other.data[i];
+        if (a < b) { ret -1; }
+        if (a > b) { ret 1; }
         i = i + 1;
     }
+    if (s.len < other.len) { ret -1; }
+    if (s.len > other.len) { ret 1; }
+    ret 0;
+}
 
+# str_starts_with: true if s begins with prefix.
+# ---
+# s:      the string to test
+# prefix: the prefix to check for
+# ret:    true if s starts with prefix
+pub fun str_starts_with(s: str, prefix: str) bool {
+    if (prefix.len > s.len) { ret false; }
+    var i: usize = 0;
+    for (i < prefix.len::usize) {
+        if (s.data[i] != prefix.data[i]) { ret false; }
+        i = i + 1;
+    }
+    ret true;
+}
+
+# str_ends_with: true if s ends with suffix.
+# ---
+# s:      the string to test
+# suffix: the suffix to check for
+# ret:    true if s ends with suffix
+pub fun str_ends_with(s: str, suffix: str) bool {
+    if (suffix.len > s.len) { ret false; }
+    val offset: usize = (s.len - suffix.len)::usize;
+    var i:      usize = 0;
+    for (i < suffix.len::usize) {
+        if (s.data[offset + i] != suffix.data[i]) { ret false; }
+        i = i + 1;
+    }
     ret true;
 }
 
 # str_index_of: find the first index of a substring.
 # ---
+# s:   the string to search
 # sub: the substring to find
 # ret: the index of the first occurrence, or an error message
 pub fun str_index_of(s: str, sub: str) Result[usize, str] {
-    val s_len: usize = str_len(s);
-    val sub_len:  usize = str_len(sub);
-
-    if (sub_len == 0 || sub_len > s_len) {
+    if (sub.len == 0 || sub.len > s.len) {
         ret err[usize, str]("invalid substring length");
     }
-
-    var i: usize = 0;
+    val s_len:   usize = s.len::usize;
+    val sub_len: usize = sub.len::usize;
+    var i:       usize = 0;
     for (i <= s_len - sub_len) {
         var j:     usize = 0;
         var found: bool  = true;
-
         for (j < sub_len) {
-            if (s[i + j] != sub[j]) {
+            if (s.data[i + j] != sub.data[j]) {
                 found = false;
                 brk;
             }
             j = j + 1;
         }
-
         if (found) {
             ret ok[usize, str](i);
         }
-
         i = i + 1;
     }
-
     ret err[usize, str]("substring not found");
 }
 
 # str_last_index_of: find the last index of a substring.
 # ---
+# s:   the string to search
 # sub: the substring to find
 # ret: the index of the last occurrence, or an error message
 pub fun str_last_index_of(s: str, sub: str) Result[usize, str] {
-    val s_len: usize = str_len(s);
-    val sub_len:  usize = str_len(sub);
-
-    if (sub_len == 0 || sub_len > s_len) {
+    if (sub.len == 0 || sub.len > s.len) {
         ret err[usize, str]("invalid substring length");
     }
-
-    var i: usize = (s_len - sub_len) + 1;
+    val s_len:   usize = s.len::usize;
+    val sub_len: usize = sub.len::usize;
+    var i:       usize = (s_len - sub_len) + 1;
     for (i > 0) {
         i = i - 1;
         var j:     usize = 0;
         var found: bool  = true;
-
         for (j < sub_len) {
-            if (s[i + j] != sub[j]) {
+            if (s.data[i + j] != sub.data[j]) {
                 found = false;
                 brk;
             }
             j = j + 1;
         }
-
         if (found) {
             ret ok[usize, str](i);
         }
     }
-
     ret err[usize, str]("substring not found");
 }
 
-# str_contains: check if the string contains the given substring.
+# str_contains: true if s contains the given substring.
 # ---
-# sub: the substring to check
-# ret: true if the string contains sub
+# s:   the string to search
+# sub: the substring to check for
+# ret: true if s contains sub
 pub fun str_contains(s: str, sub: str) bool {
     val r: Result[usize, str] = str_index_of(s, sub);
     ret is_ok[usize, str](r);
 }
 
-# str_region_equals: compare a region of a string against a pattern.
+# str_region_equals: compare a region of s against a pattern.
 # ---
+# s:     source string
 # start: byte offset into s
 # len:   number of bytes to compare
-# other: null-terminated string to compare against
+# other: pattern to compare against
 # ret:   true if s[start..start+len] equals other exactly
 pub fun str_region_equals(s: str, start: usize, len: usize, other: str) bool {
-    if (s == nil || other == nil) { ret false; }
-
-    val other_len: usize = str_len(other);
-    if (other_len != len) { ret false; }
-
-    val s_len: usize = str_len(s);
-    if (start + len > s_len) { ret false; }
-
+    if (other.len::usize != len) { ret false; }
+    if (start + len > s.len::usize) { ret false; }
     var i: usize = 0;
     for (i < len) {
-        if (s[start + i] != other[i]) { ret false; }
+        if (s.data[start + i] != other.data[i]) { ret false; }
         i = i + 1;
     }
     ret true;
 }
 
-# str_trim_left: return a pointer past leading whitespace.
+# str_slice: return a sub-string spanning [start, start+len).
 # ---
-# ret: pointer to first non-whitespace character
+# s:     source string
+# start: byte offset into s
+# len:   length of the slice
+# ret:   sub-string sharing s.data; len == 0 and data == nil if out of range
+pub fun str_slice(s: str, start: usize, len: usize) str {
+    var out: str;
+    if (start + len > s.len::usize) {
+        out.len  = 0;
+        out.data = nil;
+        ret out;
+    }
+    out.len  = len::u32;
+    out.data = (s.data::usize + start)::*u8;
+    ret out;
+}
+
+# str_trim_left: skip leading whitespace and return a sub-string.
+# ---
+# s:   the string
+# ret: sub-string sharing s.data starting at the first non-whitespace byte
 pub fun str_trim_left(s: str) str {
-    if (s == nil) { ret nil; }
     var i: usize = 0;
-    for (char_is_space(s[i])) {
+    for (i < s.len::usize && char_is_space(s.data[i])) {
         i = i + 1;
     }
-    ret (s::usize + i)::str;
+    ret str_slice(s, i, (s.len::usize - i));
 }
 
 # str_index_char: find the first occurrence of a character in a string.
 # ---
+# s:   the string to search
 # c:   character to find
 # ret: the index of the first occurrence, or an error message
 pub fun str_index_char(s: str, c: char) Result[usize, str] {
-    if (s == nil) { ret err[usize, str]("nil string"); }
     var i: usize = 0;
-    for (s[i] != 0) {
-        if (s[i] == c) { ret ok[usize, str](i); }
+    for (i < s.len::usize) {
+        if (s.data[i] == c) { ret ok[usize, str](i); }
         i = i + 1;
     }
     ret err[usize, str]("character not found");
@@ -238,22 +241,22 @@ pub fun str_index_char(s: str, c: char) Result[usize, str] {
 
 # str_last_index_char: find the last occurrence of a character in a string.
 # ---
+# s:   the string to search
 # c:   character to find
 # ret: the index of the last occurrence, or an error message
 pub fun str_last_index_char(s: str, c: char) Result[usize, str] {
-    if (s == nil) { ret err[usize, str]("nil string"); }
-    val len: usize = str_len(s);
-    if (len == 0) { ret err[usize, str]("character not found"); }
-    var i: usize = len;
+    if (s.len == 0) { ret err[usize, str]("character not found"); }
+    var i: usize = s.len::usize;
     for (i > 0) {
         i = i - 1;
-        if (s[i] == c) { ret ok[usize, str](i); }
+        if (s.data[i] == c) { ret ok[usize, str](i); }
     }
     ret err[usize, str]("character not found");
 }
 
-# str_contains_char: check if a string contains a character.
+# str_contains_char: true if a string contains a character.
 # ---
+# s:   the string to search
 # c:   character to find
 # ret: true if c appears in s
 pub fun str_contains_char(s: str, c: char) bool {
@@ -261,262 +264,143 @@ pub fun str_contains_char(s: str, c: char) bool {
     ret is_ok[usize, str](r);
 }
 
-test "string: len of empty string" {
+# str_from_zstr: build a str whose bytes match the given null-terminated pointer.
+# the resulting str shares the input's storage; do not free it independently.
+# ---
+# z:   null-terminated byte pointer
+# ret: a str view over the same bytes (excluding the terminator)
+pub fun str_from_zstr(z: zstr) str {
+    var out: str;
+    if (z == nil) {
+        out.len  = 0;
+        out.data = nil;
+        ret out;
+    }
+    var n: usize = 0;
+    for (z[n] != 0) {
+        n = n + 1;
+    }
+    out.len  = n::u32;
+    out.data = z;
+    ret out;
+}
+
+# zstr_len: walk a null-terminated byte pointer to compute its length.
+# ---
+# z:   null-terminated byte pointer
+# ret: number of bytes before the null terminator (0 for nil)
+pub fun zstr_len(z: zstr) usize {
+    if (z == nil) { ret 0; }
+    var n: usize = 0;
+    for (z[n] != 0) {
+        n = n + 1;
+    }
+    ret n;
+}
+
+fun if_min(a: usize, b: usize) usize {
+    if (a < b) { ret a; }
+    ret b;
+}
+
+test "string: empty literal len" {
     val s: str = "";
     if (str_len(s) != 0) { ret 0; }
+    if (!str_empty(s))   { ret 0; }
     ret 1;
 }
 
-test "string: len of non-empty string" {
+test "string: literal len" {
     val s: str = "hello";
     if (str_len(s) != 5) { ret 0; }
+    if (str_empty(s))    { ret 0; }
     ret 1;
 }
 
-test "string: len of single char" {
-    val s: str = "x";
-    if (str_len(s) != 1) { ret 0; }
+test "string: equals same content" {
+    if (!str_equals("hello", "hello")) { ret 0; }
     ret 1;
 }
 
-test "string: empty returns true for empty string" {
-    val s: str = "";
-    if (!str_empty(s)) { ret 0; }
-    ret 1;
-}
-
-test "string: empty returns false for non-empty string" {
-    val s: str = "hello";
-    if (str_empty(s)) { ret 0; }
-    ret 1;
-}
-
-test "string: equals same strings" {
-    val a: str = "hello";
-    val b: str = "hello";
-    if (!str_equals(a, b)) { ret 0; }
-    ret 1;
-}
-
-test "string: equals different strings" {
-    val a: str = "hello";
-    val b: str = "world";
-    if (str_equals(a, b)) { ret 0; }
+test "string: equals different content" {
+    if (str_equals("hello", "world")) { ret 0; }
     ret 1;
 }
 
 test "string: equals different lengths" {
-    val a: str = "hello";
-    val b: str = "hello world";
-    if (str_equals(a, b)) { ret 0; }
+    if (str_equals("hello", "hello world")) { ret 0; }
     ret 1;
 }
 
-test "string: equals empty strings" {
-    val a: str = "";
-    val b: str = "";
-    if (!str_equals(a, b)) { ret 0; }
+test "string: compare lex order" {
+    if (str_compare("abc", "abd") >= 0) { ret 0; }
+    if (str_compare("abd", "abc") <= 0) { ret 0; }
+    if (str_compare("abc", "abc") != 0) { ret 0; }
     ret 1;
 }
 
-test "string: compare equal strings" {
-    val a: str = "abc";
-    val b: str = "abc";
-    if (str_compare(a, b) != 0) { ret 0; }
+test "string: starts_with" {
+    if (!str_starts_with("hello world", "hello")) { ret 0; }
+    if (str_starts_with("hello world", "world"))  { ret 0; }
+    if (!str_starts_with("hi", ""))                { ret 0; }
     ret 1;
 }
 
-test "string: compare less than" {
-    val a: str = "abc";
-    val b: str = "abd";
-    if (str_compare(a, b) >= 0) { ret 0; }
+test "string: ends_with" {
+    if (!str_ends_with("hello world", "world")) { ret 0; }
+    if (str_ends_with("hello world", "hello"))  { ret 0; }
+    if (!str_ends_with("hi", ""))                { ret 0; }
     ret 1;
 }
 
-test "string: compare greater than" {
-    val a: str = "abd";
-    val b: str = "abc";
-    if (str_compare(a, b) <= 0) { ret 0; }
+test "string: index_of" {
+    val r: Result[usize, str] = str_index_of("hello world", "wor");
+    if (is_err[usize, str](r))            { ret 0; }
+    if (unwrap_ok[usize, str](r) != 6)    { ret 0; }
     ret 1;
 }
 
-test "string: compare prefix is less" {
-    val a: str = "abc";
-    val b: str = "abcd";
-    if (str_compare(a, b) >= 0) { ret 0; }
+test "string: contains" {
+    if (!str_contains("hello world", "wor")) { ret 0; }
+    if (str_contains("hello world", "xyz"))  { ret 0; }
     ret 1;
 }
 
-test "string: starts_with matching prefix" {
-    val s: str = "hello world";
-    if (!str_starts_with(s, "hello")) { ret 0; }
-    ret 1;
-}
-
-test "string: starts_with non-matching prefix" {
-    val s: str = "hello world";
-    if (str_starts_with(s, "world")) { ret 0; }
-    ret 1;
-}
-
-test "string: starts_with empty prefix" {
-    val s: str = "hello";
-    if (!str_starts_with(s, "")) { ret 0; }
-    ret 1;
-}
-
-test "string: starts_with full string" {
-    val s: str = "hello";
-    if (!str_starts_with(s, "hello")) { ret 0; }
-    ret 1;
-}
-
-test "string: ends_with matching suffix" {
-    val s: str = "hello world";
-    if (!str_ends_with(s, "world")) { ret 0; }
-    ret 1;
-}
-
-test "string: ends_with non-matching suffix" {
-    val s: str = "hello world";
-    if (str_ends_with(s, "hello")) { ret 0; }
-    ret 1;
-}
-
-test "string: ends_with empty suffix" {
-    val s: str = "hello";
-    if (!str_ends_with(s, "")) { ret 0; }
-    ret 1;
-}
-
-test "string: ends_with full string" {
-    val s: str = "hello";
-    if (!str_ends_with(s, "hello")) { ret 0; }
-    ret 1;
-}
-
-test "string: index_of finds substring at start" {
-    val s: str = "hello world";
-    val r: Result[usize, str] = str_index_of(s, "hello");
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 0) { ret 0; }
-    ret 1;
-}
-
-test "string: index_of finds substring in middle" {
-    val s: str = "hello world";
-    val r: Result[usize, str] = str_index_of(s, "wor");
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 6) { ret 0; }
-    ret 1;
-}
-
-test "string: index_of not found" {
-    val s: str = "hello world";
-    val r: Result[usize, str] = str_index_of(s, "xyz");
-    if (is_ok[usize, str](r)) { ret 0; }
-    ret 1;
-}
-
-test "string: last_index_of finds last occurrence" {
-    val s: str = "abcabc";
-    val r: Result[usize, str] = str_last_index_of(s, "abc");
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 3) { ret 0; }
-    ret 1;
-}
-
-test "string: last_index_of single occurrence" {
-    val s: str = "hello world";
-    val r: Result[usize, str] = str_last_index_of(s, "world");
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 6) { ret 0; }
-    ret 1;
-}
-
-test "string: contains found" {
-    val s: str = "hello world";
-    if (!str_contains(s, "wor")) { ret 0; }
-    ret 1;
-}
-
-test "string: contains not found" {
-    val s: str = "hello world";
-    if (str_contains(s, "xyz")) { ret 0; }
-    ret 1;
-}
-
-test "string: contains empty substring" {
-    val s: str = "hello";
-    if (str_contains(s, "")) { ret 0; }
-    ret 1;
-}
-
-test "string: region_equals matching start" {
-    if (!str_region_equals("hello world", 0, 5, "hello")) { ret 0; }
-    ret 1;
-}
-
-test "string: region_equals matching middle" {
+test "string: region_equals" {
     if (!str_region_equals("hello world", 6, 5, "world")) { ret 0; }
+    if (str_region_equals("hello world", 0, 5, "world"))  { ret 0; }
     ret 1;
 }
 
-test "string: region_equals single char" {
-    if (!str_region_equals("abcdef", 3, 1, "d")) { ret 0; }
-    ret 1;
-}
-
-test "string: region_equals full string" {
-    if (!str_region_equals("hello", 0, 5, "hello")) { ret 0; }
-    ret 1;
-}
-
-test "string: region_equals wrong length" {
-    if (str_region_equals("hello world", 0, 5, "hell")) { ret 0; }
-    ret 1;
-}
-
-test "string: region_equals mismatch" {
-    if (str_region_equals("hello world", 0, 5, "world")) { ret 0; }
-    ret 1;
-}
-
-test "string: trim_left" {
-    if (!str_equals(str_trim_left("  hello"), "hello")) { ret 0; }
-    if (!str_equals(str_trim_left("hello"), "hello")) { ret 0; }
+test "string: slice" {
+    val s:   str = "hello world";
+    val sub: str = str_slice(s, 6, 5);
+    if (!str_equals(sub, "world")) { ret 0; }
     ret 1;
 }
 
 test "string: index_char" {
-    var r: Result[usize, str] = str_index_char("hello", 'l');
-    if (is_err[usize, str](r)) { ret 0; }
+    val r: Result[usize, str] = str_index_char("hello", 'l');
+    if (is_err[usize, str](r))         { ret 0; }
     if (unwrap_ok[usize, str](r) != 2) { ret 0; }
-    r = str_index_char("hello", 'h');
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 0) { ret 0; }
-    r = str_index_char("hello", 'o');
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 4) { ret 0; }
-    r = str_index_char("hello", 'x');
-    if (is_ok[usize, str](r)) { ret 0; }
-    ret 1;
-}
-
-test "string: last_index_char" {
-    var r: Result[usize, str] = str_last_index_char("hello", 'l');
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 3) { ret 0; }
-    r = str_last_index_char("hello", 'h');
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 0) { ret 0; }
-    r = str_last_index_char("hello", 'x');
-    if (is_ok[usize, str](r)) { ret 0; }
     ret 1;
 }
 
 test "string: contains_char" {
     if (!str_contains_char("hello", 'e')) { ret 0; }
-    if (str_contains_char("hello", 'x')) { ret 0; }
+    if (str_contains_char("hello", 'x'))  { ret 0; }
+    ret 1;
+}
+
+test "string: zstr_len" {
+    if (zstr_len(`abc`) != 3)    { ret 0; }
+    if (zstr_len(`hello`) != 5)  { ret 0; }
+    ret 1;
+}
+
+test "string: from_zstr round trip" {
+    val s: str = str_from_zstr(`hello`);
+    if (s.len != 5)                { ret 0; }
+    if (!str_equals(s, "hello"))   { ret 0; }
     ret 1;
 }

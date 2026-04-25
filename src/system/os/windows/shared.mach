@@ -1545,7 +1545,7 @@ pub fun sock_setopt(fd: i32, level: i32, opt: i32, value: *u8, vallen: usize) i6
 
 # dns
 
-pub val DNS_HOSTS_PATH: str = "C:/Windows/System32/drivers/etc/hosts";
+pub val DNS_HOSTS_PATH: zstr = `C:/Windows/System32/drivers/etc/hosts`;
 
 # dns_nameserver: get the primary DNS nameserver address.
 #
