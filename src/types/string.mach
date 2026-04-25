@@ -10,6 +10,11 @@ use std.types.char;
 # str: a pointer to a null-terminated sequence of char.
 pub def str: *char;
 
+# zstr: a pointer to a zero-terminated sequence of char, suitable for C-style
+# interop. distinct alias for str today; will diverge once `str` becomes a
+# fat-pointer type. backtick literals (`...`) produce values of this type.
+pub def zstr: *char;
+
 # str_len: calculate the length of a null-terminated string.
 # ---
 # ret: length of the string (not including null terminator)
