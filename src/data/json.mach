@@ -312,6 +312,9 @@ fun parse_null(p: *Parser) Result[Value, str] {
 }
 
 fun parse_bool(p: *Parser) Result[Value, str] {
+    if (p.pos >= p.len) {
+        ret err[Value, str]("unexpected end of input in boolean");
+    }
     if (p.src[p.pos] == 't') {
         if (p.pos + 4 > p.len) {
             ret err[Value, str]("unexpected end of input in true");
