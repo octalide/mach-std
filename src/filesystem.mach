@@ -265,7 +265,7 @@ pub fun info_is_symlink(fi: *FileInfo) bool {
 # p:   path to query
 # ret: file metadata, or an error message
 pub fun info_path(p: str) Result[FileInfo, str] {
-    if (path.is_empty(p)) { ret err[FileInfo, str]("path is nil"); }
+    if (path.is_empty(p)) { ret err[FileInfo, str]("path is empty"); }
     var st: os.stat_t;
     val raw: i64 = os.stat_path(os.AT_FDCWD, p.data, ?st, 0);
     if (raw < 0) { ret err[FileInfo, str](os.message(raw)); }
@@ -320,7 +320,7 @@ pub fun rename(from: str, to: str) Result[bool, str] {
 # mode: permission bits
 # ret:  true on success, or an error message
 pub fun create_dir(p: str, mode: i32) Result[bool, str] {
-    if (path.is_empty(p)) { ret err[bool, str]("path is nil"); }
+    if (path.is_empty(p)) { ret err[bool, str]("path is empty"); }
     val raw: i64 = os.make_dir(os.AT_FDCWD, p.data, mode);
     if (raw < 0) { ret err[bool, str](os.message(raw)); }
     ret ok[bool, str](true);
