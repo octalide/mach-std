@@ -1,9 +1,9 @@
 # path manipulation helpers
 #
-# Path is a type alias for str. functions that return new paths allocate
-# through the caller-provided Allocator. functions that return views into
-# existing paths (filename, extension) return pointers into the input and
-# do not allocate.
+# Path is a type alias for str (the builtin fat string). functions that
+# return new paths allocate through the caller-provided Allocator. functions
+# that return views into existing paths (filename, extension) return a sub-
+# string referencing the original storage and do not allocate.
 
 use std.types.bool;
 use std.types.result;
@@ -22,28 +22,28 @@ pub fun separator() u8 {
     ret os.separator;
 }
 
-# is_empty: check whether a path is empty or nil.
+# is_empty: check whether a path is empty.
 pub fun is_empty(p: Path) bool {
-    ret p == nil || p[0] == 0;
+    ret p.len == 0 || p.data == nil;
 }
 
 # is_abs: check whether a path is absolute.
 pub fun is_abs(p: Path) bool {
-    if (p == nil) { ret false; }
+    if (is_empty(p)) { ret false; }
 
-    ret p[0] == separator();
+    ret p.data[0] == separator();
 }
 
 # is_root: check whether a path consists only of separators.
 pub fun is_root(p: Path) bool {
     if (is_empty(p)) { ret false; }
 
-    val len: usize = str_len(p);
+    val len: usize = p.len::usize;
     val sep: u8    = separator();
     var i:   usize = 0;
 
     for (i < len) {
-        if (p[i] != sep) { ret false; }
+        if (p.data[i] != sep) { ret false; }
         i = i + 1;
     }
 
@@ -52,21 +52,28 @@ pub fun is_root(p: Path) bool {
 
 # filename: return the final component of a path.
 #
-# returns a pointer into p (no allocation). returns nil for empty paths
-# and empty string for paths ending in a separator.
+# returns a sub-string referencing p.data (no allocation). returns an empty
+# str for empty paths and for paths ending in a separator.
 # ---
 # p:   path to extract filename from
-# ret: pointer into p at the filename, or nil
+# ret: sub-string into p at the filename, or empty
 pub fun filename(p: Path) str {
-    if (is_empty(p)) { ret nil; }
-    val len: usize = str_len(p);
+    var out: str;
+    out.len  = 0;
+    out.data = nil;
+
+    if (is_empty(p)) { ret out; }
+
+    val len: usize = p.len::usize;
     val sep: u8    = separator();
     var i:   usize = len;
 
     for (i > 0) {
         i = i - 1;
-        if (p[i] == sep) {
-            ret (p::usize + i + 1)::str;
+        if (p.data[i] == sep) {
+            out.len  = (len - i - 1)::u32;
+            out.data = (p.data::usize + i + 1)::*u8;
+            ret out;
         }
     }
 
@@ -75,33 +82,37 @@ pub fun filename(p: Path) str {
 
 # extension: return the file extension without the leading dot.
 #
-# returns a pointer into p (no allocation). returns nil if there is no
-# extension (no dot, or dot is first char of filename).
+# returns a sub-string referencing p.data (no allocation). returns an empty
+# str if there is no extension (no dot, or dot is first char of filename).
 # ---
 # p:   path to extract extension from
-# ret: pointer into p at the extension, or nil
+# ret: sub-string into p at the extension, or empty
 pub fun extension(p: Path) str {
+    var out: str;
+    out.len  = 0;
+    out.data = nil;
+
     val name: str = filename(p);
-    if (name == nil) { ret nil; }
+    if (name.len == 0) { ret out; }
 
-    val len: usize = str_len(name);
-    if (len == 0) { ret nil; }
-
+    val len: usize = name.len::usize;
     var i: usize = len;
     for (i > 0) {
         i = i - 1;
-        if (name[i] == '.') {
-            if (i == 0) { ret nil; }
-            ret (name::usize + i + 1)::str;
+        if (name.data[i] == '.') {
+            if (i == 0) { ret out; }
+            out.len  = (len - i - 1)::u32;
+            out.data = (name.data::usize + i + 1)::*u8;
+            ret out;
         }
     }
 
-    ret nil;
+    ret out;
 }
 
 # stem: return the filename without its extension.
 #
-# "foo/bar.txt" → "bar", "foo/.hidden" → ".hidden", "foo/bar" → "bar"
+# "foo/bar.txt" -> "bar", "foo/.hidden" -> ".hidden", "foo/bar" -> "bar"
 # ---
 # a:   allocator for the result
 # p:   path to extract stem from
@@ -110,16 +121,14 @@ pub fun stem(a: *allocator.Allocator, p: Path) Result[Path, str] {
     if (a == nil) { ret err[Path, str]("allocator is nil"); }
 
     val name: str = filename(p);
-    if (name == nil) { ret ok[Path, str](nil); }
-
-    val len: usize = str_len(name);
-    if (len == 0) { ret ok[Path, str](nil); }
+    if (name.len == 0) { ret ok[Path, str](empty_path()); }
 
     val file_ext: str = extension(p);
-    if (file_ext == nil) { ret clone(a, name); }
+    if (file_ext.len == 0) { ret clone(a, name); }
 
-    val ext_len:  usize = str_len(file_ext);
-    val stem_len: usize = len - ext_len - 1;
+    val ext_len:  usize = file_ext.len::usize;
+    val name_len: usize = name.len::usize;
+    val stem_len: usize = name_len - ext_len - 1;
 
     val r: Result[*u8, str] = allocator.allocate[u8](a, stem_len + 1);
     if (is_err[*u8, str](r)) {
@@ -127,32 +136,38 @@ pub fun stem(a: *allocator.Allocator, p: Path) Result[Path, str] {
     }
 
     val buf: *u8 = unwrap_ok[*u8, str](r);
-    mem.raw_copy(buf::ptr, name::ptr, stem_len);
+    mem.raw_copy(buf::ptr, name.data::ptr, stem_len);
     buf[stem_len] = 0;
 
-    ret ok[Path, str](buf::*u8);
+    var out: str;
+    out.len  = stem_len::u32;
+    out.data = buf;
+    ret ok[Path, str](out);
 }
 
 # clone: duplicate a path using the provided allocator.
 # ---
 # a:   allocator for the new path
-# p:   path to clone (nil returns nil)
+# p:   path to clone (empty returns empty)
 # ret: the cloned path, or an error message
 pub fun clone(a: *allocator.Allocator, p: Path) Result[Path, str] {
-    if (a == nil) { ret err[Path, str]("allocator is nil"); }
-    if (p == nil) { ret ok[Path, str](nil); }
+    if (a == nil)    { ret err[Path, str]("allocator is nil"); }
+    if (is_empty(p)) { ret ok[Path, str](empty_path()); }
 
-    val n: usize            = str_len(p);
+    val n: usize            = p.len::usize;
     val r: Result[*u8, str] = allocator.allocate[u8](a, n + 1);
     if (is_err[*u8, str](r)) {
         ret err[Path, str](unwrap_err[*u8, str](r));
     }
 
     val buf: *u8 = unwrap_ok[*u8, str](r);
-    mem.raw_copy(buf::ptr, p::ptr, n);
+    mem.raw_copy(buf::ptr, p.data::ptr, n);
     buf[n] = 0;
 
-    ret ok[Path, str](buf::*u8);
+    var out: str;
+    out.len  = n::u32;
+    out.data = buf;
+    ret ok[Path, str](out);
 }
 
 # join: join two path segments with the platform separator.
@@ -167,9 +182,9 @@ pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str]
     if (is_empty(right)) { ret clone(a, left); }
 
     val sep:       u8    = separator();
-    val left_len:  usize = str_len(left);
-    val right_len: usize = str_len(right);
-    val has_sep:   bool  = left[left_len - 1] == sep || right[0] == sep;
+    val left_len:  usize = left.len::usize;
+    val right_len: usize = right.len::usize;
+    val has_sep:   bool  = left.data[left_len - 1] == sep || right.data[0] == sep;
 
     var extra: usize = 0;
     if (!has_sep) { extra = 1; }
@@ -181,7 +196,7 @@ pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str]
     }
 
     val buf: *u8 = unwrap_ok[*u8, str](r);
-    mem.raw_copy(buf::ptr, left::ptr, left_len);
+    mem.raw_copy(buf::ptr, left.data::ptr, left_len);
 
     var off: usize = left_len;
     if (!has_sep) {
@@ -189,10 +204,13 @@ pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str]
         off = off + 1;
     }
 
-    mem.raw_copy((buf::usize + off)::ptr, right::ptr, right_len);
+    mem.raw_copy((buf::usize + off)::ptr, right.data::ptr, right_len);
     buf[out_len] = 0;
 
-    ret ok[Path, str](buf::*u8);
+    var out: str;
+    out.len  = out_len::u32;
+    out.data = buf;
+    ret ok[Path, str](out);
 }
 
 # parent: return the parent directory of a path.
@@ -204,11 +222,11 @@ pub fun parent(a: *allocator.Allocator, p: Path) Result[Path, str] {
     if (a == nil)    { ret err[Path, str]("allocator is nil"); }
     if (is_empty(p)) { ret clone(a, "."); }
 
-    val len: usize = str_len(p);
+    val len: usize = p.len::usize;
     val sep: u8    = separator();
 
     var end: usize = len;
-    for (end > 0 && p[end - 1] == sep) {
+    for (end > 0 && p.data[end - 1] == sep) {
         end = end - 1;
     }
     if (end == 0) { ret clone_sep(a, sep); }
@@ -216,14 +234,14 @@ pub fun parent(a: *allocator.Allocator, p: Path) Result[Path, str] {
     var i: usize = end;
     for (i > 0) {
         i = i - 1;
-        if (p[i] == sep) { brk; }
+        if (p.data[i] == sep) { brk; }
     }
 
-    if (i == 0 && p[0] != sep) { ret clone(a, "."); }
-    if (i == 0)                { ret clone_sep(a, sep); }
+    if (i == 0 && p.data[0] != sep) { ret clone(a, "."); }
+    if (i == 0)                     { ret clone_sep(a, sep); }
 
     var parent_end: usize = i;
-    for (parent_end > 0 && p[parent_end - 1] == sep) {
+    for (parent_end > 0 && p.data[parent_end - 1] == sep) {
         parent_end = parent_end - 1;
     }
     if (parent_end == 0) { ret clone_sep(a, sep); }
@@ -234,10 +252,20 @@ pub fun parent(a: *allocator.Allocator, p: Path) Result[Path, str] {
     }
 
     val buf: *u8 = unwrap_ok[*u8, str](r);
-    mem.raw_copy(buf::ptr, p::ptr, parent_end);
+    mem.raw_copy(buf::ptr, p.data::ptr, parent_end);
     buf[parent_end] = 0;
 
-    ret ok[Path, str](buf::*u8);
+    var out: str;
+    out.len  = parent_end::u32;
+    out.data = buf;
+    ret ok[Path, str](out);
+}
+
+fun empty_path() str {
+    var out: str;
+    out.len  = 0;
+    out.data = nil;
+    ret out;
 }
 
 fun clone_sep(a: *allocator.Allocator, sep: u8) Result[Path, str] {
@@ -250,7 +278,10 @@ fun clone_sep(a: *allocator.Allocator, sep: u8) Result[Path, str] {
     buf[0] = sep;
     buf[1] = 0;
 
-    ret ok[Path, str](buf::*u8);
+    var out: str;
+    out.len  = 1;
+    out.data = buf;
+    ret ok[Path, str](out);
 }
 
 test "path: is_abs with absolute path" {
@@ -263,8 +294,9 @@ test "path: is_abs with relative path" {
     ret 1;
 }
 
-test "path: is_abs with nil" {
-    if (is_abs(nil)) { ret 0; }
+test "path: is_abs with empty" {
+    val empty: str = "";
+    if (is_abs(empty)) { ret 0; }
     ret 1;
 }
 
@@ -280,9 +312,9 @@ test "path: filename no directory" {
     ret 1;
 }
 
-test "path: filename nil" {
-    val f: str = filename(nil);
-    if (f != nil) { ret 0; }
+test "path: filename empty" {
+    val f: str = filename("");
+    if (f.len != 0) { ret 0; }
     ret 1;
 }
 
@@ -294,13 +326,13 @@ test "path: extension basic" {
 
 test "path: extension none" {
     val e: str = extension("/foo/bar");
-    if (e != nil) { ret 0; }
+    if (e.len != 0) { ret 0; }
     ret 1;
 }
 
 test "path: extension hidden file" {
     val e: str = extension("/foo/.hidden");
-    if (e != nil) { ret 0; }
+    if (e.len != 0) { ret 0; }
     ret 1;
 }
 

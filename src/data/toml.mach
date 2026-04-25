@@ -21,6 +21,7 @@ pub val TYPE_ARRAY:   u8 = 4;
 pub val TYPE_TABLE:   u8 = 5;
 
 val VALUE_SIZE: usize = $size_of(Value);
+val STR_SIZE:   usize = $size_of(str);
 
 # Value: tagged TOML value.
 # ---
@@ -113,7 +114,7 @@ fun table_set(a: *Allocator, t: *Table, key: str, val_: Value) Result[bool, str]
             }
         }
 
-        val kr: Result[*u8, str] = allocate[u8](a, new_cap * 8);
+        val kr: Result[*u8, str] = allocate[u8](a, new_cap * STR_SIZE);
         if (is_err[*u8, str](kr)) { ret err[bool, str](unwrap_err[*u8, str](kr)); }
         val new_keys: *str = unwrap_ok[*u8, str](kr)::*str;
 
@@ -122,7 +123,7 @@ fun table_set(a: *Allocator, t: *Table, key: str, val_: Value) Result[bool, str]
         val new_vals: *Value = unwrap_ok[*u8, str](vr)::*Value;
 
         if (t.len > 0) {
-            mem.raw_copy(new_keys::ptr, t.keys, t.len * 8);
+            mem.raw_copy(new_keys::ptr, t.keys, t.len * STR_SIZE);
             mem.raw_copy(new_vals::ptr, t.values, t.len * VALUE_SIZE);
         }
 
@@ -256,11 +257,11 @@ fun keysegs_push(a: *Allocator, ks: *KeySegs, seg: str) Result[bool, str] {
             }
         }
 
-        val r: Result[*u8, str] = allocate[u8](a, new_cap * 8);
+        val r: Result[*u8, str] = allocate[u8](a, new_cap * STR_SIZE);
         if (is_err[*u8, str](r)) { ret err[bool, str](unwrap_err[*u8, str](r)); }
         val new_segs: *str = unwrap_ok[*u8, str](r)::*str;
         if (ks.len > 0) {
-            mem.raw_copy(new_segs::ptr, ks.segs::ptr, ks.len * 8);
+            mem.raw_copy(new_segs::ptr, ks.segs::ptr, ks.len * STR_SIZE);
         }
         ks.segs = new_segs;
         ks.cap = new_cap;
@@ -321,15 +322,19 @@ fun value_array(a: Array) Value {
 # path: dotted key path (e.g. "project.name")
 # ret:  pointer to the value, or nil if not found
 pub fun get(t: *Table, path: str) *Value {
-    if (t == nil || path == nil) { ret nil; }
+    if (t == nil || path.data == nil) { ret nil; }
 
     var current: *Table = t;
     var start: usize = 0;
     var i: usize = 0;
+    val plen: usize = path.len::usize;
 
-    for (path[i] != 0) {
-        if (path[i] == '.') {
-            val v: *Value = find_by_seg(current, (path::usize + start)::str, i - start);
+    for (i < plen) {
+        if (path.data[i] == '.') {
+            var seg: str;
+            seg.len  = (i - start)::u32;
+            seg.data = (path.data::usize + start)::*u8;
+            val v: *Value = find_by_seg(current, seg, i - start);
             if (v == nil || v.tag != TYPE_TABLE) { ret nil; }
             current = ?v.data.table;
             start = i + 1;
@@ -337,7 +342,10 @@ pub fun get(t: *Table, path: str) *Value {
         i = i + 1;
     }
 
-    ret find_by_seg(current, (path::usize + start)::str, i - start);
+    var seg: str;
+    seg.len  = (i - start)::u32;
+    seg.data = (path.data::usize + start)::*u8;
+    ret find_by_seg(current, seg, i - start);
 }
 
 # find_by_seg: find a value by key prefix and length.
@@ -364,7 +372,7 @@ fun find_by_seg(t: *Table, seg: str, seg_len: usize) *Value {
 fun str_eq_n(a: str, b: str, n: usize) bool {
     var i: usize = 0;
     for (i < n) {
-        if (a[i] != b[i]) { ret false; }
+        if (a.data[i] != b.data[i]) { ret false; }
         i = i + 1;
     }
     ret true;
@@ -377,7 +385,12 @@ fun str_eq_n(a: str, b: str, n: usize) bool {
 # ret:  the string value, or nil if not found or wrong type
 pub fun get_str(t: *Table, path: str) str {
     val v: *Value = get(t, path);
-    if (v == nil || v.tag != TYPE_STRING) { ret nil; }
+    if (v == nil || v.tag != TYPE_STRING) {
+        var empty: str;
+        empty.len  = 0;
+        empty.data = nil;
+        ret empty;
+    }
     ret v.data.string;
 }
 
@@ -462,7 +475,12 @@ pub fun table_len(t: *Table) usize {
 # index: position (0-based)
 # ret:   key string, or nil if out of bounds
 pub fun table_key(t: *Table, index: usize) str {
-    if (t == nil || index >= t.len) { ret nil; }
+    if (t == nil || index >= t.len) {
+        var empty: str;
+        empty.len  = 0;
+        empty.data = nil;
+        ret empty;
+    }
     val keys: *str = t.keys::*str;
     ret keys[index];
 }
@@ -503,20 +521,20 @@ fun is_bare_key_char(b: u8) bool {
 }
 
 fun skip_ws(src: str, i: *usize) {
-    for (is_ws(src[@i])) {
+    for (is_ws(src.data[@i])) {
         @i = @i + 1;
     }
 }
 
 fun skip_ws_and_newlines(src: str, i: *usize) {
-    for (is_ws_or_newline(src[@i])) {
+    for (is_ws_or_newline(src.data[@i])) {
         @i = @i + 1;
     }
 }
 
 fun skip_comment(src: str, i: *usize) {
-    if (src[@i] == '#') {
-        for (src[@i] != 0 && src[@i] != '\n') {
+    if (src.data[@i] == '#') {
+        for (src.data[@i] != 0 && src.data[@i] != '\n') {
             @i = @i + 1;
         }
     }
@@ -525,7 +543,7 @@ fun skip_comment(src: str, i: *usize) {
 fun skip_ws_comments_newlines(src: str, i: *usize) {
     for {
         skip_ws_and_newlines(src, i);
-        if (src[@i] == '#') {
+        if (src.data[@i] == '#') {
             skip_comment(src, i);
             cnt;
         }
@@ -536,8 +554,8 @@ fun skip_ws_comments_newlines(src: str, i: *usize) {
 fun skip_to_newline(src: str, i: *usize) {
     skip_ws(src, i);
     skip_comment(src, i);
-    if (src[@i] == '\r') { @i = @i + 1; }
-    if (src[@i] == '\n') { @i = @i + 1; }
+    if (src.data[@i] == '\r') { @i = @i + 1; }
+    if (src.data[@i] == '\n') { @i = @i + 1; }
 }
 
 # alloc_str: allocate a copy of a substring.
@@ -553,9 +571,12 @@ fun alloc_str(a: *Allocator, src: str, start: usize, len: usize) Result[str, str
         ret err[str, str](unwrap_err[*u8, str](r));
     }
     val buf: *u8 = unwrap_ok[*u8, str](r);
-    mem.raw_copy(buf::ptr, (src::usize + start)::ptr, len);
+    mem.raw_copy(buf::ptr, (src.data::usize + start)::ptr, len);
     buf[len] = 0;
-    ret ok[str, str](buf::*u8);
+    var out: str;
+    out.len  = len::u32;
+    out.data = buf;
+    ret ok[str, str](out);
 }
 
 # hex_digit: return the numeric value of a hex character, or -1.
@@ -570,7 +591,7 @@ fun hex_digit(c: u8) i32 {
 # advances si past the escape. returns 0 on invalid escape, otherwise
 # the number of bytes written (1 for simple escapes, 1-4 for unicode).
 fun decode_escape(src: str, si: *usize, buf: *u8, di: usize) usize {
-    val e: u8 = src[@si];
+    val e: u8 = src.data[@si];
 
     if (e == 'n')   { buf[di] = '\n'; @si = @si + 1; ret 1; }
     if (e == 't')   { buf[di] = '\t'; @si = @si + 1; ret 1; }
@@ -587,7 +608,7 @@ fun decode_escape(src: str, si: *usize, buf: *u8, di: usize) usize {
         var code: u32 = 0;
         var k: usize = 0;
         for (k < ndig) {
-            val d: i32 = hex_digit(src[@si + 1 + k]);
+            val d: i32 = hex_digit(src.data[@si + 1 + k]);
             if (d < 0) { ret 0; }
             code = (code << 4) | d::u32;
             k = k + 1;
@@ -602,17 +623,17 @@ fun decode_escape(src: str, si: *usize, buf: *u8, di: usize) usize {
     ret 0;
 }
 
-# count_escape_len: count output bytes for an escape at src[@i].
+# count_escape_len: count output bytes for an escape at src.data[@i].
 # advances i past the escape sequence.
 fun count_escape_len(src: str, i: *usize) usize {
-    val e: u8 = src[@i];
+    val e: u8 = src.data[@i];
     if (e == 'u' || e == 'U') {
         var ndig: usize = 4;
         if (e == 'U') { ndig = 8; }
         var code: u32 = 0;
         var k: usize = 0;
         for (k < ndig) {
-            val d: i32 = hex_digit(src[@i + 1 + k]);
+            val d: i32 = hex_digit(src.data[@i + 1 + k]);
             if (d >= 0) { code = (code << 4) | d::u32; }
             k = k + 1;
         }
@@ -666,7 +687,7 @@ fun encode_utf8(buf: *u8, di: usize, code: u32) usize {
 fun parse_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
     @i = @i + 1;
 
-    if (src[@i] == '"' && src[@i + 1] == '"') {
+    if (src.data[@i] == '"' && src.data[@i + 1] == '"') {
         @i = @i + 2;
         ret parse_ml_basic_string(a, src, i);
     }
@@ -676,12 +697,12 @@ fun parse_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
     # pass 1: compute output length
     var out_len: usize = 0;
     for {
-        val b: u8 = src[@i];
+        val b: u8 = src.data[@i];
         if (b == 0 || b == '\n') { ret err[str, str]("unterminated string"); }
         if (b == '"') { brk; }
         if (b == '\\') {
             @i = @i + 1;
-            if (src[@i] == 0) { ret err[str, str]("unterminated escape"); }
+            if (src.data[@i] == 0) { ret err[str, str]("unterminated escape"); }
             out_len = out_len + count_escape_len(src, i);
             cnt;
         }
@@ -697,8 +718,8 @@ fun parse_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
     var si: usize = start;
     var di: usize = 0;
     for {
-        if (src[si] == '"') { brk; }
-        if (src[si] == '\\') {
+        if (src.data[si] == '"') { brk; }
+        if (src.data[si] == '\\') {
             si = si + 1;
             val esc_len: usize = decode_escape(src, ?si, buf, di);
             if (esc_len == 0) {
@@ -707,14 +728,17 @@ fun parse_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
             di = di + esc_len;
             cnt;
         }
-        buf[di] = src[si];
+        buf[di] = src.data[si];
         di = di + 1;
         si = si + 1;
     }
 
     buf[out_len] = 0;
     @i = @i + 1;
-    ret ok[str, str](buf::*u8);
+    var out: str;
+    out.len  = out_len::u32;
+    out.data = buf;
+    ret ok[str, str](out);
 }
 
 # parse_ml_basic_string: parse a triple-quoted basic string.
@@ -726,21 +750,21 @@ fun parse_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
 # ret: the parsed string, or an error
 fun parse_ml_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
     # skip immediate newline after opening """
-    if (src[@i] == '\n') { @i = @i + 1; }
-    or (src[@i] == '\r' && src[@i + 1] == '\n') { @i = @i + 2; }
+    if (src.data[@i] == '\n') { @i = @i + 1; }
+    or (src.data[@i] == '\r' && src.data[@i + 1] == '\n') { @i = @i + 2; }
 
     val start: usize = @i;
     var out_len: usize = 0;
 
     # pass 1: compute output length
     for {
-        if (src[@i] == 0) { ret err[str, str]("unterminated multi-line string"); }
-        if (src[@i] == '"' && src[@i + 1] == '"' && src[@i + 2] == '"') { brk; }
-        if (src[@i] == '\\') {
+        if (src.data[@i] == 0) { ret err[str, str]("unterminated multi-line string"); }
+        if (src.data[@i] == '"' && src.data[@i + 1] == '"' && src.data[@i + 2] == '"') { brk; }
+        if (src.data[@i] == '\\') {
             @i = @i + 1;
             # line-ending backslash: skip trailing whitespace
-            if (is_ws_or_newline(src[@i])) {
-                for (is_ws_or_newline(src[@i])) { @i = @i + 1; }
+            if (is_ws_or_newline(src.data[@i])) {
+                for (is_ws_or_newline(src.data[@i])) { @i = @i + 1; }
                 cnt;
             }
             out_len = out_len + count_escape_len(src, i);
@@ -758,24 +782,27 @@ fun parse_ml_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
     var si: usize = start;
     var di: usize = 0;
     for {
-        if (src[si] == '"' && src[si + 1] == '"' && src[si + 2] == '"') { brk; }
-        if (src[si] == '\\') {
+        if (src.data[si] == '"' && src.data[si + 1] == '"' && src.data[si + 2] == '"') { brk; }
+        if (src.data[si] == '\\') {
             si = si + 1;
-            if (is_ws_or_newline(src[si])) {
-                for (is_ws_or_newline(src[si])) { si = si + 1; }
+            if (is_ws_or_newline(src.data[si])) {
+                for (is_ws_or_newline(src.data[si])) { si = si + 1; }
                 cnt;
             }
             di = di + decode_escape(src, ?si, buf, di);
             cnt;
         }
-        buf[di] = src[si];
+        buf[di] = src.data[si];
         di = di + 1;
         si = si + 1;
     }
 
     buf[out_len] = 0;
     @i = @i + 3;
-    ret ok[str, str](buf::*u8);
+    var out: str;
+    out.len  = out_len::u32;
+    out.data = buf;
+    ret ok[str, str](out);
 }
 
 # parse_literal_string: parse a single-quoted string (no escapes).
@@ -788,16 +815,16 @@ fun parse_ml_basic_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
 fun parse_literal_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
     @i = @i + 1;
 
-    if (src[@i] == '\'' && src[@i + 1] == '\'') {
+    if (src.data[@i] == '\'' && src.data[@i + 1] == '\'') {
         @i = @i + 2;
         ret parse_ml_literal_string(a, src, i);
     }
 
     val start: usize = @i;
-    for (src[@i] != 0 && src[@i] != '\'' && src[@i] != '\n') {
+    for (src.data[@i] != 0 && src.data[@i] != '\'' && src.data[@i] != '\n') {
         @i = @i + 1;
     }
-    if (src[@i] != '\'') { ret err[str, str]("unterminated literal string"); }
+    if (src.data[@i] != '\'') { ret err[str, str]("unterminated literal string"); }
 
     val len: usize = @i - start;
     @i = @i + 1;
@@ -812,13 +839,13 @@ fun parse_literal_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
 # i:   cursor position
 # ret: the parsed string, or an error
 fun parse_ml_literal_string(a: *Allocator, src: str, i: *usize) Result[str, str] {
-    if (src[@i] == '\n') { @i = @i + 1; }
-    or (src[@i] == '\r' && src[@i + 1] == '\n') { @i = @i + 2; }
+    if (src.data[@i] == '\n') { @i = @i + 1; }
+    or (src.data[@i] == '\r' && src.data[@i + 1] == '\n') { @i = @i + 2; }
 
     val start: usize = @i;
     for {
-        if (src[@i] == 0) { ret err[str, str]("unterminated multi-line literal string"); }
-        if (src[@i] == '\'' && src[@i + 1] == '\'' && src[@i + 2] == '\'') { brk; }
+        if (src.data[@i] == 0) { ret err[str, str]("unterminated multi-line literal string"); }
+        if (src.data[@i] == '\'' && src.data[@i + 1] == '\'' && src.data[@i + 2] == '\'') { brk; }
         @i = @i + 1;
     }
 
@@ -836,11 +863,11 @@ fun parse_ml_literal_string(a: *Allocator, src: str, i: *usize) Result[str, str]
 # ret: parsed Value, or an error
 fun parse_number(src: str, i: *usize) Result[Value, str] {
     var sign: i64 = 1;
-    if (src[@i] == '+') { @i = @i + 1; }
-    or (src[@i] == '-') { sign = -1; @i = @i + 1; }
+    if (src.data[@i] == '+') { @i = @i + 1; }
+    or (src.data[@i] == '-') { sign = -1; @i = @i + 1; }
 
     # inf
-    if (src[@i] == 'i' && src[@i + 1] == 'n' && src[@i + 2] == 'f') {
+    if (src.data[@i] == 'i' && src.data[@i + 1] == 'n' && src.data[@i + 2] == 'f') {
         @i = @i + 3;
         var bits: u64 = 0x7FF0000000000000;
         if (sign < 0) { bits = 0xFFF0000000000000; }
@@ -850,7 +877,7 @@ fun parse_number(src: str, i: *usize) Result[Value, str] {
     }
 
     # nan
-    if (src[@i] == 'n' && src[@i + 1] == 'a' && src[@i + 2] == 'n') {
+    if (src.data[@i] == 'n' && src.data[@i + 1] == 'a' && src.data[@i + 2] == 'n') {
         @i = @i + 3;
         var bits: u64 = 0x7FF8000000000000;
         if (sign < 0) { bits = 0xFFF8000000000000; }
@@ -860,8 +887,8 @@ fun parse_number(src: str, i: *usize) Result[Value, str] {
     }
 
     # hex, octal, binary prefixes
-    if (src[@i] == '0') {
-        val next: u8 = src[@i + 1];
+    if (src.data[@i] == '0') {
+        val next: u8 = src.data[@i + 1];
         if (next == 'x' || next == 'X') {
             @i = @i + 2;
             ret parse_hex_int(src, i, sign);
@@ -880,7 +907,7 @@ fun parse_number(src: str, i: *usize) Result[Value, str] {
     var x: u64 = 0;
     var any: bool = false;
     for {
-        val b: u8 = src[@i];
+        val b: u8 = src.data[@i];
         if (b == '_') { @i = @i + 1; cnt; }
         if (b < '0' || b > '9') { brk; }
         any = true;
@@ -896,12 +923,12 @@ fun parse_number(src: str, i: *usize) Result[Value, str] {
     if (!any) { ret err[Value, str]("expected number"); }
 
     # fractional part
-    if (src[@i] == '.' && src[@i + 1] >= '0' && src[@i + 1] <= '9') {
+    if (src.data[@i] == '.' && src.data[@i + 1] >= '0' && src.data[@i + 1] <= '9') {
         ret parse_float_frac(src, i, x::i64, sign);
     }
 
     # exponent without fraction
-    if (src[@i] == 'e' || src[@i] == 'E') {
+    if (src.data[@i] == 'e' || src.data[@i] == 'E') {
         ret parse_float_exp(src, i, x::f64 * sign::f64);
     }
 
@@ -921,7 +948,7 @@ fun parse_float_frac(src: str, i: *usize, int_part: i64, sign: i64) Result[Value
     var divisor: f64 = 1.0;
 
     for {
-        val b: u8 = src[@i];
+        val b: u8 = src.data[@i];
         if (b == '_') { @i = @i + 1; cnt; }
         if (b < '0' || b > '9') { brk; }
         frac = frac * 10.0 + (b - '0')::u64::f64;
@@ -931,7 +958,7 @@ fun parse_float_frac(src: str, i: *usize, int_part: i64, sign: i64) Result[Value
 
     var result: f64 = (int_part::f64 + frac / divisor) * sign::f64;
 
-    if (src[@i] == 'e' || src[@i] == 'E') {
+    if (src.data[@i] == 'e' || src.data[@i] == 'E') {
         ret parse_float_exp(src, i, result);
     }
 
@@ -947,13 +974,13 @@ fun parse_float_frac(src: str, i: *usize, int_part: i64, sign: i64) Result[Value
 fun parse_float_exp(src: str, i: *usize, mantissa: f64) Result[Value, str] {
     @i = @i + 1;
     var exp_sign: i64 = 1;
-    if (src[@i] == '+') { @i = @i + 1; }
-    or (src[@i] == '-') { exp_sign = -1; @i = @i + 1; }
+    if (src.data[@i] == '+') { @i = @i + 1; }
+    or (src.data[@i] == '-') { exp_sign = -1; @i = @i + 1; }
 
     var exp: i64 = 0;
     var any: bool = false;
     for {
-        val b: u8 = src[@i];
+        val b: u8 = src.data[@i];
         if (b == '_') { @i = @i + 1; cnt; }
         if (b < '0' || b > '9') { brk; }
         any = true;
@@ -1013,7 +1040,7 @@ fun parse_hex_int(src: str, i: *usize, sign: i64) Result[Value, str] {
     var x: u64 = 0;
     var any: bool = false;
     for {
-        val b: u8 = src[@i];
+        val b: u8 = src.data[@i];
         if (b == '_') { @i = @i + 1; cnt; }
         val d: i32 = hex_digit(b);
         if (d < 0) { brk; }
@@ -1031,7 +1058,7 @@ fun parse_oct_int(src: str, i: *usize, sign: i64) Result[Value, str] {
     var x: u64 = 0;
     var any: bool = false;
     for {
-        val b: u8 = src[@i];
+        val b: u8 = src.data[@i];
         if (b == '_') { @i = @i + 1; cnt; }
         if (b < '0' || b > '7') { brk; }
         any = true;
@@ -1048,7 +1075,7 @@ fun parse_bin_int(src: str, i: *usize, sign: i64) Result[Value, str] {
     var x: u64 = 0;
     var any: bool = false;
     for {
-        val b: u8 = src[@i];
+        val b: u8 = src.data[@i];
         if (b == '_') { @i = @i + 1; cnt; }
         if (b != '0' && b != '1') { brk; }
         any = true;
@@ -1068,13 +1095,13 @@ fun is_value_term(b: u8) bool {
 
 # parse_bool_val: parse "true" or "false".
 fun parse_bool_val(src: str, i: *usize) Result[Value, str] {
-    if (src[@i] == 't' && src[@i + 1] == 'r' && src[@i + 2] == 'u' && src[@i + 3] == 'e') {
-        if (!is_value_term(src[@i + 4])) { ret err[Value, str]("expected boolean"); }
+    if (src.data[@i] == 't' && src.data[@i + 1] == 'r' && src.data[@i + 2] == 'u' && src.data[@i + 3] == 'e') {
+        if (!is_value_term(src.data[@i + 4])) { ret err[Value, str]("expected boolean"); }
         @i = @i + 4;
         ret ok[Value, str](value_bool(true));
     }
-    if (src[@i] == 'f' && src[@i + 1] == 'a' && src[@i + 2] == 'l' && src[@i + 3] == 's' && src[@i + 4] == 'e') {
-        if (!is_value_term(src[@i + 5])) { ret err[Value, str]("expected boolean"); }
+    if (src.data[@i] == 'f' && src.data[@i + 1] == 'a' && src.data[@i + 2] == 'l' && src.data[@i + 3] == 's' && src.data[@i + 4] == 'e') {
+        if (!is_value_term(src.data[@i + 5])) { ret err[Value, str]("expected boolean"); }
         @i = @i + 5;
         ret ok[Value, str](value_bool(false));
     }
@@ -1088,15 +1115,15 @@ fun parse_bool_val(src: str, i: *usize) Result[Value, str] {
 # i:   cursor position
 # ret: the key string, or an error
 fun parse_key_segment(a: *Allocator, src: str, i: *usize) Result[str, str] {
-    if (src[@i] == '"') {
+    if (src.data[@i] == '"') {
         ret parse_basic_string(a, src, i);
     }
-    if (src[@i] == '\'') {
+    if (src.data[@i] == '\'') {
         ret parse_literal_string(a, src, i);
     }
 
     val start: usize = @i;
-    for (is_bare_key_char(src[@i])) {
+    for (is_bare_key_char(src.data[@i])) {
         @i = @i + 1;
     }
     if (@i == start) { ret err[str, str]("expected key"); }
@@ -1122,7 +1149,7 @@ fun parse_key_path(a: *Allocator, src: str, i: *usize) Result[KeySegs, str] {
     val pr: Result[bool, str] = keysegs_push(a, ?ks, unwrap_ok[str, str](first));
     if (is_err[bool, str](pr)) { ret err[KeySegs, str](unwrap_err[bool, str](pr)); }
 
-    for (src[@i] == '.') {
+    for (src.data[@i] == '.') {
         @i = @i + 1;
         val seg: Result[str, str] = parse_key_segment(a, src, i);
         if (is_err[str, str](seg)) { ret err[KeySegs, str](unwrap_err[str, str](seg)); }
@@ -1162,7 +1189,7 @@ fun navigate_segs(a: *Allocator, t: *Table, ks: *KeySegs) Result[*Table, str] {
 fun parse_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
     skip_ws(src, i);
 
-    val b: u8 = src[@i];
+    val b: u8 = src.data[@i];
 
     if (b == '"') {
         val r: Result[str, str] = parse_basic_string(a, src, i);
@@ -1207,7 +1234,7 @@ fun parse_array_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
 
     for {
         skip_ws_comments_newlines(src, i);
-        if (src[@i] == ']') {
+        if (src.data[@i] == ']') {
             @i = @i + 1;
             brk;
         }
@@ -1219,7 +1246,7 @@ fun parse_array_value(a: *Allocator, src: str, i: *usize) Result[Value, str] {
         if (is_err[bool, str](pr)) { ret err[Value, str](unwrap_err[bool, str](pr)); }
 
         skip_ws_comments_newlines(src, i);
-        if (src[@i] == ',') {
+        if (src.data[@i] == ',') {
             @i = @i + 1;
             cnt;
         }
@@ -1239,7 +1266,7 @@ fun parse_inline_table(a: *Allocator, src: str, i: *usize) Result[Value, str] {
     var t: Table = table_make();
 
     skip_ws(src, i);
-    if (src[@i] == '}') {
+    if (src.data[@i] == '}') {
         @i = @i + 1;
         ret ok[Value, str](value_table(t));
     }
@@ -1252,7 +1279,7 @@ fun parse_inline_table(a: *Allocator, src: str, i: *usize) Result[Value, str] {
         var ks: KeySegs = unwrap_ok[KeySegs, str](ksr);
 
         skip_ws(src, i);
-        if (src[@i] != '=') { ret err[Value, str]("expected '=' in inline table"); }
+        if (src.data[@i] != '=') { ret err[Value, str]("expected '=' in inline table"); }
         @i = @i + 1;
 
         val vr: Result[Value, str] = parse_value(a, src, i);
@@ -1265,11 +1292,11 @@ fun parse_inline_table(a: *Allocator, src: str, i: *usize) Result[Value, str] {
         if (is_err[bool, str](sr)) { ret err[Value, str](unwrap_err[bool, str](sr)); }
 
         skip_ws(src, i);
-        if (src[@i] == ',') {
+        if (src.data[@i] == ',') {
             @i = @i + 1;
             cnt;
         }
-        if (src[@i] == '}') {
+        if (src.data[@i] == '}') {
             @i = @i + 1;
             brk;
         }
@@ -1368,7 +1395,7 @@ pub fun parse(a: *Allocator, src: str) Result[Table, str] {
     if (a == nil) {
         ret err[Table, str]("allocator is nil");
     }
-    if (src == nil) {
+    if (src.data == nil) {
         ret err[Table, str]("source is nil");
     }
 
@@ -1378,10 +1405,10 @@ pub fun parse(a: *Allocator, src: str) Result[Table, str] {
 
     for {
         skip_ws_comments_newlines(src, ?i);
-        if (src[i] == 0) { brk; }
+        if (src.data[i] == 0) { brk; }
 
         # array of tables: [[key]]
-        if (src[i] == '[' && src[i + 1] == '[') {
+        if (src.data[i] == '[' && src.data[i + 1] == '[') {
             i = i + 2;
             skip_ws(src, ?i);
 
@@ -1390,7 +1417,7 @@ pub fun parse(a: *Allocator, src: str) Result[Table, str] {
             var ks: KeySegs = unwrap_ok[KeySegs, str](ksr);
 
             skip_ws(src, ?i);
-            if (src[i] != ']' || src[i + 1] != ']') {
+            if (src.data[i] != ']' || src.data[i + 1] != ']') {
                 ret err[Table, str]("expected ']]'");
             }
             i = i + 2;
@@ -1404,7 +1431,7 @@ pub fun parse(a: *Allocator, src: str) Result[Table, str] {
         }
 
         # table header: [key]
-        if (src[i] == '[') {
+        if (src.data[i] == '[') {
             i = i + 1;
             skip_ws(src, ?i);
 
@@ -1413,7 +1440,7 @@ pub fun parse(a: *Allocator, src: str) Result[Table, str] {
             var ks: KeySegs = unwrap_ok[KeySegs, str](ksr);
 
             skip_ws(src, ?i);
-            if (src[i] != ']') {
+            if (src.data[i] != ']') {
                 ret err[Table, str]("expected ']'");
             }
             i = i + 1;
@@ -1438,7 +1465,7 @@ pub fun parse(a: *Allocator, src: str) Result[Table, str] {
         var ks: KeySegs = unwrap_ok[KeySegs, str](ksr);
 
         skip_ws(src, ?i);
-        if (src[i] != '=') {
+        if (src.data[i] != '=') {
             ret err[Table, str]("expected '='");
         }
         i = i + 1;

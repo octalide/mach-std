@@ -24,8 +24,8 @@ pub fun write_bytes(w: *writer.Writer, buf: *u8, len: usize) Result[usize, str] 
 # s:   string to write (nil treated as empty)
 # ret: bytes written, or an error message
 pub fun write_str(w: *writer.Writer, s: str) Result[usize, str] {
-    if (s == nil) { ret ok[usize, str](0); }
-    ret writer.write_all(w, s, str_len(s));
+    if (s.len == 0 || s.data == nil) { ret ok[usize, str](0); }
+    ret writer.write_all(w, s.data, str_len(s));
 }
 
 # write_byte: write a single byte to a writer.
@@ -167,10 +167,11 @@ pub fun vformat(w: *writer.Writer, format: str, ap: *va_list, ...) Result[usize,
 
     var total: usize = 0;
     var i: usize = 0;
+    val flen: usize = format.len::usize;
 
-    for (format[i] != 0) {
-        if (format[i] != '%') {
-            val r: Result[usize, str] = write_byte(w, format[i]);
+    for (i < flen) {
+        if (format.data[i] != '%') {
+            val r: Result[usize, str] = write_byte(w, format.data[i]);
             if (is_err[usize, str](r)) { ret r; }
             total = total + unwrap_ok[usize, str](r);
             i = i + 1;
@@ -178,10 +179,10 @@ pub fun vformat(w: *writer.Writer, format: str, ap: *va_list, ...) Result[usize,
         }
 
         i = i + 1;
-        val c: u8 = format[i];
-        if (c == 0) {
+        if (i >= flen) {
             ret err[usize, str](ERR_BAD_FORMAT);
         }
+        val c: u8 = format.data[i];
 
         var r: Result[usize, str];
 

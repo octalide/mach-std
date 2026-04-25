@@ -31,11 +31,16 @@ pub rec Semver {
 # a:     allocator for prerelease/build substring copies
 # ret:   the parsed version, or an error message
 pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
-    if (input == nil || str_len(input) == 0) {
+    if (str_len(input) == 0) {
         ret err[Semver, str]("empty version string");
     }
 
     var v:   Semver;
+    v.prerelease.len  = 0;
+    v.prerelease.data = nil;
+    v.build.len       = 0;
+    v.build.data      = nil;
+
     var pos: usize = 0;
 
     var major_result: Option[u64] = parse_number(input, ?pos);
@@ -44,7 +49,7 @@ pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
     }
     v.major = unwrap[u64](major_result);
 
-    if (pos >= str_len(input) || input[pos] != '.') {
+    if (pos >= str_len(input) || input.data[pos] != '.') {
         ret err[Semver, str]("expected '.' after major");
     }
     pos = pos + 1;
@@ -55,7 +60,7 @@ pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
     }
     v.minor = unwrap[u64](minor_result);
 
-    if (pos >= str_len(input) || input[pos] != '.') {
+    if (pos >= str_len(input) || input.data[pos] != '.') {
         ret err[Semver, str]("expected '.' after minor");
     }
     pos = pos + 1;
@@ -66,12 +71,12 @@ pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
     }
     v.patch = unwrap[u64](patch_result);
 
-    if (pos < str_len(input) && input[pos] == '-') {
+    if (pos < str_len(input) && input.data[pos] == '-') {
         pos = pos + 1;
         val start: usize = pos;
 
         for (pos < str_len(input)) {
-            val c: u8 = input[pos];
+            val c: u8 = input.data[pos];
             if (c == '+') { brk; }
             if (!is_valid_prerelease_char(c)) {
                 ret err[Semver, str]("invalid prerelease character");
@@ -85,17 +90,18 @@ pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
             ret err[Semver, str]("out of memory");
         }
         val buf: *u8 = unwrap_ok[ptr, str](alloc_result)::*u8;
-        mem.raw_copy(buf::ptr, (input + start)::ptr, pre_len);
+        mem.raw_copy(buf::ptr, (input.data::usize + start)::ptr, pre_len);
         buf[pre_len] = 0;
-        v.prerelease = buf::str;
+        v.prerelease.len  = pre_len::u32;
+        v.prerelease.data = buf;
     }
 
-    if (pos < str_len(input) && input[pos] == '+') {
+    if (pos < str_len(input) && input.data[pos] == '+') {
         pos = pos + 1;
         val start: usize = pos;
 
         for (pos < str_len(input)) {
-            val c: u8 = input[pos];
+            val c: u8 = input.data[pos];
             if (!is_valid_build_char(c)) {
                 ret err[Semver, str]("invalid build character");
             }
@@ -108,9 +114,10 @@ pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
             ret err[Semver, str]("out of memory");
         }
         val buf: *u8 = unwrap_ok[ptr, str](alloc_result)::*u8;
-        mem.raw_copy(buf::ptr, (input + start)::ptr, bld_len);
+        mem.raw_copy(buf::ptr, (input.data::usize + start)::ptr, bld_len);
         buf[bld_len] = 0;
-        v.build = buf::str;
+        v.build.len  = bld_len::u32;
+        v.build.data = buf;
     }
 
     ret ok[Semver, str](v);
@@ -118,20 +125,20 @@ pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
 
 # validate that a Semver is well-formed
 pub fun semver_is_valid(v: *Semver) bool {
-    if (!(v.prerelease == nil || str_len(v.prerelease) == 0)) {
+    if (v.prerelease.len > 0) {
         var i: usize = 0;
-        for (v.prerelease[i] != 0) {
-            if (!is_valid_prerelease_char(v.prerelease[i])) {
+        for (i < v.prerelease.len::usize) {
+            if (!is_valid_prerelease_char(v.prerelease.data[i])) {
                 ret false;
             }
             i = i + 1;
         }
     }
 
-    if (!(v.build == nil || str_len(v.build) == 0)) {
+    if (v.build.len > 0) {
         var i: usize = 0;
-        for (v.build[i] != 0) {
-            if (!is_valid_build_char(v.build[i])) {
+        for (i < v.build.len::usize) {
+            if (!is_valid_build_char(v.build.data[i])) {
                 ret false;
             }
             i = i + 1;
@@ -156,8 +163,8 @@ pub fun semver_compare(v: *Semver, other: *Semver) i64 {
     if (v.patch < other.patch) { ret -1; }
     if (v.patch > other.patch) { ret 1; }
 
-    val this_has_pre:  bool = !(v.prerelease == nil || str_len(v.prerelease) == 0);
-    val other_has_pre: bool = !(other.prerelease == nil || str_len(other.prerelease) == 0);
+    val this_has_pre:  bool = v.prerelease.len > 0;
+    val other_has_pre: bool = other.prerelease.len > 0;
 
     if (!this_has_pre && other_has_pre) { ret 1; }
     if (this_has_pre && !other_has_pre) { ret -1; }
@@ -186,17 +193,17 @@ pub fun semver_equals(v: *Semver, other: *Semver) bool {
 
 # check whether v is a stable release
 pub fun semver_is_stable(v: *Semver) bool {
-    ret v.prerelease == nil || str_len(v.prerelease) == 0;
+    ret v.prerelease.len == 0;
 }
 
 # check whether v is a prerelease
 pub fun semver_is_prerelease(v: *Semver) bool {
-    ret !(v.prerelease == nil || str_len(v.prerelease) == 0);
+    ret v.prerelease.len > 0;
 }
 
 # check whether v has build metadata
 pub fun semver_has_build(v: *Semver) bool {
-    ret !(v.build == nil || str_len(v.build) == 0);
+    ret v.build.len > 0;
 }
 
 # parse an unsigned number from input at pos
@@ -205,12 +212,11 @@ pub fun semver_has_build(v: *Semver) bool {
 # pos:   pointer to current position (advanced past the number on success)
 # ret:   some(value) or none on failure
 fun parse_number(input: str, pos: *usize) Option[u64] {
-    val start:       usize = @pos;
     var value:       u64   = 0;
     var found_digit: bool  = false;
 
     for (@pos < str_len(input)) {
-        val c: u8 = input[@pos];
+        val c: u8 = input.data[@pos];
         if (!char_is_digit(c)) { brk; }
 
         val digit: u64 = (c - '0')::u64;
@@ -246,27 +252,29 @@ fun compare_prerelease(a: str, b: str) i64 {
     var a_pos: usize = 0;
     var b_pos: usize = 0;
 
-    for {
-        val a_len: usize = str_len(a);
-        val b_len: usize = str_len(b);
+    val a_len: usize = str_len(a);
+    val b_len: usize = str_len(b);
 
+    for {
         if (a_pos >= a_len && b_pos >= b_len) { ret 0; }
         if (a_pos >= a_len) { ret -1; }
         if (b_pos >= b_len) { ret 1; }
 
         var a_start: usize = a_pos;
-        for (a_pos < a_len && a[a_pos] != '.') {
+        for (a_pos < a_len && a.data[a_pos] != '.') {
             a_pos = a_pos + 1;
         }
         val a_ident_len: usize = a_pos - a_start;
 
         var b_start: usize = b_pos;
-        for (b_pos < b_len && b[b_pos] != '.') {
+        for (b_pos < b_len && b.data[b_pos] != '.') {
             b_pos = b_pos + 1;
         }
         val b_ident_len: usize = b_pos - b_start;
 
-        val cmp: i64 = compare_identifier(a + a_start, a_ident_len, b + b_start, b_ident_len);
+        val cmp: i64 = compare_identifier_raw(
+            (a.data::usize + a_start)::*u8, a_ident_len,
+            (b.data::usize + b_start)::*u8, b_ident_len);
         if (cmp != 0) { ret cmp; }
 
         if (a_pos < a_len) { a_pos = a_pos + 1; }
@@ -276,37 +284,33 @@ fun compare_prerelease(a: str, b: str) i64 {
     ret 0;
 }
 
-# compare two identifiers per SemVer rules
+# compare two raw byte spans as semver identifiers
 # ---
-# a:     first identifier
+# a:     first identifier bytes
 # a_len: length of first identifier
-# b:     second identifier
+# b:     second identifier bytes
 # b_len: length of second identifier
 # ret:   <0 if a < b, 0 if equal, >0 if a > b
-fun compare_identifier(a: str, a_len: usize, b: str, b_len: usize) i64 {
-    val a_numeric: bool = is_numeric(a, a_len);
-    val b_numeric: bool = is_numeric(b, b_len);
+fun compare_identifier_raw(a: *u8, a_len: usize, b: *u8, b_len: usize) i64 {
+    val a_numeric: bool = is_numeric_raw(a, a_len);
+    val b_numeric: bool = is_numeric_raw(b, b_len);
 
     if (a_numeric && !b_numeric) { ret -1; }
     if (!a_numeric && b_numeric) { ret 1; }
 
     if (a_numeric && b_numeric) {
-        val a_val: u64 = parse_identifier_num(a, a_len);
-        val b_val: u64 = parse_identifier_num(b, b_len);
+        val a_val: u64 = parse_identifier_num_raw(a, a_len);
+        val b_val: u64 = parse_identifier_num_raw(b, b_len);
         if (a_val < b_val) { ret -1; }
         if (a_val > b_val) { ret 1; }
         ret 0;
     }
 
-    ret compare_bounded(a, a_len, b, b_len);
+    ret compare_bounded_raw(a, a_len, b, b_len);
 }
 
 # check whether the first len bytes of s are all digits
-# ---
-# s:   string to check
-# len: number of bytes to examine
-# ret: true if all bytes are digits and len > 0
-fun is_numeric(s: str, len: usize) bool {
+fun is_numeric_raw(s: *u8, len: usize) bool {
     if (len == 0) { ret false; }
 
     var i: usize = 0;
@@ -319,11 +323,7 @@ fun is_numeric(s: str, len: usize) bool {
 }
 
 # parse the first len bytes of s as a number
-# ---
-# s:   string containing digits
-# len: number of bytes to parse
-# ret: the parsed value
-fun parse_identifier_num(s: str, len: usize) u64 {
+fun parse_identifier_num_raw(s: *u8, len: usize) u64 {
     var value: u64   = 0;
     var i:     usize = 0;
 
@@ -338,14 +338,8 @@ fun parse_identifier_num(s: str, len: usize) u64 {
     ret value;
 }
 
-# lexicographic comparison of two bounded strings
-# ---
-# a:     first string
-# a_len: length of first string
-# b:     second string
-# b_len: length of second string
-# ret:   <0 if a < b, 0 if equal, >0 if a > b
-fun compare_bounded(a: str, a_len: usize, b: str, b_len: usize) i64 {
+# lexicographic comparison of two bounded raw byte spans
+fun compare_bounded_raw(a: *u8, a_len: usize, b: *u8, b_len: usize) i64 {
     var min_len: usize = a_len;
     if (b_len < min_len) { min_len = b_len; }
 
@@ -371,8 +365,8 @@ test "semver: parse basic version" {
     if (v.major != 1) { ret 0; }
     if (v.minor != 2) { ret 0; }
     if (v.patch != 3) { ret 0; }
-    if (v.prerelease != nil && str_len(v.prerelease) != 0) { ret 0; }
-    if (v.build != nil && str_len(v.build) != 0) { ret 0; }
+    if (v.prerelease.len != 0) { ret 0; }
+    if (v.build.len != 0) { ret 0; }
     ret 1;
 }
 
@@ -387,7 +381,7 @@ test "semver: parse prerelease with dots" {
     if (v.minor != 0) { ret 0; }
     if (v.patch != 0) { ret 0; }
     if (!str_equals(v.prerelease, "alpha.1")) { ret 0; }
-    if (v.build != nil && str_len(v.build) != 0) { ret 0; }
+    if (v.build.len != 0) { ret 0; }
     ret 1;
 }
 
@@ -399,7 +393,7 @@ test "semver: parse build metadata" {
     if (is_err[Semver, str](r)) { ret 0; }
     val v: Semver = unwrap_ok[Semver, str](r);
     if (v.major != 1) { ret 0; }
-    if (v.prerelease != nil && str_len(v.prerelease) != 0) { ret 0; }
+    if (v.prerelease.len != 0) { ret 0; }
     if (!str_equals(v.build, "build")) { ret 0; }
     ret 1;
 }

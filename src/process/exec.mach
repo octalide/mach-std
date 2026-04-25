@@ -28,7 +28,7 @@ pub rec Child {
 # envp:     null-terminated environment array
 # ret:      exit status, or an error message
 pub fun run(pathname: str, argv: **u8, envp: **u8) Result[ExitStatus, str] {
-    val pid: i64 = os.spawn(pathname, argv, envp);
+    val pid: i64 = os.spawn(pathname.data, argv, envp);
     if (pid < 0) { ret err[ExitStatus, str]("spawn failed"); }
 
     var wstatus: i32 = 0;
@@ -45,7 +45,7 @@ pub fun run(pathname: str, argv: **u8, envp: **u8) Result[ExitStatus, str] {
 # envp:     null-terminated environment array
 # ret:      child handle, or an error message
 pub fun spawn(pathname: str, argv: **u8, envp: **u8) Result[Child, str] {
-    val pid: i64 = os.spawn(pathname, argv, envp);
+    val pid: i64 = os.spawn(pathname.data, argv, envp);
     if (pid < 0) { ret err[Child, str]("spawn failed"); }
     ret ok[Child, str](Child{pid: pid});
 }
@@ -102,7 +102,7 @@ pub fun exit(code: i64) {
 
 fun make_argv1(prog: str) [2]usize {
     var buf: [2]usize;
-    buf[0] = prog::usize;
+    buf[0] = prog.data::usize;
     buf[1] = 0;
     ret buf;
 }

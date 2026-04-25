@@ -162,7 +162,12 @@ pub fun value_get(v: *Value, index: usize) *Value {
 # index: zero-based index
 # ret:   key string (null-terminated), or nil if out of bounds
 pub fun value_key(v: *Value, index: usize) str {
-    if (v.kind != OBJECT || index >= v.count) { ret nil; }
+    if (v.kind != OBJECT || index >= v.count) {
+        var empty: str;
+        empty.len  = 0;
+        empty.data = nil;
+        ret empty;
+    }
     ret v.keys[index];
 }
 
@@ -202,7 +207,8 @@ fun make_null() Value {
     v.kind = NULL;
     v.bool_val = 0;
     v.num_val = 0;
-    v.str_val = nil;
+    v.str_val.len  = 0;
+    v.str_val.data = nil;
     v.str_len = 0;
     v.children = nil;
     v.keys = nil;
@@ -369,7 +375,9 @@ fun parse_string(p: *Parser) Result[Value, str] {
         }
         if (c == '"') {
             val slen: usize = p.pos - start;
-            val sptr: str = (p.src::usize + start)::str;
+            var sptr: str;
+            sptr.len  = slen::u32;
+            sptr.data = (p.src::usize + start)::*u8;
             p.pos = p.pos + 1;
             ret ok[Value, str](make_string(sptr, slen));
         }
@@ -527,9 +535,10 @@ fun emit_bytes(e: *Emitter, s: *u8, slen: usize) {
 }
 
 fun emit_str(e: *Emitter, s: str) {
+    val n: usize = s.len::usize;
     var i: usize = 0;
-    for (s[i] != 0) {
-        emit_byte(e, s[i]);
+    for (i < n) {
+        emit_byte(e, s.data[i]);
         i = i + 1;
     }
 }

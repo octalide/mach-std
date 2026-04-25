@@ -359,11 +359,12 @@ pub fun hash_str(p: ptr) u64 {
     var hash: u64 = FNV_OFFSET;
     val sp: str = @s;
 
-    if (sp == nil) { ret hash; }
+    if (sp.data == nil) { ret hash; }
 
+    val n: usize = sp.len::usize;
     var i: usize = 0;
-    for (sp[i] != 0) {
-        val byte: u64 = sp[i]::u64;
+    for (i < n) {
+        val byte: u64 = sp.data[i]::u64;
         hash = hash ^ byte;
         hash = hash * FNV_PRIME;
         i = i + 1;
