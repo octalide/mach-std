@@ -6,6 +6,7 @@
 
 use std.types.size;
 use std.types.bool;
+use std.types.zstr;
 
 use os_shared: std.system.os.shared;
 use atomic:    std.sync.atomic;

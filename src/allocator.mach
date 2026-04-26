@@ -7,7 +7,6 @@ use std.types.bool;
 use std.types.option;
 use std.types.result;
 use std.types.size;
-use std.types.string;
 
 use mem:    std.memory;
 
