@@ -90,7 +90,7 @@ pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
             ret err[Semver, str]("out of memory");
         }
         val buf: *u8 = unwrap_ok[ptr, str](alloc_result)::*u8;
-        mem.raw_copy(buf::ptr, (input.data::usize + start)::ptr, pre_len);
+        mem.raw_copy(buf, ?input.data[start], pre_len);
         buf[pre_len] = 0;
         v.prerelease.len  = pre_len::u32;
         v.prerelease.data = buf;
@@ -114,7 +114,7 @@ pub fun semver_parse(input: str, a: *allo.Allocator) Result[Semver, str] {
             ret err[Semver, str]("out of memory");
         }
         val buf: *u8 = unwrap_ok[ptr, str](alloc_result)::*u8;
-        mem.raw_copy(buf::ptr, (input.data::usize + start)::ptr, bld_len);
+        mem.raw_copy(buf, ?input.data[start], bld_len);
         buf[bld_len] = 0;
         v.build.len  = bld_len::u32;
         v.build.data = buf;
@@ -273,8 +273,8 @@ fun compare_prerelease(a: str, b: str) i64 {
         val b_ident_len: usize = b_pos - b_start;
 
         val cmp: i64 = compare_identifier_raw(
-            (a.data::usize + a_start)::*u8, a_ident_len,
-            (b.data::usize + b_start)::*u8, b_ident_len);
+            ?a.data[a_start], a_ident_len,
+            ?b.data[b_start], b_ident_len);
         if (cmp != 0) { ret cmp; }
 
         if (a_pos < a_len) { a_pos = a_pos + 1; }
