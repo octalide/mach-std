@@ -11,7 +11,7 @@
 #
 # user code must define:
 #   $main.symbol = "main";
-#   fun main(argc: i64, argv: **u8) i64 { ... }
+#   fun main(argc: usize, argv: *zstr) i64 { ... }
 
 $if ($mach.build.target.os.id != $mach.os.windows.id) {
     $error("std.runtime.windows.x86_64: requires windows target");
@@ -20,6 +20,9 @@ $if ($mach.build.target.os.id != $mach.os.windows.id) {
 $if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
     $error("std.runtime.windows.x86_64: requires x86_64 target");
 }
+
+use std.types.size;
+use std.types.zstr;
 
 $GetCommandLineA.symbol = "GetCommandLineA";
 ext GetCommandLineA: fun() *u8;
@@ -31,8 +34,8 @@ val MAX_ARGS: usize = 256;
 val MAX_CMDLINE: usize = 32768;
 
 var cmdline_buf: [32768]u8;
-var argv_ptrs: [256]usize;
-var argc: i64 = 0;
+var argv_ptrs: [256]zstr;
+var argc: usize = 0;
 
 $_start.symbol = "mainCRTStartup";
 pub fun _start() {
@@ -101,7 +104,7 @@ fun parse_cmdline(cmdline: *u8) {
         }
         cmdline_buf[write_pos] = 0;
 
-        argv_ptrs[count] = ?cmdline_buf[arg_start]::usize;
+        argv_ptrs[count] = ?cmdline_buf[arg_start];
         count = count + 1;
 
         if (i < len) {
@@ -109,5 +112,5 @@ fun parse_cmdline(cmdline: *u8) {
         }
     }
 
-    argc = count::i64;
+    argc = count;
 }

@@ -4,15 +4,20 @@
 # the program entrypoint. user code must define a `main` function as follows:
 #
 #   use std.runtime;
+#   use std.types.size;
+#   use std.types.zstr;
 #
 #   $main.symbol = "main";
-#   fun main(argc: i64, argv: **u8) i64 {
+#   fun main(argc: usize, argv: *zstr) i64 {
 #       ret 0;
 #   }
 #
 # the `_start` entrypoint decodes argc/argv from the initial stack layout and
 # calls the user's `main`. on return, it terminates the process with the exit
 # code returned by `main`.
+#
+# argc is the platform-pointer-sized count of arguments. argv is a pointer
+# to the first of (argc + 1) zstrs; argv[argc] is nil to terminate the array.
 #
 # note: `use std.runtime;` is required to link the entrypoint into the binary.
 
