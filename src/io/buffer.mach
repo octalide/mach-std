@@ -234,7 +234,9 @@ pub fun rbuf_read_str(buf: *ReadBuf) Result[str, str] {
     var i: usize = buf.pos;
     for (i < buf.len) {
         if (buf.data[i] == 0) {
-            val s: str = (buf.data::usize + buf.pos)::str;
+            var s: str;
+            s.len  = (i - buf.pos)::u32;
+            s.data = ?buf.data[buf.pos];
             buf.pos = i + 1;
             ret ok[str, str](s);
         }
