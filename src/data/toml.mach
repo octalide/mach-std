@@ -331,9 +331,7 @@ pub fun get(t: *Table, path: str) *Value {
 
     for (i < plen) {
         if (path.data[i] == '.') {
-            var seg: str;
-            seg.len  = (i - start)::u32;
-            seg.data = (path.data::usize + start)::*u8;
+            val seg: str = str_slice(path, start, i - start);
             val v: *Value = find_by_seg(current, seg, i - start);
             if (v == nil || v.tag != TYPE_TABLE) { ret nil; }
             current = ?v.data.table;
@@ -342,9 +340,7 @@ pub fun get(t: *Table, path: str) *Value {
         i = i + 1;
     }
 
-    var seg: str;
-    seg.len  = (i - start)::u32;
-    seg.data = (path.data::usize + start)::*u8;
+    val seg: str = str_slice(path, start, i - start);
     ret find_by_seg(current, seg, i - start);
 }
 
