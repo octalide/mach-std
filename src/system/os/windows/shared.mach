@@ -4,14 +4,17 @@
 # kernel32.dll and ntdll.dll via ext fun declarations. a HANDLE-to-fd
 # mapping table bridges the POSIX-style fd interface used by os.mach.
 
-use std.types.size;
-use std.types.bool;
-use std.types.zstr;
+use std.types.size.usize;
+use std.types.size.isize;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.string.str;
 
 use os_shared: std.system.os.shared;
 use atomic:    std.sync.atomic;
 
-$if ($mach.build.target.os.id != $mach.os.windows.id) {
+$if ($mach.target.os != $mach.os.windows) {
     $error("std.system.os.windows.shared: requires windows target");
 }
 
@@ -1546,7 +1549,7 @@ pub fun sock_setopt(fd: i32, level: i32, opt: i32, value: *u8, vallen: usize) i6
 
 # dns
 
-pub val DNS_HOSTS_PATH: zstr = `C:/Windows/System32/drivers/etc/hosts`;
+pub val DNS_HOSTS_PATH: str = "C:/Windows/System32/drivers/etc/hosts";
 
 # dns_nameserver: get the primary DNS nameserver address.
 #

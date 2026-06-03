@@ -1,5 +1,4 @@
-use std.types.bool;
-use std.types.size;
+use std.types.size.usize;
 
 # low-level memory operations for raw and typed buffers.
 

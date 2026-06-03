@@ -4,11 +4,19 @@
 # pointers into the original input buffer (escape sequences are not
 # unescaped). the caller must keep the input alive while values are in use.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
-use std.memory;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
+use std.types.string.str;
+use std.types.string.str_equals;
+use std.memory.raw_copy;
 use allo: std.allocator;
 
 pub def Kind: u8;
@@ -162,12 +170,7 @@ pub fun value_get(v: *Value, index: usize) *Value {
 # index: zero-based index
 # ret:   key string (null-terminated), or nil if out of bounds
 pub fun value_key(v: *Value, index: usize) str {
-    if (v.kind != OBJECT || index >= v.count) {
-        var empty: str;
-        empty.len  = 0;
-        empty.data = nil;
-        ret empty;
-    }
+    if (v.kind != OBJECT || index >= v.count) { ret nil; }
     ret v.keys[index];
 }
 
@@ -207,8 +210,7 @@ fun make_null() Value {
     v.kind = NULL;
     v.bool_val = 0;
     v.num_val = 0;
-    v.str_val.len  = 0;
-    v.str_val.data = nil;
+    v.str_val = nil;
     v.str_len = 0;
     v.children = nil;
     v.keys = nil;
@@ -312,9 +314,6 @@ fun parse_null(p: *Parser) Result[Value, str] {
 }
 
 fun parse_bool(p: *Parser) Result[Value, str] {
-    if (p.pos >= p.len) {
-        ret err[Value, str]("unexpected end of input in boolean");
-    }
     if (p.src[p.pos] == 't') {
         if (p.pos + 4 > p.len) {
             ret err[Value, str]("unexpected end of input in true");
@@ -378,9 +377,7 @@ fun parse_string(p: *Parser) Result[Value, str] {
         }
         if (c == '"') {
             val slen: usize = p.pos - start;
-            var sptr: str;
-            sptr.len  = slen::u32;
-            sptr.data = (p.src::usize + start)::*u8;
+            val sptr: str = (p.src::usize + start)::str;
             p.pos = p.pos + 1;
             ret ok[Value, str](make_string(sptr, slen));
         }
@@ -538,10 +535,9 @@ fun emit_bytes(e: *Emitter, s: *u8, slen: usize) {
 }
 
 fun emit_str(e: *Emitter, s: str) {
-    val n: usize = s.len::usize;
     var i: usize = 0;
-    for (i < n) {
-        emit_byte(e, s.data[i]);
+    for (s[i] != 0) {
+        emit_byte(e, s[i]);
         i = i + 1;
     }
 }

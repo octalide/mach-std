@@ -6,12 +6,15 @@
 # reclaimed on program exit. use an arena allocator for bulk-freeable
 # allocation patterns, or a real heap allocator for general-purpose use.
 
-use       std.types.bool;
-use       std.types.option;
-use       std.types.size;
-use       std.types.string;
-use allo: std.allocator;
+use std.types.option.Option;
+use std.types.option.some;
+use std.types.option.none;
+use std.types.option.is_none;
+use std.types.option.unwrap;
+use std.types.size.usize;
+use std.types.string.str;
 
+use allo: std.allocator;
 use mem:  std.memory;
 use pmem: std.system.os;
 

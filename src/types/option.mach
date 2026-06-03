@@ -1,7 +1,9 @@
 # optional value type
 
-use std.types.bool;
-use std.system.panic;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.system.panic.panic;
 
 # Option[T]: represents an optional value that may or may not be present.
 # ---
@@ -49,7 +51,7 @@ pub fun is_none[T](opt: Option[T]) bool {
 # ret: the contained value
 pub fun unwrap[T](opt: Option[T]) T {
     if (!opt.has_value) {
-        panic(`unwrap called on None\n`);
+        panic("unwrap called on None\n");
     }
     ret opt.value;
 }

@@ -3,8 +3,9 @@
 # Date represents a calendar date (year, month, day).
 # Datetime extends Date with time-of-day and UTC offset.
 
-use std.types.bool;
-use std.chrono.time;
+use std.types.bool.bool;
+use std.chrono.time.Time;
+use std.chrono.time.unix;
 
 val SECONDS_PER_DAY:    i64 = 86400;
 val SECONDS_PER_HOUR:   i64 = 3600;

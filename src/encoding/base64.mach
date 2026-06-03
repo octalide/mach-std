@@ -1,8 +1,11 @@
 # base64 encoding and decoding.
 
-use std.types.bool;
-use std.types.size;
-use std.types.string;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.string.str_equals;
 
 val std_table: [64]u8 = [64]u8{
     65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80,

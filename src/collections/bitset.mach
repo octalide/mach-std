@@ -1,12 +1,19 @@
 # dynamic bitset backed by allocator.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
-use mem: std.memory;
-use bits: std.math.bits;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
 
+use mem:       std.memory;
+use bits:      std.math.bits;
 use allocator: std.allocator;
 use page:      std.allocator.page;
 

@@ -3,8 +3,13 @@
 # Time represents an absolute point in time as seconds + nanoseconds
 # since the Unix epoch (1970-01-01 00:00:00 UTC).
 
-use std.types.bool;
-use std.chrono.duration;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.chrono.duration.Duration;
+use std.chrono.duration.MICROSECOND;
+use std.chrono.duration.MILLISECOND;
+use std.chrono.duration.SECOND;
 
 use os: std.system.os;
 

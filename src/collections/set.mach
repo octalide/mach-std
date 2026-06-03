@@ -1,9 +1,15 @@
 # hash set backed by Map.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
 
 use allocator: std.allocator;
 use page:      std.allocator.page;
@@ -78,12 +84,12 @@ pub fun clear[K](s: *Set[K]) {
     map.clear[K, u8](?s.inner);
 }
 
-pub fwd map.hash_str;
-pub fwd map.eq_str;
-pub fwd map.hash_i64;
-pub fwd map.eq_i64;
-pub fwd map.hash_u64;
-pub fwd map.eq_u64;
+fwd map.hash_str;
+fwd map.eq_str;
+fwd map.hash_i64;
+fwd map.eq_i64;
+fwd map.hash_u64;
+fwd map.eq_u64;
 
 test "set: init creates empty set" {
     var a: allocator.Allocator;

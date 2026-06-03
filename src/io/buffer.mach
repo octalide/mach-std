@@ -3,10 +3,19 @@
 # WriteBuf builds byte sequences with typed writes, alignment, and patching.
 # ReadBuf provides a cursor over an existing byte slice for deserialization.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_ok;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.string.str_len;
+use std.types.string.str_equals;
 
 use allocator: std.allocator;
 use page:      std.allocator.page;
@@ -234,9 +243,7 @@ pub fun rbuf_read_str(buf: *ReadBuf) Result[str, str] {
     var i: usize = buf.pos;
     for (i < buf.len) {
         if (buf.data[i] == 0) {
-            var s: str;
-            s.len  = (i - buf.pos)::u32;
-            s.data = ?buf.data[buf.pos];
+            val s: str = (buf.data::usize + buf.pos)::str;
             buf.pos = i + 1;
             ret ok[str, str](s);
         }

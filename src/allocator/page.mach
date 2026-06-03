@@ -3,12 +3,13 @@
 # wraps platform page allocation functions for the Allocator interface.
 # alignment is ignored since page allocations are always page-aligned.
 
-use       std.types.bool;
-use       std.types.option;
-use       std.types.size;
-use       std.types.string;
-use allo: std.allocator;
+use std.types.option.Option;
+use std.types.option.some;
+use std.types.option.none;
+use std.types.size.usize;
+use std.types.string.str;
 
+use allo: std.allocator;
 use pmem: std.system.os;
 
 # make: initialize a page-backed Allocator.

@@ -1,33 +1,23 @@
 # path manipulation helpers
 #
-# Path is a type alias for str (the builtin fat string). every value of
-# type Path upholds an additional invariant beyond str:
-#
-#     p.data[p.len] == 0
-#
-# i.e. one byte past the logical end of every valid Path is a null
-# terminator. this makes p.data unconditionally safe to pass across
-# C-FFI boundaries that expect a null-terminated *u8.
-#
-# the invariant is preserved by construction:
-#   * literal-derived Path values use rodata which is null-terminated by
-#     the compiler.
-#   * allocating constructors (clone, join, parent, stem, filename,
-#     extension, ...) write a trailing 0 into the buffer they allocate
-#     and report `len` excluding the terminator.
-#   * the canonical empty Path returned by `empty_path()` points at a
-#     static zero byte.
-#
-# corollary: do NOT construct a Path by hand-stitching `len` and `data`
-# fields unless you've ensured the byte at offset `len` is 0. functions
-# that conceptually slice a path (filename, extension) therefore allocate
-# a fresh null-terminated copy rather than returning a sub-view.
+# Path is a type alias for str. functions that return new paths allocate
+# through the caller-provided Allocator. functions that return views into
+# existing paths (filename, extension) return pointers into the input and
+# do not allocate.
 
-use std.types.bool;
-use std.types.result;
-use std.types.size;
-use std.types.string;
-use std.types.zstr;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.string.str_len;
+use std.types.string.str_equals;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
 
 use allocator: std.allocator;
 use mem:       std.memory;
@@ -36,119 +26,91 @@ use page:      std.allocator.page;
 
 pub def Path: str;
 
-# canonical empty Path. the backing storage is a single null byte so that
-# the null-termination invariant holds even for the empty case.
-val EMPTY_BYTE: zstr = ``;
-
 # separator: platform path separator character.
 pub fun separator() u8 {
     ret os.separator;
 }
 
-# empty_path: the canonical empty Path value. its data pointer is non-nil
-# and points at a static null byte, so `empty_path().data[0] == 0`.
-pub fun empty_path() Path {
-    var out: Path;
-    out.len  = 0;
-    out.data = EMPTY_BYTE;
-    ret out;
-}
-
-# is_empty: check whether a path is empty.
+# is_empty: check whether a path is empty or nil.
 pub fun is_empty(p: Path) bool {
-    ret p.len == 0;
+    ret p == nil || p[0] == 0;
 }
 
 # is_abs: check whether a path is absolute.
 pub fun is_abs(p: Path) bool {
-    if (is_empty(p)) { ret false; }
+    if (p == nil) { ret false; }
 
-    ret p.data[0] == separator();
+    ret p[0] == separator();
 }
 
 # is_root: check whether a path consists only of separators.
 pub fun is_root(p: Path) bool {
     if (is_empty(p)) { ret false; }
 
-    val len: usize = p.len::usize;
+    val len: usize = str_len(p);
     val sep: u8    = separator();
     var i:   usize = 0;
 
     for (i < len) {
-        if (p.data[i] != sep) { ret false; }
+        if (p[i] != sep) { ret false; }
         i = i + 1;
     }
 
     ret true;
 }
 
-# filename: return the final component of a path as a freshly allocated Path.
+# filename: return the final component of a path.
 #
-# allocates a null-terminated copy via `a`. for an empty input or a path
-# that ends in a separator (no final component), returns the canonical
-# empty Path.
+# returns a pointer into p (no allocation). returns nil for empty paths
+# and empty string for paths ending in a separator.
 # ---
-# a:   allocator for the result
 # p:   path to extract filename from
-# ret: the filename, or an error message
-pub fun filename(a: *allocator.Allocator, p: Path) Result[Path, str] {
-    if (a == nil) { ret err[Path, str]("allocator is nil"); }
-    if (is_empty(p)) { ret ok[Path, str](empty_path()); }
-
-    val len: usize = p.len::usize;
+# ret: pointer into p at the filename, or nil
+pub fun filename(p: Path) str {
+    if (is_empty(p)) { ret nil; }
+    val len: usize = str_len(p);
     val sep: u8    = separator();
     var i:   usize = len;
 
-    var start:    usize = 0;
-    var name_len: usize = len;
-
     for (i > 0) {
         i = i - 1;
-        if (p.data[i] == sep) {
-            start    = i + 1;
-            name_len = len - start;
-            ret clone_range(a, p, start, name_len);
+        if (p[i] == sep) {
+            ret (p::usize + i + 1)::str;
         }
     }
 
-    ret clone(a, p);
+    ret p;
 }
 
-# extension: return the file extension (without leading dot) as a freshly
-# allocated Path.
+# extension: return the file extension without the leading dot.
 #
-# allocates a null-terminated copy via `a`. returns the canonical empty
-# Path if the filename has no extension (no dot, or dot is the first
-# character of the filename, like ".hidden").
+# returns a pointer into p (no allocation). returns nil if there is no
+# extension (no dot, or dot is first char of filename).
 # ---
-# a:   allocator for the result
 # p:   path to extract extension from
-# ret: the extension, or an error message
-pub fun extension(a: *allocator.Allocator, p: Path) Result[Path, str] {
-    if (a == nil) { ret err[Path, str]("allocator is nil"); }
+# ret: pointer into p at the extension, or nil
+pub fun extension(p: Path) str {
+    val name: str = filename(p);
+    if (name == nil) { ret nil; }
 
-    var name_start: usize = 0;
-    var name_len:   usize = 0;
-    filename_range(p, ?name_start, ?name_len);
-    if (name_len == 0) { ret ok[Path, str](empty_path()); }
+    val len: usize = str_len(name);
+    if (len == 0) { ret nil; }
 
-    var k: usize = name_len;
-    for (k > 0) {
-        k = k - 1;
-        if (p.data[name_start + k] == '.') {
-            if (k == 0) { ret ok[Path, str](empty_path()); }
-            val ext_start: usize = name_start + k + 1;
-            val ext_len:   usize = name_len - k - 1;
-            ret clone_range(a, p, ext_start, ext_len);
+    var i: usize = len;
+    for (i > 0) {
+        i = i - 1;
+        if (name[i] == '.') {
+            if (i == 0) { ret nil; }
+            ret (name::usize + i + 1)::str;
         }
     }
 
-    ret ok[Path, str](empty_path());
+    ret nil;
 }
 
-# stem: return the filename without its extension as a freshly allocated Path.
+# stem: return the filename without its extension.
 #
-# "foo/bar.txt" -> "bar", "foo/.hidden" -> ".hidden", "foo/bar" -> "bar"
+# "foo/bar.txt" → "bar", "foo/.hidden" → ".hidden", "foo/bar" → "bar"
 # ---
 # a:   allocator for the result
 # p:   path to extract stem from
@@ -156,41 +118,50 @@ pub fun extension(a: *allocator.Allocator, p: Path) Result[Path, str] {
 pub fun stem(a: *allocator.Allocator, p: Path) Result[Path, str] {
     if (a == nil) { ret err[Path, str]("allocator is nil"); }
 
-    var name_start: usize = 0;
-    var name_len:   usize = 0;
-    filename_range(p, ?name_start, ?name_len);
-    if (name_len == 0) { ret ok[Path, str](empty_path()); }
+    val name: str = filename(p);
+    if (name == nil) { ret ok[Path, str](nil); }
 
-    # find the last '.' that is not at position 0 of the filename
-    var dot_pos: usize = name_len;
-    var has_dot: bool  = false;
-    var k:       usize = name_len;
-    for (k > 0) {
-        k = k - 1;
-        if (p.data[name_start + k] == '.') {
-            if (k == 0) { brk; }
-            dot_pos = k;
-            has_dot = true;
-            brk;
-        }
+    val len: usize = str_len(name);
+    if (len == 0) { ret ok[Path, str](nil); }
+
+    val file_ext: str = extension(p);
+    if (file_ext == nil) { ret clone(a, name); }
+
+    val ext_len:  usize = str_len(file_ext);
+    val stem_len: usize = len - ext_len - 1;
+
+    val r: Result[*u8, str] = allocator.allocate[u8](a, stem_len + 1);
+    if (is_err[*u8, str](r)) {
+        ret err[Path, str](unwrap_err[*u8, str](r));
     }
 
-    if (!has_dot) {
-        ret clone_range(a, p, name_start, name_len);
-    }
-    ret clone_range(a, p, name_start, dot_pos);
+    val buf: *u8 = unwrap_ok[*u8, str](r);
+    mem.raw_copy(buf::ptr, name::ptr, stem_len);
+    buf[stem_len] = 0;
+
+    ret ok[Path, str](buf::*u8);
 }
 
 # clone: duplicate a path using the provided allocator.
 # ---
 # a:   allocator for the new path
-# p:   path to clone (empty returns empty)
+# p:   path to clone (nil returns nil)
 # ret: the cloned path, or an error message
 pub fun clone(a: *allocator.Allocator, p: Path) Result[Path, str] {
-    if (a == nil)    { ret err[Path, str]("allocator is nil"); }
-    if (is_empty(p)) { ret ok[Path, str](empty_path()); }
+    if (a == nil) { ret err[Path, str]("allocator is nil"); }
+    if (p == nil) { ret ok[Path, str](nil); }
 
-    ret clone_range(a, p, 0, p.len::usize);
+    val n: usize            = str_len(p);
+    val r: Result[*u8, str] = allocator.allocate[u8](a, n + 1);
+    if (is_err[*u8, str](r)) {
+        ret err[Path, str](unwrap_err[*u8, str](r));
+    }
+
+    val buf: *u8 = unwrap_ok[*u8, str](r);
+    mem.raw_copy(buf::ptr, p::ptr, n);
+    buf[n] = 0;
+
+    ret ok[Path, str](buf::*u8);
 }
 
 # join: join two path segments with the platform separator.
@@ -205,9 +176,9 @@ pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str]
     if (is_empty(right)) { ret clone(a, left); }
 
     val sep:       u8    = separator();
-    val left_len:  usize = left.len::usize;
-    val right_len: usize = right.len::usize;
-    val has_sep:   bool  = left.data[left_len - 1] == sep || right.data[0] == sep;
+    val left_len:  usize = str_len(left);
+    val right_len: usize = str_len(right);
+    val has_sep:   bool  = left[left_len - 1] == sep || right[0] == sep;
 
     var extra: usize = 0;
     if (!has_sep) { extra = 1; }
@@ -219,7 +190,7 @@ pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str]
     }
 
     val buf: *u8 = unwrap_ok[*u8, str](r);
-    mem.raw_copy(buf::ptr, left.data::ptr, left_len);
+    mem.raw_copy(buf::ptr, left::ptr, left_len);
 
     var off: usize = left_len;
     if (!has_sep) {
@@ -227,13 +198,10 @@ pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str]
         off = off + 1;
     }
 
-    mem.raw_copy((buf::usize + off)::ptr, right.data::ptr, right_len);
+    mem.raw_copy((buf::usize + off)::ptr, right::ptr, right_len);
     buf[out_len] = 0;
 
-    var out: Path;
-    out.len  = out_len::u32;
-    out.data = buf;
-    ret ok[Path, str](out);
+    ret ok[Path, str](buf::*u8);
 }
 
 # parent: return the parent directory of a path.
@@ -245,11 +213,11 @@ pub fun parent(a: *allocator.Allocator, p: Path) Result[Path, str] {
     if (a == nil)    { ret err[Path, str]("allocator is nil"); }
     if (is_empty(p)) { ret clone(a, "."); }
 
-    val len: usize = p.len::usize;
+    val len: usize = str_len(p);
     val sep: u8    = separator();
 
     var end: usize = len;
-    for (end > 0 && p.data[end - 1] == sep) {
+    for (end > 0 && p[end - 1] == sep) {
         end = end - 1;
     }
     if (end == 0) { ret clone_sep(a, sep); }
@@ -257,69 +225,30 @@ pub fun parent(a: *allocator.Allocator, p: Path) Result[Path, str] {
     var i: usize = end;
     for (i > 0) {
         i = i - 1;
-        if (p.data[i] == sep) { brk; }
+        if (p[i] == sep) { brk; }
     }
 
-    if (i == 0 && p.data[0] != sep) { ret clone(a, "."); }
-    if (i == 0)                     { ret clone_sep(a, sep); }
+    if (i == 0 && p[0] != sep) { ret clone(a, "."); }
+    if (i == 0)                { ret clone_sep(a, sep); }
 
     var parent_end: usize = i;
-    for (parent_end > 0 && p.data[parent_end - 1] == sep) {
+    for (parent_end > 0 && p[parent_end - 1] == sep) {
         parent_end = parent_end - 1;
     }
     if (parent_end == 0) { ret clone_sep(a, sep); }
 
-    ret clone_range(a, p, 0, parent_end);
-}
-
-# filename_range: compute the byte offset and length of the final
-# component of a path within p.data, without allocating.
-#
-# this is an internal helper. callers must use the result only to read
-# bytes within `p`; the byte after the range is NOT guaranteed to be 0.
-fun filename_range(p: Path, start: *usize, len: *usize) {
-    @start = 0;
-    @len   = 0;
-    if (is_empty(p)) { ret; }
-
-    val plen: usize = p.len::usize;
-    val sep:  u8    = separator();
-    var i:    usize = plen;
-
-    for (i > 0) {
-        i = i - 1;
-        if (p.data[i] == sep) {
-            @start = i + 1;
-            @len   = plen - @start;
-            ret;
-        }
-    }
-
-    @start = 0;
-    @len   = plen;
-}
-
-# clone_range: allocate a null-terminated Path containing
-# p.data[start..start+len].
-fun clone_range(a: *allocator.Allocator, p: Path, start: usize, len: usize) Result[Path, str] {
-    val r: Result[*u8, str] = allocator.allocate[u8](a, len + 1);
+    val r: Result[*u8, str] = allocator.allocate[u8](a, parent_end + 1);
     if (is_err[*u8, str](r)) {
         ret err[Path, str](unwrap_err[*u8, str](r));
     }
 
     val buf: *u8 = unwrap_ok[*u8, str](r);
-    if (len > 0) {
-        mem.raw_copy(buf::ptr, (p.data::usize + start)::ptr, len);
-    }
-    buf[len] = 0;
+    mem.raw_copy(buf::ptr, p::ptr, parent_end);
+    buf[parent_end] = 0;
 
-    var out: Path;
-    out.len  = len::u32;
-    out.data = buf;
-    ret ok[Path, str](out);
+    ret ok[Path, str](buf::*u8);
 }
 
-# clone_sep: allocate a one-character Path consisting of just `sep`.
 fun clone_sep(a: *allocator.Allocator, sep: u8) Result[Path, str] {
     val r: Result[*u8, str] = allocator.allocate[u8](a, 2);
     if (is_err[*u8, str](r)) {
@@ -330,10 +259,7 @@ fun clone_sep(a: *allocator.Allocator, sep: u8) Result[Path, str] {
     buf[0] = sep;
     buf[1] = 0;
 
-    var out: Path;
-    out.len  = 1;
-    out.data = buf;
-    ret ok[Path, str](out);
+    ret ok[Path, str](buf::*u8);
 }
 
 test "path: is_abs with absolute path" {
@@ -346,82 +272,44 @@ test "path: is_abs with relative path" {
     ret 1;
 }
 
-test "path: is_abs with empty" {
-    if (is_abs(empty_path())) { ret 0; }
-    ret 1;
-}
-
-test "path: empty_path is null-terminated" {
-    val e: Path = empty_path();
-    if (e.len != 0)        { ret 0; }
-    if (e.data == nil)     { ret 0; }
-    if (e.data[0] != 0)    { ret 0; }
+test "path: is_abs with nil" {
+    if (is_abs(nil)) { ret 0; }
     ret 1;
 }
 
 test "path: filename basic" {
-    var a: allocator.Allocator;
-    page.make(?a);
-    val r: Result[Path, str] = filename(?a, "/foo/bar.txt");
-    if (is_err[Path, str](r))      { ret 0; }
-    val f: Path = unwrap_ok[Path, str](r);
+    val f: str = filename("/foo/bar.txt");
     if (!str_equals(f, "bar.txt")) { ret 0; }
-    if (f.data[f.len::usize] != 0) { ret 0; }
     ret 1;
 }
 
 test "path: filename no directory" {
-    var a: allocator.Allocator;
-    page.make(?a);
-    val r: Result[Path, str] = filename(?a, "bar.txt");
-    if (is_err[Path, str](r))      { ret 0; }
-    val f: Path = unwrap_ok[Path, str](r);
+    val f: str = filename("bar.txt");
     if (!str_equals(f, "bar.txt")) { ret 0; }
-    if (f.data[f.len::usize] != 0) { ret 0; }
     ret 1;
 }
 
-test "path: filename empty input returns empty" {
-    var a: allocator.Allocator;
-    page.make(?a);
-    val r: Result[Path, str] = filename(?a, "");
-    if (is_err[Path, str](r)) { ret 0; }
-    val f: Path = unwrap_ok[Path, str](r);
-    if (f.len != 0)        { ret 0; }
-    if (f.data[0] != 0)    { ret 0; }
+test "path: filename nil" {
+    val f: str = filename(nil);
+    if (f != nil) { ret 0; }
     ret 1;
 }
 
 test "path: extension basic" {
-    var a: allocator.Allocator;
-    page.make(?a);
-    val r: Result[Path, str] = extension(?a, "/foo/bar.txt");
-    if (is_err[Path, str](r))   { ret 0; }
-    val e: Path = unwrap_ok[Path, str](r);
-    if (!str_equals(e, "txt"))  { ret 0; }
-    if (e.data[e.len::usize] != 0) { ret 0; }
+    val e: str = extension("/foo/bar.txt");
+    if (!str_equals(e, "txt")) { ret 0; }
     ret 1;
 }
 
 test "path: extension none" {
-    var a: allocator.Allocator;
-    page.make(?a);
-    val r: Result[Path, str] = extension(?a, "/foo/bar");
-    if (is_err[Path, str](r)) { ret 0; }
-    val e: Path = unwrap_ok[Path, str](r);
-    if (e.len != 0)           { ret 0; }
-    if (e.data[0] != 0)       { ret 0; }
+    val e: str = extension("/foo/bar");
+    if (e != nil) { ret 0; }
     ret 1;
 }
 
 test "path: extension hidden file" {
-    var a: allocator.Allocator;
-    page.make(?a);
-    val r: Result[Path, str] = extension(?a, "/foo/.hidden");
-    if (is_err[Path, str](r)) { ret 0; }
-    val e: Path = unwrap_ok[Path, str](r);
-    if (e.len != 0)           { ret 0; }
-    if (e.data[0] != 0)       { ret 0; }
+    val e: str = extension("/foo/.hidden");
+    if (e != nil) { ret 0; }
     ret 1;
 }
 
@@ -429,10 +317,9 @@ test "path: stem basic" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Path, str] = stem(?a, "/foo/bar.txt");
-    if (is_err[Path, str](r))     { ret 0; }
-    val s: Path = unwrap_ok[Path, str](r);
-    if (!str_equals(s, "bar"))    { ret 0; }
-    if (s.data[s.len::usize] != 0) { ret 0; }
+    if (is_err[Path, str](r)) { ret 0; }
+    val s: str = unwrap_ok[Path, str](r);
+    if (!str_equals(s, "bar")) { ret 0; }
     ret 1;
 }
 
@@ -440,10 +327,9 @@ test "path: stem no extension" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Path, str] = stem(?a, "/foo/bar");
-    if (is_err[Path, str](r))     { ret 0; }
-    val s: Path = unwrap_ok[Path, str](r);
-    if (!str_equals(s, "bar"))    { ret 0; }
-    if (s.data[s.len::usize] != 0) { ret 0; }
+    if (is_err[Path, str](r)) { ret 0; }
+    val s: str = unwrap_ok[Path, str](r);
+    if (!str_equals(s, "bar")) { ret 0; }
     ret 1;
 }
 
@@ -451,10 +337,9 @@ test "path: parent basic" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Path, str] = parent(?a, "/foo/bar");
-    if (is_err[Path, str](r))    { ret 0; }
-    val p: Path = unwrap_ok[Path, str](r);
-    if (!str_equals(p, "/foo"))  { ret 0; }
-    if (p.data[p.len::usize] != 0) { ret 0; }
+    if (is_err[Path, str](r)) { ret 0; }
+    val p: str = unwrap_ok[Path, str](r);
+    if (!str_equals(p, "/foo")) { ret 0; }
     ret 1;
 }
 
@@ -463,30 +348,7 @@ test "path: parent root" {
     page.make(?a);
     val r: Result[Path, str] = parent(?a, "/foo");
     if (is_err[Path, str](r)) { ret 0; }
-    val p: Path = unwrap_ok[Path, str](r);
-    if (!str_equals(p, "/"))  { ret 0; }
-    if (p.data[p.len::usize] != 0) { ret 0; }
-    ret 1;
-}
-
-test "path: clone preserves null terminator" {
-    var a: allocator.Allocator;
-    page.make(?a);
-    val r: Result[Path, str] = clone(?a, "hello/world");
-    if (is_err[Path, str](r))      { ret 0; }
-    val c: Path = unwrap_ok[Path, str](r);
-    if (!str_equals(c, "hello/world")) { ret 0; }
-    if (c.data[c.len::usize] != 0) { ret 0; }
-    ret 1;
-}
-
-test "path: join produces null-terminated path" {
-    var a: allocator.Allocator;
-    page.make(?a);
-    val r: Result[Path, str] = join(?a, "/foo", "bar");
-    if (is_err[Path, str](r))      { ret 0; }
-    val j: Path = unwrap_ok[Path, str](r);
-    if (!str_equals(j, "/foo/bar")) { ret 0; }
-    if (j.data[j.len::usize] != 0) { ret 0; }
+    val p: str = unwrap_ok[Path, str](r);
+    if (!str_equals(p, "/")) { ret 0; }
     ret 1;
 }

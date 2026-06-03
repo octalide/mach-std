@@ -1,6 +1,8 @@
 # integer math utilities.
 
-use std.types.bool;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
 
 val I64_MIN: i64 = -9223372036854775808;
 val I64_MAX: i64 = 9223372036854775807;

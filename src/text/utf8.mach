@@ -1,7 +1,9 @@
 # UTF-8 encoding, decoding, and validation.
 
-use std.types.bool;
-use std.types.size;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
 
 pub def Codepoint: u32;
 

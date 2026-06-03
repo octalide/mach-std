@@ -2,10 +2,17 @@
 #
 # writes formatted data to any io.Writer without allocation.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.string.str;
+use std.types.string.str_len;
 use writer: std.io.writer;
 
 # write_bytes: write raw bytes to a writer.
@@ -24,8 +31,8 @@ pub fun write_bytes(w: *writer.Writer, buf: *u8, len: usize) Result[usize, str] 
 # s:   string to write (nil treated as empty)
 # ret: bytes written, or an error message
 pub fun write_str(w: *writer.Writer, s: str) Result[usize, str] {
-    if (s.len == 0 || s.data == nil) { ret ok[usize, str](0); }
-    ret writer.write_all(w, s.data, str_len(s));
+    if (s == nil) { ret ok[usize, str](0); }
+    ret writer.write_all(w, s, str_len(s));
 }
 
 # write_byte: write a single byte to a writer.
@@ -167,11 +174,10 @@ pub fun vformat(w: *writer.Writer, format: str, ap: *va_list, ...) Result[usize,
 
     var total: usize = 0;
     var i: usize = 0;
-    val flen: usize = format.len::usize;
 
-    for (i < flen) {
-        if (format.data[i] != '%') {
-            val r: Result[usize, str] = write_byte(w, format.data[i]);
+    for (format[i] != 0) {
+        if (format[i] != '%') {
+            val r: Result[usize, str] = write_byte(w, format[i]);
             if (is_err[usize, str](r)) { ret r; }
             total = total + unwrap_ok[usize, str](r);
             i = i + 1;
@@ -179,10 +185,10 @@ pub fun vformat(w: *writer.Writer, format: str, ap: *va_list, ...) Result[usize,
         }
 
         i = i + 1;
-        if (i >= flen) {
+        val c: u8 = format[i];
+        if (c == 0) {
             ret err[usize, str](ERR_BAD_FORMAT);
         }
-        val c: u8 = format.data[i];
 
         var r: Result[usize, str];
 

@@ -3,15 +3,23 @@
 # keys and values are stored in parallel arrays. a separate "state" array tracks
 # which slots are empty, occupied, or tombstones (deleted).
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.string.str_equals;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_ok;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
 
 use allocator: std.allocator;
 use page:      std.allocator.page;
 use mem:       std.memory;
-use fnv1a:     std.crypto.hash.fnv1a;
 
 val SLOT_EMPTY:     u8 = 0;
 val SLOT_OCCUPIED:  u8 = 1;
@@ -354,9 +362,23 @@ pub fun remove[K, V](m: *Map[K, V], key: *K) Result[bool, str] {
 # hash_str: FNV-1a hash for strings.
 pub fun hash_str(p: ptr) u64 {
     val s: *str = p::*str;
+    val FNV_OFFSET: u64 = 14695981039346656037;
+    val FNV_PRIME:  u64 = 1099511628211;
+
+    var hash: u64 = FNV_OFFSET;
     val sp: str = @s;
-    if (sp.data == nil) { ret fnv1a.init(); }
-    ret fnv1a.str_hash(sp);
+
+    if (sp == nil) { ret hash; }
+
+    var i: usize = 0;
+    for (sp[i] != 0) {
+        val byte: u64 = sp[i]::u64;
+        hash = hash ^ byte;
+        hash = hash * FNV_PRIME;
+        i = i + 1;
+    }
+
+    ret hash;
 }
 
 # eq_str: equality function for strings.
@@ -401,6 +423,25 @@ pub fun hash_u64(p: ptr) u64 {
 pub fun eq_u64(pa: ptr, pb: ptr) bool {
     val a: *u64 = pa::*u64;
     val b: *u64 = pb::*u64;
+    ret @a == @b;
+}
+
+# hash_u32: splitmix64 hash for u32.
+pub fun hash_u32(p: ptr) u64 {
+    val n: *u32 = p::*u32;
+    var x: u64 = (@n)::u64;
+    x = x ^ (x >> 33);
+    x = x * 0xff51afd7ed558ccd;
+    x = x ^ (x >> 33);
+    x = x * 0xc4ceb9fe1a85ec53;
+    x = x ^ (x >> 33);
+    ret x;
+}
+
+# eq_u32: equality function for u32.
+pub fun eq_u32(pa: ptr, pb: ptr) bool {
+    val a: *u32 = pa::*u32;
+    val b: *u32 = pb::*u32;
     ret @a == @b;
 }
 

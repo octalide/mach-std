@@ -1,6 +1,6 @@
 # character type and ASCII classification.
 
-use std.types.bool;
+use std.types.bool.bool;
 
 # a single byte representing a character in a null-terminated string.
 pub def char: u8;

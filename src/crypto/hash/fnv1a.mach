@@ -1,130 +1,43 @@
-# FNV-1a non-cryptographic hash.
+# std.crypto.hash.fnv1a: incremental FNV-1a hashing.
 #
-# Streaming API:
-#   var h: u64 = init();
-#   h = step_u8(h, byte);
-#   ... more steps ...
-#   # final value of h is the hash
-#
-# Convenience helpers (`bytes`, `str`) compute a full hash in one call.
-# Step variants over wider integers (`step_u32`, `step_u64`) hash each
-# byte of the value in little-endian order; they exist so callers
-# building identity hashes over record fields don't have to manually
-# split values into bytes.
+# the type interners hash composite records field-by-field rather than over a
+# contiguous byte buffer, so they need an incremental folding API. this mirrors
+# the byte-wise FNV-1a used by the stdlib map's `hash_str`, exposed as an
+# `init` seed plus per-value `step_*` folds.
 
-use std.types.bool;
-use std.types.size;
-use std.types.string;
+# FNV-1a 64-bit offset basis.
+val FNV_OFFSET: u64 = 14695981039346656037;
+# FNV-1a 64-bit prime.
+val FNV_PRIME:  u64 = 1099511628211;
 
-pub val FNV_OFFSET_BASIS: u64 = 14695981039346656037;
-pub val FNV_PRIME:        u64 = 1099511628211;
-
-# init: returns the FNV-1a offset basis as the seed for a fresh hash.
+# init: the FNV-1a seed value to begin a hash with.
 # ---
-# ret: the offset basis (`FNV_OFFSET_BASIS`)
+# ret: the 64-bit offset basis
 pub fun init() u64 {
-    ret FNV_OFFSET_BASIS;
+    ret FNV_OFFSET;
 }
 
 # step_u8: fold one byte into the running hash.
 # ---
-# h: current hash state
-# b: byte to fold in
-# ret: updated hash state
-pub fun step_u8(h: u64, b: u8) u64 {
-    var x: u64 = h ^ b::u64;
-    ret x * FNV_PRIME;
+# h: running hash
+# v: byte to fold in
+# ret: updated hash
+pub fun step_u8(h: u64, v: u8) u64 {
+    var x: u64 = h ^ v::u64;
+    x = x * FNV_PRIME;
+    ret x;
 }
 
-# step_u32: fold four bytes (little-endian) of a u32 into the running hash.
+# step_u32: fold a 32-bit value into the running hash, byte by byte (little-endian).
 # ---
-# h: current hash state
-# x: u32 value to fold in
-# ret: updated hash state
-pub fun step_u32(h: u64, x: u32) u64 {
-    var s: u64 = h;
-    s = step_u8(s, (x & 0xff)::u8);
-    s = step_u8(s, ((x >> 8) & 0xff)::u8);
-    s = step_u8(s, ((x >> 16) & 0xff)::u8);
-    s = step_u8(s, ((x >> 24) & 0xff)::u8);
-    ret s;
-}
-
-# step_u64: fold eight bytes (little-endian) of a u64 into the running hash.
-# ---
-# h: current hash state
-# x: u64 value to fold in
-# ret: updated hash state
-pub fun step_u64(h: u64, x: u64) u64 {
-    var s: u64 = h;
-    s = step_u32(s, (x & 0xffffffff)::u32);
-    s = step_u32(s, ((x >> 32) & 0xffffffff)::u32);
-    ret s;
-}
-
-# bytes: compute the FNV-1a hash of `len` bytes at `p`.
-# ---
-# p:   pointer to the first byte
-# len: number of bytes to hash
-# ret: the FNV-1a hash
-pub fun bytes(p: *u8, len: usize) u64 {
-    var h: u64 = init();
-    var i: usize = 0;
-    for (i < len) {
-        h = step_u8(h, p[i]);
-        i = i + 1;
-    }
-    ret h;
-}
-
-# str: compute the FNV-1a hash of a fat-pointer string's contents.
-# ---
-# s:   the string
-# ret: the FNV-1a hash of s.data[0..s.len]
-pub fun str_hash(s: str) u64 {
-    ret bytes(s.data, s.len::usize);
-}
-
-test "fnv1a: empty input yields offset basis" {
-    val h: u64 = bytes(nil, 0);
-    if (h != FNV_OFFSET_BASIS) { ret 0; }
-    ret 1;
-}
-
-test "fnv1a: single byte fold matches manual step" {
-    val expected: u64 = step_u8(init(), 'a');
-    val s: str = "a";
-    val actual: u64 = str_hash(s);
-    if (actual != expected) { ret 0; }
-    ret 1;
-}
-
-test "fnv1a: known hash for 'foobar'" {
-    # FNV-1a 64-bit of "foobar" is 0x85944171f73967e8
-    val s: str = "foobar";
-    val h: u64 = str_hash(s);
-    if (h != 0x85944171f73967e8) { ret 0; }
-    ret 1;
-}
-
-test "fnv1a: step_u32 equals four step_u8 calls (little-endian)" {
-    val x: u32 = 0x12345678;
-    val a: u64 = step_u32(init(), x);
-    var b: u64 = init();
-    b = step_u8(b, 0x78);
-    b = step_u8(b, 0x56);
-    b = step_u8(b, 0x34);
-    b = step_u8(b, 0x12);
-    if (a != b) { ret 0; }
-    ret 1;
-}
-
-test "fnv1a: step_u64 equals two step_u32 calls (little-endian)" {
-    val x: u64 = 0x0123456789abcdef;
-    val a: u64 = step_u64(init(), x);
-    var b: u64 = init();
-    b = step_u32(b, 0x89abcdef);
-    b = step_u32(b, 0x01234567);
-    if (a != b) { ret 0; }
-    ret 1;
+# h: running hash
+# v: value to fold in
+# ret: updated hash
+pub fun step_u32(h: u64, v: u32) u64 {
+    var x: u64 = h;
+    x = step_u8(x, (v & 0xFF)::u8);
+    x = step_u8(x, ((v >> 8) & 0xFF)::u8);
+    x = step_u8(x, ((v >> 16) & 0xFF)::u8);
+    x = step_u8(x, ((v >> 24) & 0xFF)::u8);
+    ret x;
 }

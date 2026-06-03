@@ -1,9 +1,16 @@
 # in-place sorting, searching, and array utilities.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use mem: std.memory;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_ok;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
 
 # swap: exchange the values at two pointers.
 # ---

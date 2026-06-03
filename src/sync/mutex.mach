@@ -8,7 +8,8 @@
 #
 # values: 0 = unlocked, 1 = locked
 
-use std.types.bool;
+use std.types.bool.bool;
+use std.types.bool.true;
 use atomic: std.sync.atomic;
 
 pub def Mutex: i64;

@@ -3,11 +3,16 @@
 # provides formatters for standard time representations.
 # intended usage: `use fmt: std.chrono.format;` then `fmt.rfc3339(dt, buf, len)`.
 
-use std.types.size;
-use std.types.string;
-use std.types.zstr;
-use std.chrono.time;
-use std.chrono.date;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.string.str_equals;
+use std.chrono.time.Time;
+use std.chrono.time.unix;
+use std.chrono.date.Date;
+use std.chrono.date.Datetime;
+use std.chrono.date.datetime_from_time;
+use std.chrono.date.datetime_with_offset;
+use std.chrono.date.civil_to_days;
 
 val SECONDS_PER_HOUR:   i64 = 3600;
 val SECONDS_PER_MINUTE: i64 = 60;
@@ -246,9 +251,9 @@ var fmt_buf: [64]u8;
 test "format: rfc3339 utc" {
     val t: Time = unix(1234567890, 0);
     val dt: Datetime = datetime_from_time(t);
-    val n: usize = rfc3339(dt, ?fmt_buf[0], 64);
+    val n: usize = rfc3339(dt, (?fmt_buf)::*u8, 64);
     if (n == 0) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "2009-02-13T23:31:30Z")) { ret 2; }
     ret 1;
 }
@@ -256,9 +261,9 @@ test "format: rfc3339 utc" {
 test "format: rfc3339 with offset" {
     val t: Time = unix(1234567890, 0);
     val dt: Datetime = datetime_with_offset(t, 19800);
-    val n: usize = rfc3339(dt, ?fmt_buf[0], 64);
+    val n: usize = rfc3339(dt, (?fmt_buf)::*u8, 64);
     if (n == 0) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "2009-02-14T05:01:30+05:30")) { ret 2; }
     ret 1;
 }
@@ -266,9 +271,9 @@ test "format: rfc3339 with offset" {
 test "format: rfc3339 with nsec" {
     val t: Time = unix(1234567890, 123456789);
     val dt: Datetime = datetime_from_time(t);
-    val n: usize = rfc3339(dt, ?fmt_buf[0], 64);
+    val n: usize = rfc3339(dt, (?fmt_buf)::*u8, 64);
     if (n == 0) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "2009-02-13T23:31:30.123456789Z")) { ret 2; }
     ret 1;
 }
@@ -276,18 +281,18 @@ test "format: rfc3339 with nsec" {
 test "format: rfc3339 epoch" {
     val t: Time = unix(0, 0);
     val dt: Datetime = datetime_from_time(t);
-    val n: usize = rfc3339(dt, ?fmt_buf[0], 64);
+    val n: usize = rfc3339(dt, (?fmt_buf)::*u8, 64);
     if (n == 0) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "1970-01-01T00:00:00Z")) { ret 2; }
     ret 1;
 }
 
 test "format: rfc3339_date" {
     val d: Date = Date{year: 2025, month: 3, day: 6};
-    val n: usize = rfc3339_date(d, ?fmt_buf[0], 64);
+    val n: usize = rfc3339_date(d, (?fmt_buf)::*u8, 64);
     if (n != 10) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "2025-03-06")) { ret 2; }
     ret 1;
 }
@@ -295,9 +300,9 @@ test "format: rfc3339_date" {
 test "format: rfc3339 negative offset" {
     val t: Time = unix(1234567890, 0);
     val dt: Datetime = datetime_with_offset(t, 0 - 18000);
-    val n: usize = rfc3339(dt, ?fmt_buf[0], 64);
+    val n: usize = rfc3339(dt, (?fmt_buf)::*u8, 64);
     if (n == 0) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "2009-02-13T18:31:30-05:00")) { ret 2; }
     ret 1;
 }
@@ -305,9 +310,9 @@ test "format: rfc3339 negative offset" {
 test "format: rfc2822 utc" {
     val t: Time = unix(1234567890, 0);
     val dt: Datetime = datetime_from_time(t);
-    val n: usize = rfc2822(dt, ?fmt_buf[0], 64);
+    val n: usize = rfc2822(dt, (?fmt_buf)::*u8, 64);
     if (n == 0) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "Fri, 13 Feb 2009 23:31:30 +0000")) { ret 2; }
     ret 1;
 }
@@ -315,33 +320,33 @@ test "format: rfc2822 utc" {
 test "format: rfc2822 with offset" {
     val t: Time = unix(1234567890, 0);
     val dt: Datetime = datetime_with_offset(t, 0 - 18000);
-    val n: usize = rfc2822(dt, ?fmt_buf[0], 64);
+    val n: usize = rfc2822(dt, (?fmt_buf)::*u8, 64);
     if (n == 0) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "Fri, 13 Feb 2009 18:31:30 -0500")) { ret 2; }
     ret 1;
 }
 
 test "format: unix_sec positive" {
-    val n: usize = unix_sec(1234567890, ?fmt_buf[0], 64);
+    val n: usize = unix_sec(1234567890, (?fmt_buf)::*u8, 64);
     if (n == 0) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "1234567890")) { ret 2; }
     ret 1;
 }
 
 test "format: unix_sec zero" {
-    val n: usize = unix_sec(0, ?fmt_buf[0], 64);
+    val n: usize = unix_sec(0, (?fmt_buf)::*u8, 64);
     if (n == 0) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "0")) { ret 2; }
     ret 1;
 }
 
 test "format: unix_sec negative" {
-    val n: usize = unix_sec(0 - 86400, ?fmt_buf[0], 64);
+    val n: usize = unix_sec(0 - 86400, (?fmt_buf)::*u8, 64);
     if (n == 0) { ret 0; }
-    val s: str = zstr_to_str(?fmt_buf[0]);
+    val s: str = (?fmt_buf)::*u8::str;
     if (!str_equals(s, "-86400")) { ret 2; }
     ret 1;
 }

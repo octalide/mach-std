@@ -4,11 +4,9 @@
 # the program entrypoint. user code must define a `main` function as follows:
 #
 #   use std.runtime;
-#   use std.types.size;
-#   use std.types.zstr;
 #
 #   $main.symbol = "main";
-#   fun main(argc: usize, argv: *zstr) i64 {
+#   fun main(argc: i64, argv: **u8) i64 {
 #       ret 0;
 #   }
 #
@@ -16,18 +14,15 @@
 # calls the user's `main`. on return, it terminates the process with the exit
 # code returned by `main`.
 #
-# argc is the platform-pointer-sized count of arguments. argv is a pointer
-# to the first of (argc + 1) zstrs; argv[argc] is nil to terminate the array.
-#
 # note: `use std.runtime;` is required to link the entrypoint into the binary.
 
-$if ($mach.build.target.os.id == $mach.os.linux.id) {
+$if ($mach.target.os == $mach.os.linux) {
     use std.runtime.linux;
 }
-$or ($mach.build.target.os.id == $mach.os.darwin.id) {
+$or ($mach.target.os == $mach.os.darwin) {
     use std.runtime.darwin;
 }
-$or ($mach.build.target.os.id == $mach.os.windows.id) {
+$or ($mach.target.os == $mach.os.windows) {
     use std.runtime.windows;
 }
 $or {

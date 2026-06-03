@@ -1,8 +1,8 @@
 # IP address types and utilities.
 
-use std.types.bool;
-use std.types.size;
-use std.types.string;
+use std.types.bool.bool;
+use std.types.size.usize;
+use std.types.string.str_starts_with;
 
 use mem: std.memory;
 use os:  std.system.os;
@@ -245,10 +245,7 @@ test "ip: ipv4_format" {
     var buf: [16]u8;
     val n: usize = ipv4_format(ip, ?buf[0], 16);
     if (n != 7) { ret 0; }
-    var view: str;
-    view.len  = n::u32;
-    view.data = ?buf[0];
-    if (!str_starts_with(view, "127.0.0.1")) { ret 0; }
+    if (!str_starts_with(?buf[0], "127.0.0.1")) { ret 0; }
     ret 1;
 }
 
@@ -257,10 +254,7 @@ test "ip: ipv4_format three digit octets" {
     var buf: [20]u8;
     val n: usize = ipv4_format(ip, ?buf[0], 20);
     if (n != 15) { ret 0; }
-    var view: str;
-    view.len  = n::u32;
-    view.data = ?buf[0];
-    if (!str_starts_with(view, "255.255.255.255")) { ret 0; }
+    if (!str_starts_with(?buf[0], "255.255.255.255")) { ret 0; }
     ret 1;
 }
 

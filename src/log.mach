@@ -3,10 +3,10 @@
 # writes leveled log messages to stderr by default, or to a configured
 # writer. each message is prefixed with the level tag in brackets.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.string.str;
+use std.types.string.str_len;
 use writer: std.io.writer;
 use f:      std.format;
 use os:     std.system.os;
@@ -62,13 +62,13 @@ fun write_piece(buf: *u8, len: usize) {
 
 fun log_msg(level: Level, prefix: str, msg: str) {
     if (level::i64 < atomic.load(?level_val)) { ret; }
-    write_piece(`[`, 1);
-    write_piece(prefix.data, str_len(prefix));
-    write_piece(`] `, 2);
-    if (msg.data != nil) {
-        write_piece(msg.data, str_len(msg));
+    write_piece("[", 1);
+    write_piece(prefix, str_len(prefix));
+    write_piece("] ", 2);
+    if (msg != nil) {
+        write_piece(msg, str_len(msg));
     }
-    write_piece(`\n`, 1);
+    write_piece("\n", 1);
 }
 
 # log a message at DEBUG level.
@@ -119,12 +119,12 @@ test "set_level: DEBUG enables all" {
     ret 1;
 }
 
-test "log functions: empty message does not crash" {
+test "log functions: nil message does not crash" {
     set_level(DEBUG);
-    debug("");
-    info("");
-    warn("");
-    error("");
+    debug(nil);
+    info(nil);
+    warn(nil);
+    error(nil);
     set_level(INFO);
     ret 1;
 }

@@ -1,9 +1,14 @@
 # DNS hostname resolution.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.string.str;
+use std.types.string.str_len;
 use memory: std.memory;
 use os: std.system.os;
 use ip: std.net.ip;
@@ -71,7 +76,7 @@ pub fun lookup_hosts(hostname: str, addr: *ip.IPv4) bool {
             val name_len: usize = pos - name_start;
 
             val host_len: usize = str_len(hostname);
-            if (name_len == host_len && region_eq(?buf[name_start], hostname.data, host_len)) {
+            if (name_len == host_len && region_eq(?buf[name_start], hostname, host_len)) {
                 val parsed: bool = parse_ipv4(?buf[ip_start], ip_end - ip_start, addr);
                 if (parsed) { ret true; }
             }
@@ -189,13 +194,13 @@ fun build_query(hostname: str, buf: *u8, cap: usize, qid: u16) usize {
     var label_len: usize = 0;
     var i: usize = 0;
     for (i < host_len) {
-        if (hostname.data[i] == '.') {
+        if ((hostname::*u8)[i] == '.') {
             buf[label_start] = label_len::u8;
             label_start = pos;
             label_len = 0;
             pos = pos + 1;
         } or {
-            buf[pos] = hostname.data[i];
+            buf[pos] = (hostname::*u8)[i];
             pos = pos + 1;
             label_len = label_len + 1;
         }
