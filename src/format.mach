@@ -13,6 +13,7 @@ use std.types.result.is_err;
 use std.types.result.unwrap_ok;
 use std.types.string.str;
 use std.types.string.str_len;
+use std.types.string.str_equals;
 use writer: std.io.writer;
 
 # write_bytes: write raw bytes to a writer.
@@ -241,4 +242,124 @@ pub fun format(w: *writer.Writer, format: str, ...) Result[usize, str] {
     val r: Result[usize, str] = vformat(w, format, ?ap);
     va_end(?ap);
     ret r;
+}
+
+# variadic-codegen regression coverage.
+#
+# these guard the SysV variadic lowering against two miscompiles that silently
+# re-break (mach issues #1135 / #1136): the va_list overflow cursor must skip an
+# empty-aggregate vararg, and the AL-guarded FP-register save must see the caller's
+# vector-register count survive the prologue. plus baseline va_arg smoke cases.
+
+# an empty (size-0) aggregate, passed through varargs to exercise the overflow
+# cursor advance for a zero-byte slot.
+rec VaEmpty {}
+
+# a <=16B aggregate (two GP eightbytes) and a >16B aggregate (passed by reference),
+# to cover the non-empty by-value and by-reference va_arg overflow paths alongside
+# the empty case.
+rec VaSmall { x: i64; y: i64; }
+rec VaBig   { a: i64; b: i64; c: i64; }
+
+# va_empty_then_i64: six fixed i64 params consume all six SysV GP argument
+# registers, so gp_offset == 48 on entry to the varargs and both the empty struct
+# and the i64 land in the overflow area. returns the i64 vararg; the empty slot
+# must be skipped (advanced by one eightbyte) or the i64 re-reads the empty slot.
+fun va_empty_then_i64(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, ...) i64 {
+    var ap: va_list;
+    va_start(?ap);
+    val _e: VaEmpty = va_arg[VaEmpty](?ap);
+    val n: i64 = va_arg[i64](?ap);
+    va_end(?ap);
+    ret n;
+}
+
+# va_mixed_aggregates: empty + small + scalar + big-by-ref + scalar, all forced
+# into the overflow area, returns their checksum to prove every cursor advance.
+fun va_mixed_aggregates(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, ...) i64 {
+    var ap: va_list;
+    va_start(?ap);
+    val _e: VaEmpty = va_arg[VaEmpty](?ap);
+    val s:  VaSmall = va_arg[VaSmall](?ap);
+    val n1: i64     = va_arg[i64](?ap);
+    val g:  VaBig   = va_arg[VaBig](?ap);
+    val n2: i64     = va_arg[i64](?ap);
+    va_end(?ap);
+    ret s.x + s.y + n1 + g.a + g.b + g.c + n2;
+}
+
+# va_one_gp_then_f64: one named GP param then an f64 vararg. the prologue captures
+# p0 before the AL-guarded FP-register save; if a capture vreg is colored to the
+# vector-count register (RAX) the save's `test al,al` reads the wrong count. when
+# p0's low byte is zero (p0 == 256) a clobbered AL would be zero and skip the FP
+# save, so va_arg[f64] would read garbage.
+fun va_one_gp_then_f64(p0: i64, ...) i64 {
+    var ap: va_list;
+    va_start(?ap);
+    val x: f64 = va_arg[f64](?ap);
+    va_end(?ap);
+    ret p0 + x::i64;
+}
+
+# va_i64: a baseline integer vararg smoke case.
+fun va_i64(n: i64, ...) i64 {
+    var ap: va_list;
+    va_start(?ap);
+    val v: i64 = va_arg[i64](?ap);
+    va_end(?ap);
+    ret v;
+}
+
+# va_str: a baseline string vararg smoke case (str is a 16-byte aggregate).
+fun va_str(n: i64, ...) str {
+    var ap: va_list;
+    va_start(?ap);
+    val s: str = va_arg[str](?ap);
+    va_end(?ap);
+    ret s;
+}
+
+# va_f64: a baseline float vararg smoke case (lands in a vector register).
+fun va_f64(n: i64, ...) f64 {
+    var ap: va_list;
+    va_start(?ap);
+    val v: f64 = va_arg[f64](?ap);
+    va_end(?ap);
+    ret v;
+}
+
+test "variadic: empty-aggregate overflow cursor skips the empty slot" {
+    if (va_empty_then_i64(1, 2, 3, 4, 5, 6, VaEmpty{}, 4242) != 4242) { ret 1; }
+    ret 0;
+}
+
+test "variadic: mixed empty/small/big/scalar overflow varargs" {
+    val s: VaSmall = VaSmall{ x: 11, y: 22 };
+    val g: VaBig   = VaBig{ a: 100, b: 200, c: 300 };
+    val want: i64  = 11 + 22 + 7 + 100 + 200 + 300 + 9000;
+    if (va_mixed_aggregates(1, 2, 3, 4, 5, 6, VaEmpty{}, s, 7, g, 9000) != want) { ret 1; }
+    ret 0;
+}
+
+test "variadic: FP-save AL guard survives a zero-low-byte GP param" {
+    # p0 == 256 -> low byte 0: a clobbered AL would skip the FP save.
+    if (va_one_gp_then_f64(256, 3.0) != 259) { ret 1; }
+    # a non-zero-low-byte control case.
+    if (va_one_gp_then_f64(1, 7.0) != 8) { ret 1; }
+    ret 0;
+}
+
+test "variadic: baseline i64 vararg" {
+    if (va_i64(0, 1234567) != 1234567) { ret 1; }
+    ret 0;
+}
+
+test "variadic: baseline str vararg" {
+    if (!str_equals(va_str(0, "hello"), "hello")) { ret 1; }
+    ret 0;
+}
+
+test "variadic: baseline f64 vararg" {
+    if (va_f64(0, 1234.0)::i64 != 1234) { ret 1; }
+    ret 0;
 }
