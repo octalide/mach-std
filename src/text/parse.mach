@@ -566,345 +566,345 @@ pub fun parse_f64_exact(s: str) Result[f64, str] {
 
 test "parse: u64 decimal simple" {
     val r: Result[u64, str] = parse_u64("12345", 10);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 12345) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 12345) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 decimal zero" {
     val r: Result[u64, str] = parse_u64("0", 10);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 0) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 0) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 hex lowercase" {
     val r: Result[u64, str] = parse_u64("ff", 16);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 255) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 255) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 hex uppercase" {
     val r: Result[u64, str] = parse_u64("FF", 16);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 255) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 255) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 binary" {
     val r: Result[u64, str] = parse_u64("1010", 2);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 10) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 10) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 octal" {
     val r: Result[u64, str] = parse_u64("77", 8);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 63) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 63) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 auto-detect hex" {
     val r: Result[u64, str] = parse_u64("0xff", 0);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 255) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 255) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 auto-detect binary" {
     val r: Result[u64, str] = parse_u64("0b1010", 0);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 10) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 10) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 auto-detect octal" {
     val r: Result[u64, str] = parse_u64("0o77", 0);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 63) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 63) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 auto-detect decimal" {
     val r: Result[u64, str] = parse_u64("999", 0);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 999) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 999) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 with underscores" {
     val r: Result[u64, str] = parse_u64("1_000_000", 10);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 1000000) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 1000000) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 max value" {
     val r: Result[u64, str] = parse_u64("18446744073709551615", 10);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 18446744073709551615) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 18446744073709551615) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 overflow" {
     val r: Result[u64, str] = parse_u64("18446744073709551616", 10);
-    if (is_ok[u64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[u64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 empty string" {
     val r: Result[u64, str] = parse_u64("", 10);
-    if (is_ok[u64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[u64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 invalid digit" {
     val r: Result[u64, str] = parse_u64("12g45", 10);
     # should parse up to 'g' and return 12
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 12) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 12) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64 leading whitespace" {
     val r: Result[u64, str] = parse_u64("  42", 10);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 42) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 42) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 positive" {
     val r: Result[i64, str] = parse_i64("12345", 10);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 12345) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 12345) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 negative" {
     val r: Result[i64, str] = parse_i64("-12345", 10);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != -12345) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != -12345) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 explicit positive" {
     val r: Result[i64, str] = parse_i64("+42", 10);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 42) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 42) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 zero" {
     val r: Result[i64, str] = parse_i64("0", 10);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 0) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 0) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 negative zero" {
     val r: Result[i64, str] = parse_i64("-0", 10);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 0) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 0) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 max value" {
     val r: Result[i64, str] = parse_i64("9223372036854775807", 10);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 9223372036854775807) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 9223372036854775807) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 min value" {
     val r: Result[i64, str] = parse_i64("-9223372036854775808", 10);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != -9223372036854775808) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != -9223372036854775808) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 overflow positive" {
     val r: Result[i64, str] = parse_i64("9223372036854775808", 10);
-    if (is_ok[i64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[i64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 overflow negative" {
     val r: Result[i64, str] = parse_i64("-9223372036854775809", 10);
-    if (is_ok[i64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[i64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 hex with sign" {
     val r: Result[i64, str] = parse_i64("-0xff", 0);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != -255) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != -255) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 with underscores" {
     val r: Result[i64, str] = parse_i64("-1_000_000", 10);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != -1000000) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != -1000000) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64 leading whitespace" {
     val r: Result[i64, str] = parse_i64("  -42", 10);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != -42) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != -42) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64 simple" {
     val r: Result[f64, str] = parse_f64("3.14");
-    if (is_err[f64, str](r)) { ret 0; }
+    if (is_err[f64, str](r)) { ret 1; }
     val v: f64 = unwrap_ok[f64, str](r);
-    if (v < 3.13 || v > 3.15) { ret 0; }
-    ret 1;
+    if (v < 3.13 || v > 3.15) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64 negative" {
     val r: Result[f64, str] = parse_f64("-2.5");
-    if (is_err[f64, str](r)) { ret 0; }
+    if (is_err[f64, str](r)) { ret 1; }
     val v: f64 = unwrap_ok[f64, str](r);
-    if (v < -2.51 || v > -2.49) { ret 0; }
-    ret 1;
+    if (v < -2.51 || v > -2.49) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64 exponent" {
     val r: Result[f64, str] = parse_f64("1.5e2");
-    if (is_err[f64, str](r)) { ret 0; }
+    if (is_err[f64, str](r)) { ret 1; }
     val v: f64 = unwrap_ok[f64, str](r);
-    if (v < 149.0 || v > 151.0) { ret 0; }
-    ret 1;
+    if (v < 149.0 || v > 151.0) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64 negative exponent" {
     val r: Result[f64, str] = parse_f64("1.5e-1");
-    if (is_err[f64, str](r)) { ret 0; }
+    if (is_err[f64, str](r)) { ret 1; }
     val v: f64 = unwrap_ok[f64, str](r);
-    if (v < 0.14 || v > 0.16) { ret 0; }
-    ret 1;
+    if (v < 0.14 || v > 0.16) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64 integer" {
     val r: Result[f64, str] = parse_f64("42");
-    if (is_err[f64, str](r)) { ret 0; }
+    if (is_err[f64, str](r)) { ret 1; }
     val v: f64 = unwrap_ok[f64, str](r);
-    if (v < 41.9 || v > 42.1) { ret 0; }
-    ret 1;
+    if (v < 41.9 || v > 42.1) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64 with underscores" {
     val r: Result[f64, str] = parse_f64("1_000.5");
-    if (is_err[f64, str](r)) { ret 0; }
+    if (is_err[f64, str](r)) { ret 1; }
     val v: f64 = unwrap_ok[f64, str](r);
-    if (v < 1000.4 || v > 1000.6) { ret 0; }
-    ret 1;
+    if (v < 1000.4 || v > 1000.6) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64 empty string" {
     val r: Result[f64, str] = parse_f64("");
-    if (is_ok[f64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[f64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64_exact valid" {
     val r: Result[u64, str] = parse_u64_exact("12345", 10);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 12345) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 12345) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64_exact trailing chars" {
     val r: Result[u64, str] = parse_u64_exact("12g45", 10);
-    if (is_ok[u64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[u64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64_exact trailing whitespace" {
     val r: Result[u64, str] = parse_u64_exact("42 ", 10);
-    if (is_ok[u64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[u64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64_exact leading whitespace" {
     val r: Result[u64, str] = parse_u64_exact(" 42", 10);
-    if (is_ok[u64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[u64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64_exact hex prefix" {
     val r: Result[u64, str] = parse_u64_exact("0xff", 0);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 255) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 255) { ret 1; }
+    ret 0;
 }
 
 test "parse: u64_exact with underscores" {
     val r: Result[u64, str] = parse_u64_exact("1_000_000", 10);
-    if (is_err[u64, str](r)) { ret 0; }
-    if (unwrap_ok[u64, str](r) != 1000000) { ret 0; }
-    ret 1;
+    if (is_err[u64, str](r)) { ret 1; }
+    if (unwrap_ok[u64, str](r) != 1000000) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64_exact valid" {
     val r: Result[i64, str] = parse_i64_exact("-12345", 10);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != -12345) { ret 0; }
-    ret 1;
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != -12345) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64_exact trailing chars" {
     val r: Result[i64, str] = parse_i64_exact("-12abc", 10);
-    if (is_ok[i64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[i64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: i64_exact trailing whitespace" {
     val r: Result[i64, str] = parse_i64_exact("42 ", 10);
-    if (is_ok[i64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[i64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64_exact valid" {
     val r: Result[f64, str] = parse_f64_exact("3.14");
-    if (is_err[f64, str](r)) { ret 0; }
+    if (is_err[f64, str](r)) { ret 1; }
     val v: f64 = unwrap_ok[f64, str](r);
-    if (v < 3.13 || v > 3.15) { ret 0; }
-    ret 1;
+    if (v < 3.13 || v > 3.15) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64_exact trailing chars" {
     val r: Result[f64, str] = parse_f64_exact("3.14abc");
-    if (is_ok[f64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[f64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64_exact trailing whitespace" {
     val r: Result[f64, str] = parse_f64_exact("3.14 ");
-    if (is_ok[f64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[f64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64_exact with exponent" {
     val r: Result[f64, str] = parse_f64_exact("1.5e2");
-    if (is_err[f64, str](r)) { ret 0; }
+    if (is_err[f64, str](r)) { ret 1; }
     val v: f64 = unwrap_ok[f64, str](r);
-    if (v < 149.0 || v > 151.0) { ret 0; }
-    ret 1;
+    if (v < 149.0 || v > 151.0) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64_exact inf" {
     val r: Result[f64, str] = parse_f64_exact("inf");
-    if (is_err[f64, str](r)) { ret 0; }
-    ret 1;
+    if (is_err[f64, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "parse: f64_exact inf trailing" {
     val r: Result[f64, str] = parse_f64_exact("inf ");
-    if (is_ok[f64, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[f64, str](r)) { ret 1; }
+    ret 0;
 }

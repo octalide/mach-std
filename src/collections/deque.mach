@@ -205,9 +205,9 @@ test "deque: init creates empty deque" {
     var a: allo.Allocator;
     page.make(?a);
     val dq: Deque[i64] = init[i64](?a);
-    if (!is_empty[i64](dq)) { ret 0; }
-    if (length[i64](dq) != 0) { ret 0; }
-    ret 1;
+    if (!is_empty[i64](dq)) { ret 1; }
+    if (length[i64](dq) != 0) { ret 1; }
+    ret 0;
 }
 
 test "deque: push_back and pop_front (FIFO)" {
@@ -222,22 +222,22 @@ test "deque: push_back and pop_front (FIFO)" {
     var r: Result[i64, str];
 
     r = pop_front[i64](?dq);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 10) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 10) { ret 1; }
 
     r = pop_front[i64](?dq);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 20) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 20) { ret 1; }
 
     r = pop_front[i64](?dq);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 30) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 30) { ret 1; }
 
-    if (!is_empty[i64](dq)) { ret 0; }
+    if (!is_empty[i64](dq)) { ret 1; }
 
     val ok: bool = dnit[i64](?dq);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "deque: push_front and pop_back (FIFO reversed)" {
@@ -252,22 +252,22 @@ test "deque: push_front and pop_back (FIFO reversed)" {
     var r: Result[i64, str];
 
     r = pop_back[i64](?dq);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 10) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 10) { ret 1; }
 
     r = pop_back[i64](?dq);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 20) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 20) { ret 1; }
 
     r = pop_back[i64](?dq);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 30) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 30) { ret 1; }
 
-    if (!is_empty[i64](dq)) { ret 0; }
+    if (!is_empty[i64](dq)) { ret 1; }
 
     val ok: bool = dnit[i64](?dq);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "deque: mixed push and pop" {
@@ -279,24 +279,24 @@ test "deque: mixed push and pop" {
     push_back[i64](?dq, 2);
     push_front[i64](?dq, 0);
 
-    if (length[i64](dq) != 3) { ret 0; }
+    if (length[i64](dq) != 3) { ret 1; }
 
     var r: Result[i64, str];
 
     r = pop_front[i64](?dq);
-    if (unwrap_ok[i64, str](r) != 0) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 0) { ret 1; }
 
     r = pop_back[i64](?dq);
-    if (unwrap_ok[i64, str](r) != 2) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 2) { ret 1; }
 
     r = pop_front[i64](?dq);
-    if (unwrap_ok[i64, str](r) != 1) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 1) { ret 1; }
 
-    if (!is_empty[i64](dq)) { ret 0; }
+    if (!is_empty[i64](dq)) { ret 1; }
 
     val ok: bool = dnit[i64](?dq);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "deque: get by index" {
@@ -309,23 +309,23 @@ test "deque: get by index" {
     push_back[i64](?dq, 300);
 
     val r0: Result[*i64, str] = get[i64](?dq, 0);
-    if (is_err[*i64, str](r0)) { ret 0; }
-    if (@unwrap_ok[*i64, str](r0) != 100) { ret 0; }
+    if (is_err[*i64, str](r0)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r0) != 100) { ret 1; }
 
     val r1: Result[*i64, str] = get[i64](?dq, 1);
-    if (is_err[*i64, str](r1)) { ret 0; }
-    if (@unwrap_ok[*i64, str](r1) != 200) { ret 0; }
+    if (is_err[*i64, str](r1)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r1) != 200) { ret 1; }
 
     val r2: Result[*i64, str] = get[i64](?dq, 2);
-    if (is_err[*i64, str](r2)) { ret 0; }
-    if (@unwrap_ok[*i64, str](r2) != 300) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r2) != 300) { ret 1; }
 
     val r_oob: Result[*i64, str] = get[i64](?dq, 3);
-    if (is_ok[*i64, str](r_oob)) { ret 0; }
+    if (is_ok[*i64, str](r_oob)) { ret 1; }
 
     val ok: bool = dnit[i64](?dq);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "deque: pop from empty returns error" {
@@ -334,14 +334,14 @@ test "deque: pop from empty returns error" {
     var dq: Deque[i64] = init[i64](?a);
 
     val r1: Result[i64, str] = pop_front[i64](?dq);
-    if (is_ok[i64, str](r1)) { ret 0; }
+    if (is_ok[i64, str](r1)) { ret 1; }
 
     val r2: Result[i64, str] = pop_back[i64](?dq);
-    if (is_ok[i64, str](r2)) { ret 0; }
+    if (is_ok[i64, str](r2)) { ret 1; }
 
     val ok: bool = dnit[i64](?dq);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "deque: wrap-around behavior" {
@@ -367,19 +367,19 @@ test "deque: wrap-around behavior" {
         k = k + 1;
     }
 
-    if (length[i64](dq) != 8) { ret 0; }
+    if (length[i64](dq) != 8) { ret 1; }
 
     var r: Result[i64, str];
 
     r = pop_front[i64](?dq);
-    if (unwrap_ok[i64, str](r) != 4) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 4) { ret 1; }
 
     r = pop_front[i64](?dq);
-    if (unwrap_ok[i64, str](r) != 5) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 5) { ret 1; }
 
     val ok: bool = dnit[i64](?dq);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "deque: clear resets length and head" {
@@ -393,16 +393,16 @@ test "deque: clear resets length and head" {
 
     clear[i64](?dq);
 
-    if (length[i64](dq) != 0) { ret 0; }
-    if (!is_empty[i64](dq)) { ret 0; }
+    if (length[i64](dq) != 0) { ret 1; }
+    if (!is_empty[i64](dq)) { ret 1; }
 
     push_back[i64](?dq, 42);
     val r: Result[i64, str] = pop_front[i64](?dq);
-    if (unwrap_ok[i64, str](r) != 42) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 42) { ret 1; }
 
     val ok: bool = dnit[i64](?dq);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "deque: dnit on empty deque succeeds" {
@@ -410,6 +410,6 @@ test "deque: dnit on empty deque succeeds" {
     page.make(?a);
     var dq: Deque[i64] = init[i64](?a);
     val ok: bool = dnit[i64](?dq);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }

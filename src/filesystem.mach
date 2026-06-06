@@ -553,8 +553,8 @@ fun write_u64(off: usize, buf: *u8, cap: usize, n: u64) usize {
 
 test "filesystem: open non-existent file returns error" {
     val r: Result[File, str] = open("/tmp/this_file_should_not_exist_12345");
-    if (is_ok[File, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[File, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "filesystem: temp_create creates file" {
@@ -562,13 +562,13 @@ test "filesystem: temp_create creates file" {
     page.make(?a);
 
     val r: Result[TempFile, str] = temp_create(?a, "test");
-    if (is_err[TempFile, str](r)) { ret 0; }
+    if (is_err[TempFile, str](r)) { ret 1; }
     var tf: TempFile = unwrap_ok[TempFile, str](r);
     if (tf.file.fd < 0) { ret 2; }
     if (tf.path == nil) { ret 3; }
     val cr: Result[bool, str] = temp_close_and_remove(?tf);
     if (is_err[bool, str](cr)) { ret 4; }
-    ret 1;
+    ret 0;
 }
 
 test "filesystem: temp file write and read" {
@@ -576,7 +576,7 @@ test "filesystem: temp file write and read" {
     page.make(?a);
 
     val r: Result[TempFile, str] = temp_create(?a, "rw");
-    if (is_err[TempFile, str](r)) { ret 0; }
+    if (is_err[TempFile, str](r)) { ret 1; }
     var tf: TempFile = unwrap_ok[TempFile, str](r);
 
     val data: str = "hello temp file";
@@ -595,7 +595,7 @@ test "filesystem: temp file write and read" {
     if (!str_starts_with(?buf[0], "hello temp file")) { ret 7; }
 
     temp_close_and_remove(?tf);
-    ret 1;
+    ret 0;
 }
 
 test "filesystem: info returns valid metadata" {
@@ -603,7 +603,7 @@ test "filesystem: info returns valid metadata" {
     page.make(?a);
 
     val cr: Result[TempFile, str] = temp_create(?a, "info");
-    if (is_err[TempFile, str](cr)) { ret 0; }
+    if (is_err[TempFile, str](cr)) { ret 1; }
     var tf: TempFile = unwrap_ok[TempFile, str](cr);
 
     val data: str = "some content";
@@ -615,7 +615,7 @@ test "filesystem: info returns valid metadata" {
     if (fi.size != str_len(data)) { ret 3; }
 
     temp_close_and_remove(?tf);
-    ret 1;
+    ret 0;
 }
 
 test "filesystem: create write close open read" {
@@ -623,7 +623,7 @@ test "filesystem: create write close open read" {
     page.make(?a);
 
     val cr: Result[TempFile, str] = temp_create(?a, "fullcycle");
-    if (is_err[TempFile, str](cr)) { ret 0; }
+    if (is_err[TempFile, str](cr)) { ret 1; }
     var tf: TempFile = unwrap_ok[TempFile, str](cr);
 
     val data: str = "test data 12345";
@@ -644,7 +644,7 @@ test "filesystem: create write close open read" {
 
     close(?f);
     temp_remove(?tf);
-    ret 1;
+    ret 0;
 }
 
 test "filesystem: unlink removes file" {
@@ -652,7 +652,7 @@ test "filesystem: unlink removes file" {
     page.make(?a);
 
     val cr: Result[TempFile, str] = temp_create(?a, "unlink");
-    if (is_err[TempFile, str](cr)) { ret 0; }
+    if (is_err[TempFile, str](cr)) { ret 1; }
     var tf: TempFile = unwrap_ok[TempFile, str](cr);
     val p: str = temp_path(?tf);
 
@@ -663,5 +663,5 @@ test "filesystem: unlink removes file" {
 
     val open_res: Result[File, str] = open(p);
     if (is_ok[File, str](open_res)) { ret 3; }
-    ret 1;
+    ret 0;
 }

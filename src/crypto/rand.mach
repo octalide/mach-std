@@ -44,33 +44,33 @@ test "fill: populates buffer with non-zero data" {
         buf[i] = 0;
         i = i + 1;
     }
-    if (fill(?buf[0], 32) < 0) { ret 0; }
+    if (fill(?buf[0], 32) < 0) { ret 1; }
     var all_zero: u8 = 1;
     i = 0;
     for (i < 32) {
         if (buf[i] != 0) { all_zero = 0; }
         i = i + 1;
     }
-    if (all_zero != 0) { ret 0; }
-    ret 1;
+    if (all_zero != 0) { ret 1; }
+    ret 0;
 }
 
 test "fill: zero length succeeds" {
     var buf: [1]u8;
-    if (fill(?buf[0], 0) < 0) { ret 0; }
-    ret 1;
+    if (fill(?buf[0], 0) < 0) { ret 1; }
+    ret 0;
 }
 
 test "u64: two calls return different values" {
     val a: u64 = u64();
     val b: u64 = u64();
-    if (a == b) { ret 0; }
-    ret 1;
+    if (a == b) { ret 1; }
+    ret 0;
 }
 
 test "u32: returns a value" {
     val v: u32 = u32();
     val w: u32 = u32();
-    if (v == w) { ret 0; }
-    ret 1;
+    if (v == w) { ret 1; }
+    ret 0;
 }

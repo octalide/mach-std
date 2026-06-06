@@ -270,262 +270,262 @@ pub fun str_contains_char(s: str, c: char) bool {
 
 test "string: len of empty string" {
     val s: str = "";
-    if (str_len(s) != 0) { ret 0; }
-    ret 1;
+    if (str_len(s) != 0) { ret 1; }
+    ret 0;
 }
 
 test "string: len of non-empty string" {
     val s: str = "hello";
-    if (str_len(s) != 5) { ret 0; }
-    ret 1;
+    if (str_len(s) != 5) { ret 1; }
+    ret 0;
 }
 
 test "string: len of single char" {
     val s: str = "x";
-    if (str_len(s) != 1) { ret 0; }
-    ret 1;
+    if (str_len(s) != 1) { ret 1; }
+    ret 0;
 }
 
 test "string: empty returns true for empty string" {
     val s: str = "";
-    if (!str_empty(s)) { ret 0; }
-    ret 1;
+    if (!str_empty(s)) { ret 1; }
+    ret 0;
 }
 
 test "string: empty returns false for non-empty string" {
     val s: str = "hello";
-    if (str_empty(s)) { ret 0; }
-    ret 1;
+    if (str_empty(s)) { ret 1; }
+    ret 0;
 }
 
 test "string: equals same strings" {
     val a: str = "hello";
     val b: str = "hello";
-    if (!str_equals(a, b)) { ret 0; }
-    ret 1;
+    if (!str_equals(a, b)) { ret 1; }
+    ret 0;
 }
 
 test "string: equals different strings" {
     val a: str = "hello";
     val b: str = "world";
-    if (str_equals(a, b)) { ret 0; }
-    ret 1;
+    if (str_equals(a, b)) { ret 1; }
+    ret 0;
 }
 
 test "string: equals different lengths" {
     val a: str = "hello";
     val b: str = "hello world";
-    if (str_equals(a, b)) { ret 0; }
-    ret 1;
+    if (str_equals(a, b)) { ret 1; }
+    ret 0;
 }
 
 test "string: equals empty strings" {
     val a: str = "";
     val b: str = "";
-    if (!str_equals(a, b)) { ret 0; }
-    ret 1;
+    if (!str_equals(a, b)) { ret 1; }
+    ret 0;
 }
 
 test "string: compare equal strings" {
     val a: str = "abc";
     val b: str = "abc";
-    if (str_compare(a, b) != 0) { ret 0; }
-    ret 1;
+    if (str_compare(a, b) != 0) { ret 1; }
+    ret 0;
 }
 
 test "string: compare less than" {
     val a: str = "abc";
     val b: str = "abd";
-    if (str_compare(a, b) >= 0) { ret 0; }
-    ret 1;
+    if (str_compare(a, b) >= 0) { ret 1; }
+    ret 0;
 }
 
 test "string: compare greater than" {
     val a: str = "abd";
     val b: str = "abc";
-    if (str_compare(a, b) <= 0) { ret 0; }
-    ret 1;
+    if (str_compare(a, b) <= 0) { ret 1; }
+    ret 0;
 }
 
 test "string: compare prefix is less" {
     val a: str = "abc";
     val b: str = "abcd";
-    if (str_compare(a, b) >= 0) { ret 0; }
-    ret 1;
+    if (str_compare(a, b) >= 0) { ret 1; }
+    ret 0;
 }
 
 test "string: starts_with matching prefix" {
     val s: str = "hello world";
-    if (!str_starts_with(s, "hello")) { ret 0; }
-    ret 1;
+    if (!str_starts_with(s, "hello")) { ret 1; }
+    ret 0;
 }
 
 test "string: starts_with non-matching prefix" {
     val s: str = "hello world";
-    if (str_starts_with(s, "world")) { ret 0; }
-    ret 1;
+    if (str_starts_with(s, "world")) { ret 1; }
+    ret 0;
 }
 
 test "string: starts_with empty prefix" {
     val s: str = "hello";
-    if (!str_starts_with(s, "")) { ret 0; }
-    ret 1;
+    if (!str_starts_with(s, "")) { ret 1; }
+    ret 0;
 }
 
 test "string: starts_with full string" {
     val s: str = "hello";
-    if (!str_starts_with(s, "hello")) { ret 0; }
-    ret 1;
+    if (!str_starts_with(s, "hello")) { ret 1; }
+    ret 0;
 }
 
 test "string: ends_with matching suffix" {
     val s: str = "hello world";
-    if (!str_ends_with(s, "world")) { ret 0; }
-    ret 1;
+    if (!str_ends_with(s, "world")) { ret 1; }
+    ret 0;
 }
 
 test "string: ends_with non-matching suffix" {
     val s: str = "hello world";
-    if (str_ends_with(s, "hello")) { ret 0; }
-    ret 1;
+    if (str_ends_with(s, "hello")) { ret 1; }
+    ret 0;
 }
 
 test "string: ends_with empty suffix" {
     val s: str = "hello";
-    if (!str_ends_with(s, "")) { ret 0; }
-    ret 1;
+    if (!str_ends_with(s, "")) { ret 1; }
+    ret 0;
 }
 
 test "string: ends_with full string" {
     val s: str = "hello";
-    if (!str_ends_with(s, "hello")) { ret 0; }
-    ret 1;
+    if (!str_ends_with(s, "hello")) { ret 1; }
+    ret 0;
 }
 
 test "string: index_of finds substring at start" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_index_of(s, "hello");
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 0) { ret 0; }
-    ret 1;
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 0) { ret 1; }
+    ret 0;
 }
 
 test "string: index_of finds substring in middle" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_index_of(s, "wor");
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 6) { ret 0; }
-    ret 1;
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 6) { ret 1; }
+    ret 0;
 }
 
 test "string: index_of not found" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_index_of(s, "xyz");
-    if (is_ok[usize, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[usize, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "string: last_index_of finds last occurrence" {
     val s: str = "abcabc";
     val r: Result[usize, str] = str_last_index_of(s, "abc");
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 3) { ret 0; }
-    ret 1;
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 3) { ret 1; }
+    ret 0;
 }
 
 test "string: last_index_of single occurrence" {
     val s: str = "hello world";
     val r: Result[usize, str] = str_last_index_of(s, "world");
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 6) { ret 0; }
-    ret 1;
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 6) { ret 1; }
+    ret 0;
 }
 
 test "string: contains found" {
     val s: str = "hello world";
-    if (!str_contains(s, "wor")) { ret 0; }
-    ret 1;
+    if (!str_contains(s, "wor")) { ret 1; }
+    ret 0;
 }
 
 test "string: contains not found" {
     val s: str = "hello world";
-    if (str_contains(s, "xyz")) { ret 0; }
-    ret 1;
+    if (str_contains(s, "xyz")) { ret 1; }
+    ret 0;
 }
 
 test "string: contains empty substring" {
     val s: str = "hello";
-    if (str_contains(s, "")) { ret 0; }
-    ret 1;
+    if (str_contains(s, "")) { ret 1; }
+    ret 0;
 }
 
 test "string: region_equals matching start" {
-    if (!str_region_equals("hello world", 0, 5, "hello")) { ret 0; }
-    ret 1;
+    if (!str_region_equals("hello world", 0, 5, "hello")) { ret 1; }
+    ret 0;
 }
 
 test "string: region_equals matching middle" {
-    if (!str_region_equals("hello world", 6, 5, "world")) { ret 0; }
-    ret 1;
+    if (!str_region_equals("hello world", 6, 5, "world")) { ret 1; }
+    ret 0;
 }
 
 test "string: region_equals single char" {
-    if (!str_region_equals("abcdef", 3, 1, "d")) { ret 0; }
-    ret 1;
+    if (!str_region_equals("abcdef", 3, 1, "d")) { ret 1; }
+    ret 0;
 }
 
 test "string: region_equals full string" {
-    if (!str_region_equals("hello", 0, 5, "hello")) { ret 0; }
-    ret 1;
+    if (!str_region_equals("hello", 0, 5, "hello")) { ret 1; }
+    ret 0;
 }
 
 test "string: region_equals wrong length" {
-    if (str_region_equals("hello world", 0, 5, "hell")) { ret 0; }
-    ret 1;
+    if (str_region_equals("hello world", 0, 5, "hell")) { ret 1; }
+    ret 0;
 }
 
 test "string: region_equals mismatch" {
-    if (str_region_equals("hello world", 0, 5, "world")) { ret 0; }
-    ret 1;
+    if (str_region_equals("hello world", 0, 5, "world")) { ret 1; }
+    ret 0;
 }
 
 test "string: trim_left" {
-    if (!str_equals(str_trim_left("  hello"), "hello")) { ret 0; }
-    if (!str_equals(str_trim_left("hello"), "hello")) { ret 0; }
-    ret 1;
+    if (!str_equals(str_trim_left("  hello"), "hello")) { ret 1; }
+    if (!str_equals(str_trim_left("hello"), "hello")) { ret 1; }
+    ret 0;
 }
 
 test "string: index_char" {
     var r: Result[usize, str] = str_index_char("hello", 'l');
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 2) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 2) { ret 1; }
     r = str_index_char("hello", 'h');
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 0) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 0) { ret 1; }
     r = str_index_char("hello", 'o');
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 4) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 4) { ret 1; }
     r = str_index_char("hello", 'x');
-    if (is_ok[usize, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[usize, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "string: last_index_char" {
     var r: Result[usize, str] = str_last_index_char("hello", 'l');
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 3) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 3) { ret 1; }
     r = str_last_index_char("hello", 'h');
-    if (is_err[usize, str](r)) { ret 0; }
-    if (unwrap_ok[usize, str](r) != 0) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 0) { ret 1; }
     r = str_last_index_char("hello", 'x');
-    if (is_ok[usize, str](r)) { ret 0; }
-    ret 1;
+    if (is_ok[usize, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "string: contains_char" {
-    if (!str_contains_char("hello", 'e')) { ret 0; }
-    if (str_contains_char("hello", 'x')) { ret 0; }
-    ret 1;
+    if (!str_contains_char("hello", 'e')) { ret 1; }
+    if (str_contains_char("hello", 'x')) { ret 1; }
+    ret 0;
 }
 
 # StrView: a borrowed, length-counted slice of characters. unlike `str`

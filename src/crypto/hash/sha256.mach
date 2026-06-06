@@ -237,29 +237,29 @@ pub fun hash(data: *u8, len: usize, digest: *u8) {
 test "sha256: empty string" {
     var digest: [32]u8;
     hash(""::*u8, 0, ?digest[0]);
-    if (digest[0] != 0xe3) { ret 0; }
-    if (digest[1] != 0xb0) { ret 0; }
-    if (digest[2] != 0xc4) { ret 0; }
-    if (digest[3] != 0x42) { ret 0; }
-    if (digest[4] != 0x98) { ret 0; }
-    if (digest[5] != 0xfc) { ret 0; }
-    if (digest[6] != 0x1c) { ret 0; }
-    if (digest[7] != 0x14) { ret 0; }
-    ret 1;
+    if (digest[0] != 0xe3) { ret 1; }
+    if (digest[1] != 0xb0) { ret 1; }
+    if (digest[2] != 0xc4) { ret 1; }
+    if (digest[3] != 0x42) { ret 1; }
+    if (digest[4] != 0x98) { ret 1; }
+    if (digest[5] != 0xfc) { ret 1; }
+    if (digest[6] != 0x1c) { ret 1; }
+    if (digest[7] != 0x14) { ret 1; }
+    ret 0;
 }
 
 test "sha256: abc" {
     var digest: [32]u8;
     hash("abc"::*u8, 3, ?digest[0]);
-    if (digest[0] != 0xba) { ret 0; }
-    if (digest[1] != 0x78) { ret 0; }
-    if (digest[2] != 0x16) { ret 0; }
-    if (digest[3] != 0xbf) { ret 0; }
-    if (digest[4] != 0x8f) { ret 0; }
-    if (digest[5] != 0x01) { ret 0; }
-    if (digest[6] != 0xcf) { ret 0; }
-    if (digest[7] != 0xea) { ret 0; }
-    ret 1;
+    if (digest[0] != 0xba) { ret 1; }
+    if (digest[1] != 0x78) { ret 1; }
+    if (digest[2] != 0x16) { ret 1; }
+    if (digest[3] != 0xbf) { ret 1; }
+    if (digest[4] != 0x8f) { ret 1; }
+    if (digest[5] != 0x01) { ret 1; }
+    if (digest[6] != 0xcf) { ret 1; }
+    if (digest[7] != 0xea) { ret 1; }
+    ret 0;
 }
 
 test "sha256: streaming matches oneshot" {
@@ -272,8 +272,8 @@ test "sha256: streaming matches oneshot" {
     final(?s, ?d2[0]);
     var i: usize = 0;
     for (i < 32) {
-        if (d1[i] != d2[i]) { ret 0; }
+        if (d1[i] != d2[i]) { ret 1; }
         i = i + 1;
     }
-    ret 1;
+    ret 0;
 }

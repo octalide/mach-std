@@ -279,17 +279,17 @@ fun parse_response(buf: *u8, len: usize, addr: *ip.IPv4, qid: u16) bool {
 test "dns: lookup_hosts localhost" {
     var addr: ip.IPv4;
     val found: bool = lookup_hosts("localhost", ?addr);
-    if (!found) { ret 0; }
-    if (addr.octets[0] != 127) { ret 0; }
-    if (addr.octets[1] != 0) { ret 0; }
-    if (addr.octets[2] != 0) { ret 0; }
-    if (addr.octets[3] != 1) { ret 0; }
-    ret 1;
+    if (!found) { ret 1; }
+    if (addr.octets[0] != 127) { ret 1; }
+    if (addr.octets[1] != 0) { ret 1; }
+    if (addr.octets[2] != 0) { ret 1; }
+    if (addr.octets[3] != 1) { ret 1; }
+    ret 0;
 }
 
 test "dns: lookup_hosts nonexistent" {
     var addr: ip.IPv4;
     val found: bool = lookup_hosts("this.host.does.not.exist.local", ?addr);
-    if (found) { ret 0; }
-    ret 1;
+    if (found) { ret 1; }
+    ret 0;
 }

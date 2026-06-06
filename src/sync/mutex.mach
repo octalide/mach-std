@@ -85,24 +85,24 @@ pub fun is_locked(m: *Mutex) bool {
 
 test "mutex: zero-initialized is unlocked" {
     var m: Mutex = make();
-    if (m != 0) { ret 0; }
-    ret 1;
+    if (m != 0) { ret 1; }
+    ret 0;
 }
 
 test "mutex: lock then unlock" {
     var m: Mutex = make();
     lock(?m);
-    if (m == 0) { ret 0; }
+    if (m == 0) { ret 1; }
     unlock(?m);
-    if (m != 0) { ret 0; }
-    ret 1;
+    if (m != 0) { ret 1; }
+    ret 0;
 }
 
 test "mutex: try_lock on unlocked succeeds" {
     var m: Mutex = make();
-    if (!try_lock(?m)) { ret 0; }
+    if (!try_lock(?m)) { ret 1; }
     unlock(?m);
-    ret 1;
+    ret 0;
 }
 
 test "mutex: try_lock on locked fails" {
@@ -110,20 +110,20 @@ test "mutex: try_lock on locked fails" {
     lock(?m);
     if (try_lock(?m)) {
         unlock(?m);
-        ret 0;
+        ret 1;
     }
     unlock(?m);
-    ret 1;
+    ret 0;
 }
 
 test "mutex: is_locked reflects state" {
     var m: Mutex = make();
-    if (is_locked(?m)) { ret 0; }
+    if (is_locked(?m)) { ret 1; }
     lock(?m);
-    if (!is_locked(?m)) { ret 0; }
+    if (!is_locked(?m)) { ret 1; }
     unlock(?m);
-    if (is_locked(?m)) { ret 0; }
-    ret 1;
+    if (is_locked(?m)) { ret 1; }
+    ret 0;
 }
 
 test "mutex: double lock-unlock cycle" {
@@ -132,6 +132,6 @@ test "mutex: double lock-unlock cycle" {
     unlock(?m);
     lock(?m);
     unlock(?m);
-    if (m != 0) { ret 0; }
-    ret 1;
+    if (m != 0) { ret 1; }
+    ret 0;
 }

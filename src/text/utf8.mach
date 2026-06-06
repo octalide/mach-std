@@ -249,114 +249,114 @@ pub fun count(buf: *u8, len: usize) usize {
 }
 
 test "utf8: byte_len" {
-    if (byte_len(0x00) != 1) { ret 0; }
-    if (byte_len(0x7F) != 1) { ret 0; }
-    if (byte_len(0x80) != 0) { ret 0; }
-    if (byte_len(0xBF) != 0) { ret 0; }
-    if (byte_len(0xC0) != 2) { ret 0; }
-    if (byte_len(0xDF) != 2) { ret 0; }
-    if (byte_len(0xE0) != 3) { ret 0; }
-    if (byte_len(0xEF) != 3) { ret 0; }
-    if (byte_len(0xF0) != 4) { ret 0; }
-    if (byte_len(0xF7) != 4) { ret 0; }
-    if (byte_len(0xF8) != 0) { ret 0; }
-    if (byte_len(0xFF) != 0) { ret 0; }
-    ret 1;
+    if (byte_len(0x00) != 1) { ret 1; }
+    if (byte_len(0x7F) != 1) { ret 1; }
+    if (byte_len(0x80) != 0) { ret 1; }
+    if (byte_len(0xBF) != 0) { ret 1; }
+    if (byte_len(0xC0) != 2) { ret 1; }
+    if (byte_len(0xDF) != 2) { ret 1; }
+    if (byte_len(0xE0) != 3) { ret 1; }
+    if (byte_len(0xEF) != 3) { ret 1; }
+    if (byte_len(0xF0) != 4) { ret 1; }
+    if (byte_len(0xF7) != 4) { ret 1; }
+    if (byte_len(0xF8) != 0) { ret 1; }
+    if (byte_len(0xFF) != 0) { ret 1; }
+    ret 0;
 }
 
 test "utf8: codepoint_len" {
-    if (codepoint_len(0x00) != 1) { ret 0; }
-    if (codepoint_len(0x7F) != 1) { ret 0; }
-    if (codepoint_len(0x80) != 2) { ret 0; }
-    if (codepoint_len(0x7FF) != 2) { ret 0; }
-    if (codepoint_len(0x800) != 3) { ret 0; }
-    if (codepoint_len(0xFFFF) != 3) { ret 0; }
-    if (codepoint_len(0x10000) != 4) { ret 0; }
-    if (codepoint_len(0x10FFFF) != 4) { ret 0; }
-    if (codepoint_len(0x110000) != 0) { ret 0; }
-    ret 1;
+    if (codepoint_len(0x00) != 1) { ret 1; }
+    if (codepoint_len(0x7F) != 1) { ret 1; }
+    if (codepoint_len(0x80) != 2) { ret 1; }
+    if (codepoint_len(0x7FF) != 2) { ret 1; }
+    if (codepoint_len(0x800) != 3) { ret 1; }
+    if (codepoint_len(0xFFFF) != 3) { ret 1; }
+    if (codepoint_len(0x10000) != 4) { ret 1; }
+    if (codepoint_len(0x10FFFF) != 4) { ret 1; }
+    if (codepoint_len(0x110000) != 0) { ret 1; }
+    ret 0;
 }
 
 test "utf8: is_continuation" {
-    if (is_continuation(0x00)) { ret 0; }
-    if (is_continuation(0x7F)) { ret 0; }
-    if (!is_continuation(0x80)) { ret 0; }
-    if (!is_continuation(0xBF)) { ret 0; }
-    if (is_continuation(0xC0)) { ret 0; }
-    ret 1;
+    if (is_continuation(0x00)) { ret 1; }
+    if (is_continuation(0x7F)) { ret 1; }
+    if (!is_continuation(0x80)) { ret 1; }
+    if (!is_continuation(0xBF)) { ret 1; }
+    if (is_continuation(0xC0)) { ret 1; }
+    ret 0;
 }
 
 test "utf8: encode/decode ASCII" {
     var buf: [8]u8;
     val n: usize = encode(0x41, ?buf[0], 8);
-    if (n != 1) { ret 0; }
-    if (buf[0] != 0x41) { ret 0; }
+    if (n != 1) { ret 1; }
+    if (buf[0] != 0x41) { ret 1; }
 
     var cp: Codepoint;
     val d: usize = decode(?buf[0], 8, ?cp);
-    if (d != 1) { ret 0; }
-    if (cp != 0x41) { ret 0; }
-    ret 1;
+    if (d != 1) { ret 1; }
+    if (cp != 0x41) { ret 1; }
+    ret 0;
 }
 
 test "utf8: encode/decode 2-byte" {
     var buf: [8]u8;
     val n: usize = encode(0xE9, ?buf[0], 8);
-    if (n != 2) { ret 0; }
-    if (buf[0] != 0xC3) { ret 0; }
-    if (buf[1] != 0xA9) { ret 0; }
+    if (n != 2) { ret 1; }
+    if (buf[0] != 0xC3) { ret 1; }
+    if (buf[1] != 0xA9) { ret 1; }
 
     var cp: Codepoint;
     val d: usize = decode(?buf[0], 8, ?cp);
-    if (d != 2) { ret 0; }
-    if (cp != 0xE9) { ret 0; }
-    ret 1;
+    if (d != 2) { ret 1; }
+    if (cp != 0xE9) { ret 1; }
+    ret 0;
 }
 
 test "utf8: encode/decode 3-byte" {
     var buf: [8]u8;
     val n: usize = encode(0x20AC, ?buf[0], 8);
-    if (n != 3) { ret 0; }
-    if (buf[0] != 0xE2) { ret 0; }
-    if (buf[1] != 0x82) { ret 0; }
-    if (buf[2] != 0xAC) { ret 0; }
+    if (n != 3) { ret 1; }
+    if (buf[0] != 0xE2) { ret 1; }
+    if (buf[1] != 0x82) { ret 1; }
+    if (buf[2] != 0xAC) { ret 1; }
 
     var cp: Codepoint;
     val d: usize = decode(?buf[0], 8, ?cp);
-    if (d != 3) { ret 0; }
-    if (cp != 0x20AC) { ret 0; }
-    ret 1;
+    if (d != 3) { ret 1; }
+    if (cp != 0x20AC) { ret 1; }
+    ret 0;
 }
 
 test "utf8: encode/decode 4-byte" {
     var buf: [8]u8;
     val n: usize = encode(0x1D11E, ?buf[0], 8);
-    if (n != 4) { ret 0; }
-    if (buf[0] != 0xF0) { ret 0; }
-    if (buf[1] != 0x9D) { ret 0; }
-    if (buf[2] != 0x84) { ret 0; }
-    if (buf[3] != 0x9E) { ret 0; }
+    if (n != 4) { ret 1; }
+    if (buf[0] != 0xF0) { ret 1; }
+    if (buf[1] != 0x9D) { ret 1; }
+    if (buf[2] != 0x84) { ret 1; }
+    if (buf[3] != 0x9E) { ret 1; }
 
     var cp: Codepoint;
     val d: usize = decode(?buf[0], 8, ?cp);
-    if (d != 4) { ret 0; }
-    if (cp != 0x1D11E) { ret 0; }
-    ret 1;
+    if (d != 4) { ret 1; }
+    if (cp != 0x1D11E) { ret 1; }
+    ret 0;
 }
 
 test "utf8: encode rejects surrogates" {
     var buf: [8]u8;
-    if (encode(0xD800, ?buf[0], 8) != 0) { ret 0; }
-    if (encode(0xDFFF, ?buf[0], 8) != 0) { ret 0; }
-    ret 1;
+    if (encode(0xD800, ?buf[0], 8) != 0) { ret 1; }
+    if (encode(0xDFFF, ?buf[0], 8) != 0) { ret 1; }
+    ret 0;
 }
 
 test "utf8: encode rejects buffer too small" {
     var buf: [8]u8;
-    if (encode(0xE9, ?buf[0], 1) != 0) { ret 0; }
-    if (encode(0x20AC, ?buf[0], 2) != 0) { ret 0; }
-    if (encode(0x1D11E, ?buf[0], 3) != 0) { ret 0; }
-    ret 1;
+    if (encode(0xE9, ?buf[0], 1) != 0) { ret 1; }
+    if (encode(0x20AC, ?buf[0], 2) != 0) { ret 1; }
+    if (encode(0x1D11E, ?buf[0], 3) != 0) { ret 1; }
+    ret 0;
 }
 
 test "utf8: decode invalid continuation" {
@@ -365,9 +365,9 @@ test "utf8: decode invalid continuation" {
     buf[1] = 0x00;
     var cp: Codepoint;
     val d: usize = decode(?buf[0], 2, ?cp);
-    if (d != 0) { ret 0; }
-    if (cp != REPLACEMENT) { ret 0; }
-    ret 1;
+    if (d != 0) { ret 1; }
+    if (cp != REPLACEMENT) { ret 1; }
+    ret 0;
 }
 
 test "utf8: decode overlong" {
@@ -376,9 +376,9 @@ test "utf8: decode overlong" {
     buf[1] = 0x81;
     var cp: Codepoint;
     val d: usize = decode(?buf[0], 2, ?cp);
-    if (d != 0) { ret 0; }
-    if (cp != REPLACEMENT) { ret 0; }
-    ret 1;
+    if (d != 0) { ret 1; }
+    if (cp != REPLACEMENT) { ret 1; }
+    ret 0;
 }
 
 test "utf8: validate valid" {
@@ -386,8 +386,8 @@ test "utf8: validate valid" {
     buf[0] = 0x48;
     buf[1] = 0xC3;
     buf[2] = 0xA9;
-    if (!validate(?buf[0], 3)) { ret 0; }
-    ret 1;
+    if (!validate(?buf[0], 3)) { ret 1; }
+    ret 0;
 }
 
 test "utf8: validate invalid" {
@@ -395,14 +395,14 @@ test "utf8: validate invalid" {
     buf[0] = 0x48;
     buf[1] = 0xFF;
     buf[2] = 0xA9;
-    if (validate(?buf[0], 3)) { ret 0; }
-    ret 1;
+    if (validate(?buf[0], 3)) { ret 1; }
+    ret 0;
 }
 
 test "utf8: validate empty" {
     var buf: [8]u8;
-    if (!validate(?buf[0], 0)) { ret 0; }
-    ret 1;
+    if (!validate(?buf[0], 0)) { ret 1; }
+    ret 0;
 }
 
 test "utf8: count codepoints" {
@@ -414,6 +414,6 @@ test "utf8: count codepoints" {
     buf[4] = 0x82;
     buf[5] = 0xAC;
     val n: usize = count(?buf[0], 6);
-    if (n != 3) { ret 0; }
-    ret 1;
+    if (n != 3) { ret 1; }
+    ret 0;
 }

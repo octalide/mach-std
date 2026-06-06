@@ -95,9 +95,9 @@ test "set: init creates empty set" {
     var a: allocator.Allocator;
     page.make(?a);
     val s: Set[i64] = init[i64](?a, map.hash_i64, map.eq_i64);
-    if (!is_empty[i64](s)) { ret 0; }
-    if (length[i64](s) != 0) { ret 0; }
-    ret 1;
+    if (!is_empty[i64](s)) { ret 1; }
+    if (length[i64](s) != 0) { ret 1; }
+    ret 0;
 }
 
 test "set: insert and contains" {
@@ -106,15 +106,15 @@ test "set: insert and contains" {
     var s: Set[i64] = init[i64](?a, map.hash_i64, map.eq_i64);
 
     val r: Result[bool, str] = insert[i64](?s, 42);
-    if (is_err[bool, str](r)) { ret 0; }
-    if (!unwrap_ok[bool, str](r)) { ret 0; }
+    if (is_err[bool, str](r)) { ret 1; }
+    if (!unwrap_ok[bool, str](r)) { ret 1; }
 
     val k: i64 = 42;
-    if (!contains[i64](?s, ?k)) { ret 0; }
-    if (length[i64](s) != 1) { ret 0; }
+    if (!contains[i64](?s, ?k)) { ret 1; }
+    if (length[i64](s) != 1) { ret 1; }
 
     dnit[i64](?s);
-    ret 1;
+    ret 0;
 }
 
 test "set: insert duplicate returns false" {
@@ -124,12 +124,12 @@ test "set: insert duplicate returns false" {
 
     insert[i64](?s, 10);
     val r: Result[bool, str] = insert[i64](?s, 10);
-    if (is_err[bool, str](r)) { ret 0; }
-    if (unwrap_ok[bool, str](r)) { ret 0; }
-    if (length[i64](s) != 1) { ret 0; }
+    if (is_err[bool, str](r)) { ret 1; }
+    if (unwrap_ok[bool, str](r)) { ret 1; }
+    if (length[i64](s) != 1) { ret 1; }
 
     dnit[i64](?s);
-    ret 1;
+    ret 0;
 }
 
 test "set: remove" {
@@ -141,23 +141,23 @@ test "set: remove" {
     insert[i64](?s, 2);
     insert[i64](?s, 3);
 
-    if (length[i64](s) != 3) { ret 0; }
+    if (length[i64](s) != 3) { ret 1; }
 
     val k: i64 = 2;
     val rr: Result[bool, str] = remove[i64](?s, ?k);
-    if (is_err[bool, str](rr)) { ret 0; }
-    if (!unwrap_ok[bool, str](rr)) { ret 0; }
+    if (is_err[bool, str](rr)) { ret 1; }
+    if (!unwrap_ok[bool, str](rr)) { ret 1; }
 
-    if (length[i64](s) != 2) { ret 0; }
-    if (contains[i64](?s, ?k)) { ret 0; }
+    if (length[i64](s) != 2) { ret 1; }
+    if (contains[i64](?s, ?k)) { ret 1; }
 
     val k1: i64 = 1;
     val k3: i64 = 3;
-    if (!contains[i64](?s, ?k1)) { ret 0; }
-    if (!contains[i64](?s, ?k3)) { ret 0; }
+    if (!contains[i64](?s, ?k1)) { ret 1; }
+    if (!contains[i64](?s, ?k3)) { ret 1; }
 
     dnit[i64](?s);
-    ret 1;
+    ret 0;
 }
 
 test "set: remove non-existent" {
@@ -169,11 +169,11 @@ test "set: remove non-existent" {
 
     val k: i64 = 999;
     val rr: Result[bool, str] = remove[i64](?s, ?k);
-    if (is_err[bool, str](rr)) { ret 0; }
-    if (unwrap_ok[bool, str](rr)) { ret 0; }
+    if (is_err[bool, str](rr)) { ret 1; }
+    if (unwrap_ok[bool, str](rr)) { ret 1; }
 
     dnit[i64](?s);
-    ret 1;
+    ret 0;
 }
 
 test "set: clear" {
@@ -186,11 +186,11 @@ test "set: clear" {
     insert[i64](?s, 3);
 
     clear[i64](?s);
-    if (length[i64](s) != 0) { ret 0; }
-    if (!is_empty[i64](s)) { ret 0; }
+    if (length[i64](s) != 0) { ret 1; }
+    if (!is_empty[i64](s)) { ret 1; }
 
     dnit[i64](?s);
-    ret 1;
+    ret 0;
 }
 
 test "set: contains non-existent" {
@@ -201,10 +201,10 @@ test "set: contains non-existent" {
     insert[i64](?s, 5);
 
     val k: i64 = 99;
-    if (contains[i64](?s, ?k)) { ret 0; }
+    if (contains[i64](?s, ?k)) { ret 1; }
 
     dnit[i64](?s);
-    ret 1;
+    ret 0;
 }
 
 test "set: many insertions" {
@@ -215,18 +215,18 @@ test "set: many insertions" {
     var i: i64 = 0;
     for (i < 50) {
         val r: Result[bool, str] = insert[i64](?s, i);
-        if (is_err[bool, str](r)) { ret 0; }
+        if (is_err[bool, str](r)) { ret 1; }
         i = i + 1;
     }
 
-    if (length[i64](s) != 50) { ret 0; }
+    if (length[i64](s) != 50) { ret 1; }
 
     var j: i64 = 0;
     for (j < 50) {
-        if (!contains[i64](?s, ?j)) { ret 0; }
+        if (!contains[i64](?s, ?j)) { ret 1; }
         j = j + 1;
     }
 
     dnit[i64](?s);
-    ret 1;
+    ret 0;
 }

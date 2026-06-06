@@ -203,9 +203,9 @@ test "heap: init creates empty heap" {
     var a: allo.Allocator;
     page.make(?a);
     val h: Heap[i64] = init[i64](?a, cmp_i64);
-    if (!is_empty[i64](h)) { ret 0; }
-    if (length[i64](h) != 0) { ret 0; }
-    ret 1;
+    if (!is_empty[i64](h)) { ret 1; }
+    if (length[i64](h) != 0) { ret 1; }
+    ret 0;
 }
 
 test "heap: push and pop returns ascending order" {
@@ -222,30 +222,30 @@ test "heap: push and pop returns ascending order" {
     var r: Result[i64, str];
 
     r = pop[i64](?h);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 10) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 10) { ret 1; }
 
     r = pop[i64](?h);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 20) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 20) { ret 1; }
 
     r = pop[i64](?h);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 30) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 30) { ret 1; }
 
     r = pop[i64](?h);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 40) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 40) { ret 1; }
 
     r = pop[i64](?h);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 50) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 50) { ret 1; }
 
-    if (!is_empty[i64](h)) { ret 0; }
+    if (!is_empty[i64](h)) { ret 1; }
 
     val ok: bool = dnit[i64](?h);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "heap: peek returns minimum without removing" {
@@ -258,13 +258,13 @@ test "heap: peek returns minimum without removing" {
     push[i64](?h, 7);
 
     val r: Result[*i64, str] = peek[i64](?h);
-    if (is_err[*i64, str](r)) { ret 0; }
-    if (@unwrap_ok[*i64, str](r) != 3) { ret 0; }
-    if (length[i64](h) != 3) { ret 0; }
+    if (is_err[*i64, str](r)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r) != 3) { ret 1; }
+    if (length[i64](h) != 3) { ret 1; }
 
     val ok: bool = dnit[i64](?h);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "heap: pop from empty returns error" {
@@ -273,11 +273,11 @@ test "heap: pop from empty returns error" {
     var h: Heap[i64] = init[i64](?a, cmp_i64);
 
     val r: Result[i64, str] = pop[i64](?h);
-    if (is_ok[i64, str](r)) { ret 0; }
+    if (is_ok[i64, str](r)) { ret 1; }
 
     val ok: bool = dnit[i64](?h);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "heap: peek on empty returns error" {
@@ -286,11 +286,11 @@ test "heap: peek on empty returns error" {
     var h: Heap[i64] = init[i64](?a, cmp_i64);
 
     val r: Result[*i64, str] = peek[i64](?h);
-    if (is_ok[*i64, str](r)) { ret 0; }
+    if (is_ok[*i64, str](r)) { ret 1; }
 
     val ok: bool = dnit[i64](?h);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "heap: push many and verify sorted extraction" {
@@ -311,18 +311,18 @@ test "heap: push many and verify sorted extraction" {
     var count: usize = 0;
     for (count < 8) {
         val r: Result[i64, str] = pop[i64](?h);
-        if (is_err[i64, str](r)) { ret 0; }
+        if (is_err[i64, str](r)) { ret 1; }
         val v: i64 = unwrap_ok[i64, str](r);
-        if (v < prev) { ret 0; }
+        if (v < prev) { ret 1; }
         prev = v;
         count = count + 1;
     }
 
-    if (!is_empty[i64](h)) { ret 0; }
+    if (!is_empty[i64](h)) { ret 1; }
 
     val ok: bool = dnit[i64](?h);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "heap: dnit on empty heap succeeds" {
@@ -330,8 +330,8 @@ test "heap: dnit on empty heap succeeds" {
     page.make(?a);
     var h: Heap[i64] = init[i64](?a, cmp_i64);
     val ok: bool = dnit[i64](?h);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "heap: duplicate values maintained" {
@@ -347,20 +347,20 @@ test "heap: duplicate values maintained" {
     var r: Result[i64, str];
 
     r = pop[i64](?h);
-    if (unwrap_ok[i64, str](r) != 3) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 3) { ret 1; }
 
     r = pop[i64](?h);
-    if (unwrap_ok[i64, str](r) != 3) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 3) { ret 1; }
 
     r = pop[i64](?h);
-    if (unwrap_ok[i64, str](r) != 5) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 5) { ret 1; }
 
     r = pop[i64](?h);
-    if (unwrap_ok[i64, str](r) != 5) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 5) { ret 1; }
 
-    if (!is_empty[i64](h)) { ret 0; }
+    if (!is_empty[i64](h)) { ret 1; }
 
     val ok: bool = dnit[i64](?h);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }

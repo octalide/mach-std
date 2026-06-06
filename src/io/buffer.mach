@@ -289,15 +289,15 @@ test "buffer: round-trip u8" {
     var wb: WriteBuf = wbuf_make(?a);
 
     val wr: Result[usize, str] = wbuf_write[u8](?wb, 0xAB);
-    if (is_err[usize, str](wr)) { ret 0; }
+    if (is_err[usize, str](wr)) { ret 1; }
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val rr: Result[u8, str] = rbuf_read[u8](?rb);
-    if (is_err[u8, str](rr)) { ret 0; }
-    if (unwrap_ok[u8, str](rr) != 0xAB) { ret 0; }
+    if (is_err[u8, str](rr)) { ret 1; }
+    if (unwrap_ok[u8, str](rr) != 0xAB) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: round-trip u16" {
@@ -309,11 +309,11 @@ test "buffer: round-trip u16" {
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val rr: Result[u16, str] = rbuf_read[u16](?rb);
-    if (is_err[u16, str](rr)) { ret 0; }
-    if (unwrap_ok[u16, str](rr) != 0xBEEF) { ret 0; }
+    if (is_err[u16, str](rr)) { ret 1; }
+    if (unwrap_ok[u16, str](rr) != 0xBEEF) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: round-trip u32" {
@@ -325,11 +325,11 @@ test "buffer: round-trip u32" {
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val rr: Result[u32, str] = rbuf_read[u32](?rb);
-    if (is_err[u32, str](rr)) { ret 0; }
-    if (unwrap_ok[u32, str](rr) != 42) { ret 0; }
+    if (is_err[u32, str](rr)) { ret 1; }
+    if (unwrap_ok[u32, str](rr) != 42) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: round-trip u64" {
@@ -341,11 +341,11 @@ test "buffer: round-trip u64" {
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val rr: Result[u64, str] = rbuf_read[u64](?rb);
-    if (is_err[u64, str](rr)) { ret 0; }
-    if (unwrap_ok[u64, str](rr) != 0xDEADBEEFCAFEBABE) { ret 0; }
+    if (is_err[u64, str](rr)) { ret 1; }
+    if (unwrap_ok[u64, str](rr) != 0xDEADBEEFCAFEBABE) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: round-trip i32" {
@@ -357,11 +357,11 @@ test "buffer: round-trip i32" {
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val rr: Result[i32, str] = rbuf_read[i32](?rb);
-    if (is_err[i32, str](rr)) { ret 0; }
-    if (unwrap_ok[i32, str](rr) != -12345) { ret 0; }
+    if (is_err[i32, str](rr)) { ret 1; }
+    if (unwrap_ok[i32, str](rr) != -12345) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: round-trip i64" {
@@ -373,11 +373,11 @@ test "buffer: round-trip i64" {
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val rr: Result[i64, str] = rbuf_read[i64](?rb);
-    if (is_err[i64, str](rr)) { ret 0; }
-    if (unwrap_ok[i64, str](rr) != -9999999999) { ret 0; }
+    if (is_err[i64, str](rr)) { ret 1; }
+    if (unwrap_ok[i64, str](rr) != -9999999999) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: write_bytes and read_bytes round-trip" {
@@ -387,20 +387,20 @@ test "buffer: write_bytes and read_bytes round-trip" {
 
     var src: [4]u8 = [4]u8{10, 20, 30, 40};
     val wr: Result[usize, str] = wbuf_write_bytes(?wb, ?src[0], 4);
-    if (is_err[usize, str](wr)) { ret 0; }
-    if (wb.len != 4) { ret 0; }
+    if (is_err[usize, str](wr)) { ret 1; }
+    if (wb.len != 4) { ret 1; }
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val rr: Result[*u8, str] = rbuf_read_bytes(?rb, 4);
-    if (is_err[*u8, str](rr)) { ret 0; }
+    if (is_err[*u8, str](rr)) { ret 1; }
     val p: *u8 = unwrap_ok[*u8, str](rr);
-    if (p[0] != 10) { ret 0; }
-    if (p[1] != 20) { ret 0; }
-    if (p[2] != 30) { ret 0; }
-    if (p[3] != 40) { ret 0; }
+    if (p[0] != 10) { ret 1; }
+    if (p[1] != 20) { ret 1; }
+    if (p[2] != 30) { ret 1; }
+    if (p[3] != 40) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: write_str and read_str round-trip" {
@@ -409,18 +409,18 @@ test "buffer: write_str and read_str round-trip" {
     var wb: WriteBuf = wbuf_make(?a);
 
     val wr: Result[usize, str] = wbuf_write_str(?wb, "hello");
-    if (is_err[usize, str](wr)) { ret 0; }
-    if (wb.len != 6) { ret 0; }
+    if (is_err[usize, str](wr)) { ret 1; }
+    if (wb.len != 6) { ret 1; }
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val rr: Result[str, str] = rbuf_read_str(?rb);
-    if (is_err[str, str](rr)) { ret 0; }
+    if (is_err[str, str](rr)) { ret 1; }
     val s: str = unwrap_ok[str, str](rr);
-    if (!str_equals(s, "hello")) { ret 0; }
-    if (str_len(s) != 5) { ret 0; }
+    if (!str_equals(s, "hello")) { ret 1; }
+    if (str_len(s) != 5) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: alignment padding" {
@@ -429,26 +429,26 @@ test "buffer: alignment padding" {
     var wb: WriteBuf = wbuf_make(?a);
 
     wbuf_write[u8](?wb, 0xFF);
-    if (wb.len != 1) { ret 0; }
+    if (wb.len != 1) { ret 1; }
 
     val ar: Result[usize, str] = wbuf_align(?wb, 8);
-    if (is_err[usize, str](ar)) { ret 0; }
-    if (wb.len != 8) { ret 0; }
+    if (is_err[usize, str](ar)) { ret 1; }
+    if (wb.len != 8) { ret 1; }
 
-    if (wb.data[1] != 0) { ret 0; }
-    if (wb.data[7] != 0) { ret 0; }
+    if (wb.data[1] != 0) { ret 1; }
+    if (wb.data[7] != 0) { ret 1; }
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val rr: Result[u8, str] = rbuf_read[u8](?rb);
-    if (is_err[u8, str](rr)) { ret 0; }
-    if (unwrap_ok[u8, str](rr) != 0xFF) { ret 0; }
+    if (is_err[u8, str](rr)) { ret 1; }
+    if (unwrap_ok[u8, str](rr) != 0xFF) { ret 1; }
 
     val ra: Result[usize, str] = rbuf_align(?rb, 8);
-    if (is_err[usize, str](ra)) { ret 0; }
-    if (rb.pos != 8) { ret 0; }
+    if (is_err[usize, str](ra)) { ret 1; }
+    if (rb.pos != 8) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: patch overwrites at offset" {
@@ -458,22 +458,22 @@ test "buffer: patch overwrites at offset" {
 
     wbuf_write[u32](?wb, 0);
     wbuf_write[u32](?wb, 0);
-    if (wb.len != 8) { ret 0; }
+    if (wb.len != 8) { ret 1; }
 
     val pr: Result[usize, str] = wbuf_patch[u32](?wb, 0, 0xDEADBEEF);
-    if (is_err[usize, str](pr)) { ret 0; }
+    if (is_err[usize, str](pr)) { ret 1; }
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val r1: Result[u32, str] = rbuf_read[u32](?rb);
-    if (is_err[u32, str](r1)) { ret 0; }
-    if (unwrap_ok[u32, str](r1) != 0xDEADBEEF) { ret 0; }
+    if (is_err[u32, str](r1)) { ret 1; }
+    if (unwrap_ok[u32, str](r1) != 0xDEADBEEF) { ret 1; }
 
     val r2: Result[u32, str] = rbuf_read[u32](?rb);
-    if (is_err[u32, str](r2)) { ret 0; }
-    if (unwrap_ok[u32, str](r2) != 0) { ret 0; }
+    if (is_err[u32, str](r2)) { ret 1; }
+    if (unwrap_ok[u32, str](r2) != 0) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: patch out of bounds returns error" {
@@ -484,10 +484,10 @@ test "buffer: patch out of bounds returns error" {
     wbuf_write[u8](?wb, 1);
 
     val pr: Result[usize, str] = wbuf_patch[u32](?wb, 0, 42);
-    if (is_ok[usize, str](pr)) { ret 0; }
+    if (is_ok[usize, str](pr)) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: multiple sequential writes then reads" {
@@ -503,23 +503,23 @@ test "buffer: multiple sequential writes then reads" {
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
 
     val r1: Result[u8, str] = rbuf_read[u8](?rb);
-    if (is_err[u8, str](r1)) { ret 0; }
-    if (unwrap_ok[u8, str](r1) != 1) { ret 0; }
+    if (is_err[u8, str](r1)) { ret 1; }
+    if (unwrap_ok[u8, str](r1) != 1) { ret 1; }
 
     val r2: Result[u16, str] = rbuf_read[u16](?rb);
-    if (is_err[u16, str](r2)) { ret 0; }
-    if (unwrap_ok[u16, str](r2) != 2) { ret 0; }
+    if (is_err[u16, str](r2)) { ret 1; }
+    if (unwrap_ok[u16, str](r2) != 2) { ret 1; }
 
     val r3: Result[u32, str] = rbuf_read[u32](?rb);
-    if (is_err[u32, str](r3)) { ret 0; }
-    if (unwrap_ok[u32, str](r3) != 3) { ret 0; }
+    if (is_err[u32, str](r3)) { ret 1; }
+    if (unwrap_ok[u32, str](r3) != 3) { ret 1; }
 
     val r4: Result[u64, str] = rbuf_read[u64](?rb);
-    if (is_err[u64, str](r4)) { ret 0; }
-    if (unwrap_ok[u64, str](r4) != 4) { ret 0; }
+    if (is_err[u64, str](r4)) { ret 1; }
+    if (unwrap_ok[u64, str](r4) != 4) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: reserve triggers growth" {
@@ -528,12 +528,12 @@ test "buffer: reserve triggers growth" {
     var wb: WriteBuf = wbuf_make(?a);
 
     val r: Result[usize, str] = wbuf_reserve(?wb, 1000);
-    if (is_err[usize, str](r)) { ret 0; }
-    if (wb.cap < 1000) { ret 0; }
-    if (wb.len != 0) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
+    if (wb.cap < 1000) { ret 1; }
+    if (wb.len != 0) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: remaining decreases on read" {
@@ -545,16 +545,16 @@ test "buffer: remaining decreases on read" {
     wbuf_write[u32](?wb, 2);
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
-    if (rbuf_remaining(?rb) != 8) { ret 0; }
+    if (rbuf_remaining(?rb) != 8) { ret 1; }
 
     rbuf_read[u32](?rb);
-    if (rbuf_remaining(?rb) != 4) { ret 0; }
+    if (rbuf_remaining(?rb) != 4) { ret 1; }
 
     rbuf_read[u32](?rb);
-    if (rbuf_remaining(?rb) != 0) { ret 0; }
+    if (rbuf_remaining(?rb) != 0) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: read past end returns error" {
@@ -566,10 +566,10 @@ test "buffer: read past end returns error" {
 
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
     val r: Result[u32, str] = rbuf_read[u32](?rb);
-    if (is_ok[u32, str](r)) { ret 0; }
+    if (is_ok[u32, str](r)) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: skip advances position" {
@@ -584,11 +584,11 @@ test "buffer: skip advances position" {
     rbuf_skip(?rb, 4);
 
     val r: Result[u32, str] = rbuf_read[u32](?rb);
-    if (is_err[u32, str](r)) { ret 0; }
-    if (unwrap_ok[u32, str](r) != 0xBBBBBBBB) { ret 0; }
+    if (is_err[u32, str](r)) { ret 1; }
+    if (unwrap_ok[u32, str](r) != 0xBBBBBBBB) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: write_bytes zero length is noop" {
@@ -602,10 +602,10 @@ test "buffer: write_bytes zero length is noop" {
     var dummy: [1]u8 = [1]u8{99};
     wbuf_write_bytes(?wb, ?dummy[0], 0);
 
-    if (wb.len != len_before) { ret 0; }
+    if (wb.len != len_before) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: align when already aligned is noop" {
@@ -614,14 +614,14 @@ test "buffer: align when already aligned is noop" {
     var wb: WriteBuf = wbuf_make(?a);
 
     wbuf_write[u64](?wb, 1);
-    if (wb.len != 8) { ret 0; }
+    if (wb.len != 8) { ret 1; }
 
     val ar: Result[usize, str] = wbuf_align(?wb, 8);
-    if (is_err[usize, str](ar)) { ret 0; }
-    if (wb.len != 8) { ret 0; }
+    if (is_err[usize, str](ar)) { ret 1; }
+    if (wb.len != 8) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: multiple strings round-trip" {
@@ -635,17 +635,17 @@ test "buffer: multiple strings round-trip" {
     var rb: ReadBuf = rbuf_make(wb.data, wb.len);
 
     val r1: Result[str, str] = rbuf_read_str(?rb);
-    if (is_err[str, str](r1)) { ret 0; }
-    if (!str_equals(unwrap_ok[str, str](r1), "hello")) { ret 0; }
+    if (is_err[str, str](r1)) { ret 1; }
+    if (!str_equals(unwrap_ok[str, str](r1), "hello")) { ret 1; }
 
     val r2: Result[str, str] = rbuf_read_str(?rb);
-    if (is_err[str, str](r2)) { ret 0; }
-    if (!str_equals(unwrap_ok[str, str](r2), "world")) { ret 0; }
+    if (is_err[str, str](r2)) { ret 1; }
+    if (!str_equals(unwrap_ok[str, str](r2), "world")) { ret 1; }
 
-    if (rbuf_remaining(?rb) != 0) { ret 0; }
+    if (rbuf_remaining(?rb) != 0) { ret 1; }
 
     wbuf_dnit(?wb);
-    ret 1;
+    ret 0;
 }
 
 test "buffer: dnit on empty buffer succeeds" {
@@ -653,6 +653,6 @@ test "buffer: dnit on empty buffer succeeds" {
     page.make(?a);
     var wb: WriteBuf = wbuf_make(?a);
     val ok_d: bool = wbuf_dnit(?wb);
-    if (!ok_d) { ret 0; }
-    ret 1;
+    if (!ok_d) { ret 1; }
+    ret 0;
 }

@@ -263,92 +263,92 @@ fun clone_sep(a: *allocator.Allocator, sep: u8) Result[Path, str] {
 }
 
 test "path: is_abs with absolute path" {
-    if (!is_abs("/foo/bar")) { ret 0; }
-    ret 1;
+    if (!is_abs("/foo/bar")) { ret 1; }
+    ret 0;
 }
 
 test "path: is_abs with relative path" {
-    if (is_abs("foo/bar")) { ret 0; }
-    ret 1;
+    if (is_abs("foo/bar")) { ret 1; }
+    ret 0;
 }
 
 test "path: is_abs with nil" {
-    if (is_abs(nil)) { ret 0; }
-    ret 1;
+    if (is_abs(nil)) { ret 1; }
+    ret 0;
 }
 
 test "path: filename basic" {
     val f: str = filename("/foo/bar.txt");
-    if (!str_equals(f, "bar.txt")) { ret 0; }
-    ret 1;
+    if (!str_equals(f, "bar.txt")) { ret 1; }
+    ret 0;
 }
 
 test "path: filename no directory" {
     val f: str = filename("bar.txt");
-    if (!str_equals(f, "bar.txt")) { ret 0; }
-    ret 1;
+    if (!str_equals(f, "bar.txt")) { ret 1; }
+    ret 0;
 }
 
 test "path: filename nil" {
     val f: str = filename(nil);
-    if (f != nil) { ret 0; }
-    ret 1;
+    if (f != nil) { ret 1; }
+    ret 0;
 }
 
 test "path: extension basic" {
     val e: str = extension("/foo/bar.txt");
-    if (!str_equals(e, "txt")) { ret 0; }
-    ret 1;
+    if (!str_equals(e, "txt")) { ret 1; }
+    ret 0;
 }
 
 test "path: extension none" {
     val e: str = extension("/foo/bar");
-    if (e != nil) { ret 0; }
-    ret 1;
+    if (e != nil) { ret 1; }
+    ret 0;
 }
 
 test "path: extension hidden file" {
     val e: str = extension("/foo/.hidden");
-    if (e != nil) { ret 0; }
-    ret 1;
+    if (e != nil) { ret 1; }
+    ret 0;
 }
 
 test "path: stem basic" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Path, str] = stem(?a, "/foo/bar.txt");
-    if (is_err[Path, str](r)) { ret 0; }
+    if (is_err[Path, str](r)) { ret 1; }
     val s: str = unwrap_ok[Path, str](r);
-    if (!str_equals(s, "bar")) { ret 0; }
-    ret 1;
+    if (!str_equals(s, "bar")) { ret 1; }
+    ret 0;
 }
 
 test "path: stem no extension" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Path, str] = stem(?a, "/foo/bar");
-    if (is_err[Path, str](r)) { ret 0; }
+    if (is_err[Path, str](r)) { ret 1; }
     val s: str = unwrap_ok[Path, str](r);
-    if (!str_equals(s, "bar")) { ret 0; }
-    ret 1;
+    if (!str_equals(s, "bar")) { ret 1; }
+    ret 0;
 }
 
 test "path: parent basic" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Path, str] = parent(?a, "/foo/bar");
-    if (is_err[Path, str](r)) { ret 0; }
+    if (is_err[Path, str](r)) { ret 1; }
     val p: str = unwrap_ok[Path, str](r);
-    if (!str_equals(p, "/foo")) { ret 0; }
-    ret 1;
+    if (!str_equals(p, "/foo")) { ret 1; }
+    ret 0;
 }
 
 test "path: parent root" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Path, str] = parent(?a, "/foo");
-    if (is_err[Path, str](r)) { ret 0; }
+    if (is_err[Path, str](r)) { ret 1; }
     val p: str = unwrap_ok[Path, str](r);
-    if (!str_equals(p, "/")) { ret 0; }
-    ret 1;
+    if (!str_equals(p, "/")) { ret 1; }
+    ret 0;
 }

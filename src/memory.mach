@@ -140,147 +140,147 @@ pub fun zero[T](p: *T, count: usize) {
 test "memory: raw_fill with non-zero value" {
     var buf: [8]u8;
     raw_fill(?buf[0], 0xAB, 8);
-    if (buf[0] != 0xAB) { ret 0; }
-    if (buf[7] != 0xAB) { ret 0; }
-    ret 1;
+    if (buf[0] != 0xAB) { ret 1; }
+    if (buf[7] != 0xAB) { ret 1; }
+    ret 0;
 }
 
 test "memory: raw_fill with zero value" {
     var buf: [4]u8 = [4]u8{1, 2, 3, 4};
     raw_fill(?buf[0], 0, 4);
-    if (buf[0] != 0) { ret 0; }
-    if (buf[1] != 0) { ret 0; }
-    if (buf[2] != 0) { ret 0; }
-    if (buf[3] != 0) { ret 0; }
-    ret 1;
+    if (buf[0] != 0) { ret 1; }
+    if (buf[1] != 0) { ret 1; }
+    if (buf[2] != 0) { ret 1; }
+    if (buf[3] != 0) { ret 1; }
+    ret 0;
 }
 
 test "memory: raw_fill with size zero is noop" {
     var buf: [2]u8 = [2]u8{0xAA, 0xBB};
     raw_fill(?buf[0], 0xFF, 0);
-    if (buf[0] != 0xAA) { ret 0; }
-    if (buf[1] != 0xBB) { ret 0; }
-    ret 1;
+    if (buf[0] != 0xAA) { ret 1; }
+    if (buf[1] != 0xBB) { ret 1; }
+    ret 0;
 }
 
 test "memory: raw_fill with nil pointer is noop" {
     raw_fill(nil, 0xFF, 100);
-    ret 1;
+    ret 0;
 }
 
 test "memory: raw_copy copies bytes" {
     var src: [4]u8 = [4]u8{1, 2, 3, 4};
     var dst: [4]u8 = [4]u8{0, 0, 0, 0};
     raw_copy(?dst[0], ?src[0], 4);
-    if (dst[0] != 1) { ret 0; }
-    if (dst[1] != 2) { ret 0; }
-    if (dst[2] != 3) { ret 0; }
-    if (dst[3] != 4) { ret 0; }
-    ret 1;
+    if (dst[0] != 1) { ret 1; }
+    if (dst[1] != 2) { ret 1; }
+    if (dst[2] != 3) { ret 1; }
+    if (dst[3] != 4) { ret 1; }
+    ret 0;
 }
 
 test "memory: raw_copy partial copy" {
     var src: [4]u8 = [4]u8{10, 20, 30, 40};
     var dst: [4]u8 = [4]u8{0, 0, 0, 0};
     raw_copy(?dst[0], ?src[0], 2);
-    if (dst[0] != 10) { ret 0; }
-    if (dst[1] != 20) { ret 0; }
-    if (dst[2] != 0) { ret 0; }
-    if (dst[3] != 0) { ret 0; }
-    ret 1;
+    if (dst[0] != 10) { ret 1; }
+    if (dst[1] != 20) { ret 1; }
+    if (dst[2] != 0) { ret 1; }
+    if (dst[3] != 0) { ret 1; }
+    ret 0;
 }
 
 test "memory: raw_copy with size zero is noop" {
     var src: [2]u8 = [2]u8{1, 2};
     var dst: [2]u8 = [2]u8{9, 9};
     raw_copy(?dst[0], ?src[0], 0);
-    if (dst[0] != 9) { ret 0; }
-    if (dst[1] != 9) { ret 0; }
-    ret 1;
+    if (dst[0] != 9) { ret 1; }
+    if (dst[1] != 9) { ret 1; }
+    ret 0;
 }
 
 test "memory: raw_copy with nil dst is noop" {
     var src: [2]u8 = [2]u8{1, 2};
     raw_copy(nil, ?src[0], 2);
-    ret 1;
+    ret 0;
 }
 
 test "memory: raw_copy with nil src is noop" {
     var dst: [2]u8 = [2]u8{9, 9};
     raw_copy(?dst[0], nil, 2);
-    if (dst[0] != 9) { ret 0; }
-    if (dst[1] != 9) { ret 0; }
-    ret 1;
+    if (dst[0] != 9) { ret 1; }
+    if (dst[1] != 9) { ret 1; }
+    ret 0;
 }
 
 test "memory: raw_zero zeroes memory" {
     var buf: [4]u8 = [4]u8{1, 2, 3, 4};
     raw_zero(?buf[0], 4);
-    if (buf[0] != 0) { ret 0; }
-    if (buf[1] != 0) { ret 0; }
-    if (buf[2] != 0) { ret 0; }
-    if (buf[3] != 0) { ret 0; }
-    ret 1;
+    if (buf[0] != 0) { ret 1; }
+    if (buf[1] != 0) { ret 1; }
+    if (buf[2] != 0) { ret 1; }
+    if (buf[3] != 0) { ret 1; }
+    ret 0;
 }
 
 test "memory: fill typed array" {
     var arr: [4]i64;
     fill[i64](?arr[0], 42, 4);
-    if (arr[0] != 42) { ret 0; }
-    if (arr[1] != 42) { ret 0; }
-    if (arr[2] != 42) { ret 0; }
-    if (arr[3] != 42) { ret 0; }
-    ret 1;
+    if (arr[0] != 42) { ret 1; }
+    if (arr[1] != 42) { ret 1; }
+    if (arr[2] != 42) { ret 1; }
+    if (arr[3] != 42) { ret 1; }
+    ret 0;
 }
 
 test "memory: fill with count zero is noop" {
     var arr: [2]i64 = [2]i64{1, 2};
     fill[i64](?arr[0], 99, 0);
-    if (arr[0] != 1) { ret 0; }
-    if (arr[1] != 2) { ret 0; }
-    ret 1;
+    if (arr[0] != 1) { ret 1; }
+    if (arr[1] != 2) { ret 1; }
+    ret 0;
 }
 
 test "memory: fill with nil pointer is noop" {
     val p: *i64 = nil;
     fill[i64](p, 99, 10);
-    ret 1;
+    ret 0;
 }
 
 test "memory: copy typed array" {
     var src: [3]i64 = [3]i64{100, 200, 300};
     var dst: [3]i64 = [3]i64{0, 0, 0};
     copy[i64](?dst[0], ?src[0], 3);
-    if (dst[0] != 100) { ret 0; }
-    if (dst[1] != 200) { ret 0; }
-    if (dst[2] != 300) { ret 0; }
-    ret 1;
+    if (dst[0] != 100) { ret 1; }
+    if (dst[1] != 200) { ret 1; }
+    if (dst[2] != 300) { ret 1; }
+    ret 0;
 }
 
 test "memory: copy partial typed array" {
     var src: [4]i64 = [4]i64{1, 2, 3, 4};
     var dst: [4]i64 = [4]i64{0, 0, 0, 0};
     copy[i64](?dst[0], ?src[0], 2);
-    if (dst[0] != 1) { ret 0; }
-    if (dst[1] != 2) { ret 0; }
-    if (dst[2] != 0) { ret 0; }
-    if (dst[3] != 0) { ret 0; }
-    ret 1;
+    if (dst[0] != 1) { ret 1; }
+    if (dst[1] != 2) { ret 1; }
+    if (dst[2] != 0) { ret 1; }
+    if (dst[3] != 0) { ret 1; }
+    ret 0;
 }
 
 test "memory: zero typed array" {
     var arr: [3]i64 = [3]i64{10, 20, 30};
     zero[i64](?arr[0], 3);
-    if (arr[0] != 0) { ret 0; }
-    if (arr[1] != 0) { ret 0; }
-    if (arr[2] != 0) { ret 0; }
-    ret 1;
+    if (arr[0] != 0) { ret 1; }
+    if (arr[1] != 0) { ret 1; }
+    if (arr[2] != 0) { ret 1; }
+    ret 0;
 }
 
 test "memory: zero with count zero is noop" {
     var arr: [2]i64 = [2]i64{5, 6};
     zero[i64](?arr[0], 0);
-    if (arr[0] != 5) { ret 0; }
-    if (arr[1] != 6) { ret 0; }
-    ret 1;
+    if (arr[0] != 5) { ret 1; }
+    if (arr[1] != 6) { ret 1; }
+    ret 0;
 }

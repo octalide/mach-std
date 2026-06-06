@@ -106,7 +106,7 @@ test "set_level: OFF suppresses all" {
     warn("should not crash");
     error("should not crash");
     set_level(INFO);
-    ret 1;
+    ret 0;
 }
 
 test "set_level: DEBUG enables all" {
@@ -116,7 +116,7 @@ test "set_level: DEBUG enables all" {
     warn("warn msg");
     error("error msg");
     set_level(INFO);
-    ret 1;
+    ret 0;
 }
 
 test "log functions: nil message does not crash" {
@@ -126,5 +126,5 @@ test "log functions: nil message does not crash" {
     warn(nil);
     error(nil);
     set_level(INFO);
-    ret 1;
+    ret 0;
 }

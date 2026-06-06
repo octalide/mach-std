@@ -149,17 +149,17 @@ pub fun listener_close(ln: *Listener) {
 test "tcp: create and close socket" {
     val ep: ip.Endpoint = ip.endpoint(127, 0, 0, 1, 0);
     val r: Result[Listener, str] = listen(ep, 1);
-    if (is_err[Listener, str](r)) { ret 0; }
+    if (is_err[Listener, str](r)) { ret 1; }
     var ln: Listener = unwrap_ok[Listener, str](r);
     listener_close(?ln);
-    ret 1;
+    ret 0;
 }
 
 test "tcp: bind to loopback" {
     val ep: ip.Endpoint = ip.endpoint(127, 0, 0, 1, 0);
     val r: Result[Listener, str] = listen(ep, 1);
-    if (is_err[Listener, str](r)) { ret 0; }
+    if (is_err[Listener, str](r)) { ret 1; }
     var ln: Listener = unwrap_ok[Listener, str](r);
     listener_close(?ln);
-    ret 1;
+    ret 0;
 }

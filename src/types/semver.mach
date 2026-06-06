@@ -380,14 +380,14 @@ test "semver: parse basic version" {
     page.make(?pa);
 
     val r: Result[Semver, str] = semver_parse("1.2.3", ?pa);
-    if (is_err[Semver, str](r)) { ret 0; }
+    if (is_err[Semver, str](r)) { ret 1; }
     val v: Semver = unwrap_ok[Semver, str](r);
-    if (v.major != 1) { ret 0; }
-    if (v.minor != 2) { ret 0; }
-    if (v.patch != 3) { ret 0; }
-    if (v.prerelease != nil && str_len(v.prerelease) != 0) { ret 0; }
-    if (v.build != nil && str_len(v.build) != 0) { ret 0; }
-    ret 1;
+    if (v.major != 1) { ret 1; }
+    if (v.minor != 2) { ret 1; }
+    if (v.patch != 3) { ret 1; }
+    if (v.prerelease != nil && str_len(v.prerelease) != 0) { ret 1; }
+    if (v.build != nil && str_len(v.build) != 0) { ret 1; }
+    ret 0;
 }
 
 test "semver: parse prerelease with dots" {
@@ -395,14 +395,14 @@ test "semver: parse prerelease with dots" {
     page.make(?pa);
 
     val r: Result[Semver, str] = semver_parse("1.0.0-alpha.1", ?pa);
-    if (is_err[Semver, str](r)) { ret 0; }
+    if (is_err[Semver, str](r)) { ret 1; }
     val v: Semver = unwrap_ok[Semver, str](r);
-    if (v.major != 1) { ret 0; }
-    if (v.minor != 0) { ret 0; }
-    if (v.patch != 0) { ret 0; }
-    if (!str_equals(v.prerelease, "alpha.1")) { ret 0; }
-    if (v.build != nil && str_len(v.build) != 0) { ret 0; }
-    ret 1;
+    if (v.major != 1) { ret 1; }
+    if (v.minor != 0) { ret 1; }
+    if (v.patch != 0) { ret 1; }
+    if (!str_equals(v.prerelease, "alpha.1")) { ret 1; }
+    if (v.build != nil && str_len(v.build) != 0) { ret 1; }
+    ret 0;
 }
 
 test "semver: parse build metadata" {
@@ -410,12 +410,12 @@ test "semver: parse build metadata" {
     page.make(?pa);
 
     val r: Result[Semver, str] = semver_parse("1.0.0+build", ?pa);
-    if (is_err[Semver, str](r)) { ret 0; }
+    if (is_err[Semver, str](r)) { ret 1; }
     val v: Semver = unwrap_ok[Semver, str](r);
-    if (v.major != 1) { ret 0; }
-    if (v.prerelease != nil && str_len(v.prerelease) != 0) { ret 0; }
-    if (!str_equals(v.build, "build")) { ret 0; }
-    ret 1;
+    if (v.major != 1) { ret 1; }
+    if (v.prerelease != nil && str_len(v.prerelease) != 0) { ret 1; }
+    if (!str_equals(v.build, "build")) { ret 1; }
+    ret 0;
 }
 
 test "semver: parse prerelease and build combo" {
@@ -423,14 +423,14 @@ test "semver: parse prerelease and build combo" {
     page.make(?pa);
 
     val r: Result[Semver, str] = semver_parse("1.0.0-beta.2+build.123", ?pa);
-    if (is_err[Semver, str](r)) { ret 0; }
+    if (is_err[Semver, str](r)) { ret 1; }
     val v: Semver = unwrap_ok[Semver, str](r);
-    if (v.major != 1) { ret 0; }
-    if (v.minor != 0) { ret 0; }
-    if (v.patch != 0) { ret 0; }
-    if (!str_equals(v.prerelease, "beta.2")) { ret 0; }
-    if (!str_equals(v.build, "build.123")) { ret 0; }
-    ret 1;
+    if (v.major != 1) { ret 1; }
+    if (v.minor != 0) { ret 1; }
+    if (v.patch != 0) { ret 1; }
+    if (!str_equals(v.prerelease, "beta.2")) { ret 1; }
+    if (!str_equals(v.build, "build.123")) { ret 1; }
+    ret 0;
 }
 
 test "semver: prerelease does not include build suffix" {
@@ -438,11 +438,11 @@ test "semver: prerelease does not include build suffix" {
     page.make(?pa);
 
     val r: Result[Semver, str] = semver_parse("2.0.0-rc.1+sha.abc", ?pa);
-    if (is_err[Semver, str](r)) { ret 0; }
+    if (is_err[Semver, str](r)) { ret 1; }
     val v: Semver = unwrap_ok[Semver, str](r);
-    if (!str_equals(v.prerelease, "rc.1")) { ret 0; }
-    if (!str_equals(v.build, "sha.abc")) { ret 0; }
-    ret 1;
+    if (!str_equals(v.prerelease, "rc.1")) { ret 1; }
+    if (!str_equals(v.build, "sha.abc")) { ret 1; }
+    ret 0;
 }
 
 test "semver: compare major versions" {
@@ -451,13 +451,13 @@ test "semver: compare major versions" {
 
     val r1: Result[Semver, str] = semver_parse("1.0.0", ?pa);
     val r2: Result[Semver, str] = semver_parse("2.0.0", ?pa);
-    if (is_err[Semver, str](r1)) { ret 0; }
-    if (is_err[Semver, str](r2)) { ret 0; }
+    if (is_err[Semver, str](r1)) { ret 1; }
+    if (is_err[Semver, str](r2)) { ret 1; }
     val v1: Semver = unwrap_ok[Semver, str](r1);
     val v2: Semver = unwrap_ok[Semver, str](r2);
-    if (!semver_is_less(?v1, ?v2)) { ret 0; }
-    if (!semver_is_greater(?v2, ?v1)) { ret 0; }
-    ret 1;
+    if (!semver_is_less(?v1, ?v2)) { ret 1; }
+    if (!semver_is_greater(?v2, ?v1)) { ret 1; }
+    ret 0;
 }
 
 test "semver: release greater than prerelease" {
@@ -466,12 +466,12 @@ test "semver: release greater than prerelease" {
 
     val r1: Result[Semver, str] = semver_parse("1.0.0", ?pa);
     val r2: Result[Semver, str] = semver_parse("1.0.0-alpha", ?pa);
-    if (is_err[Semver, str](r1)) { ret 0; }
-    if (is_err[Semver, str](r2)) { ret 0; }
+    if (is_err[Semver, str](r1)) { ret 1; }
+    if (is_err[Semver, str](r2)) { ret 1; }
     val v1: Semver = unwrap_ok[Semver, str](r1);
     val v2: Semver = unwrap_ok[Semver, str](r2);
-    if (!semver_is_greater(?v1, ?v2)) { ret 0; }
-    ret 1;
+    if (!semver_is_greater(?v1, ?v2)) { ret 1; }
+    ret 0;
 }
 
 test "semver: compare prerelease identifiers" {
@@ -480,12 +480,12 @@ test "semver: compare prerelease identifiers" {
 
     val r1: Result[Semver, str] = semver_parse("1.0.0-alpha.1", ?pa);
     val r2: Result[Semver, str] = semver_parse("1.0.0-alpha.2", ?pa);
-    if (is_err[Semver, str](r1)) { ret 0; }
-    if (is_err[Semver, str](r2)) { ret 0; }
+    if (is_err[Semver, str](r1)) { ret 1; }
+    if (is_err[Semver, str](r2)) { ret 1; }
     val v1: Semver = unwrap_ok[Semver, str](r1);
     val v2: Semver = unwrap_ok[Semver, str](r2);
-    if (!semver_is_less(?v1, ?v2)) { ret 0; }
-    ret 1;
+    if (!semver_is_less(?v1, ?v2)) { ret 1; }
+    ret 0;
 }
 
 test "semver: numeric prerelease less than alpha" {
@@ -494,12 +494,12 @@ test "semver: numeric prerelease less than alpha" {
 
     val r1: Result[Semver, str] = semver_parse("1.0.0-1", ?pa);
     val r2: Result[Semver, str] = semver_parse("1.0.0-alpha", ?pa);
-    if (is_err[Semver, str](r1)) { ret 0; }
-    if (is_err[Semver, str](r2)) { ret 0; }
+    if (is_err[Semver, str](r1)) { ret 1; }
+    if (is_err[Semver, str](r2)) { ret 1; }
     val v1: Semver = unwrap_ok[Semver, str](r1);
     val v2: Semver = unwrap_ok[Semver, str](r2);
-    if (!semver_is_less(?v1, ?v2)) { ret 0; }
-    ret 1;
+    if (!semver_is_less(?v1, ?v2)) { ret 1; }
+    ret 0;
 }
 
 test "semver: fewer prerelease fields is less" {
@@ -508,12 +508,12 @@ test "semver: fewer prerelease fields is less" {
 
     val r1: Result[Semver, str] = semver_parse("1.0.0-alpha", ?pa);
     val r2: Result[Semver, str] = semver_parse("1.0.0-alpha.1", ?pa);
-    if (is_err[Semver, str](r1)) { ret 0; }
-    if (is_err[Semver, str](r2)) { ret 0; }
+    if (is_err[Semver, str](r1)) { ret 1; }
+    if (is_err[Semver, str](r2)) { ret 1; }
     val v1: Semver = unwrap_ok[Semver, str](r1);
     val v2: Semver = unwrap_ok[Semver, str](r2);
-    if (!semver_is_less(?v1, ?v2)) { ret 0; }
-    ret 1;
+    if (!semver_is_less(?v1, ?v2)) { ret 1; }
+    ret 0;
 }
 
 test "semver: equal versions" {
@@ -522,12 +522,12 @@ test "semver: equal versions" {
 
     val r1: Result[Semver, str] = semver_parse("1.2.3", ?pa);
     val r2: Result[Semver, str] = semver_parse("1.2.3", ?pa);
-    if (is_err[Semver, str](r1)) { ret 0; }
-    if (is_err[Semver, str](r2)) { ret 0; }
+    if (is_err[Semver, str](r1)) { ret 1; }
+    if (is_err[Semver, str](r2)) { ret 1; }
     val v1: Semver = unwrap_ok[Semver, str](r1);
     val v2: Semver = unwrap_ok[Semver, str](r2);
-    if (!semver_equals(?v1, ?v2)) { ret 0; }
-    ret 1;
+    if (!semver_equals(?v1, ?v2)) { ret 1; }
+    ret 0;
 }
 
 test "semver: build metadata ignored in comparison" {
@@ -536,12 +536,12 @@ test "semver: build metadata ignored in comparison" {
 
     val r1: Result[Semver, str] = semver_parse("1.0.0+build1", ?pa);
     val r2: Result[Semver, str] = semver_parse("1.0.0+build2", ?pa);
-    if (is_err[Semver, str](r1)) { ret 0; }
-    if (is_err[Semver, str](r2)) { ret 0; }
+    if (is_err[Semver, str](r1)) { ret 1; }
+    if (is_err[Semver, str](r2)) { ret 1; }
     val v1: Semver = unwrap_ok[Semver, str](r1);
     val v2: Semver = unwrap_ok[Semver, str](r2);
-    if (!semver_equals(?v1, ?v2)) { ret 0; }
-    ret 1;
+    if (!semver_equals(?v1, ?v2)) { ret 1; }
+    ret 0;
 }
 
 test "semver: empty input returns error" {
@@ -549,8 +549,8 @@ test "semver: empty input returns error" {
     page.make(?pa);
 
     val r: Result[Semver, str] = semver_parse("", ?pa);
-    if (!is_err[Semver, str](r)) { ret 0; }
-    ret 1;
+    if (!is_err[Semver, str](r)) { ret 1; }
+    ret 0;
 }
 
 test "semver: is_stable and is_prerelease" {
@@ -559,15 +559,15 @@ test "semver: is_stable and is_prerelease" {
 
     val r1: Result[Semver, str] = semver_parse("1.0.0", ?pa);
     val r2: Result[Semver, str] = semver_parse("1.0.0-beta", ?pa);
-    if (is_err[Semver, str](r1)) { ret 0; }
-    if (is_err[Semver, str](r2)) { ret 0; }
+    if (is_err[Semver, str](r1)) { ret 1; }
+    if (is_err[Semver, str](r2)) { ret 1; }
     val v1: Semver = unwrap_ok[Semver, str](r1);
     val v2: Semver = unwrap_ok[Semver, str](r2);
-    if (!semver_is_stable(?v1)) { ret 0; }
-    if (semver_is_prerelease(?v1)) { ret 0; }
-    if (semver_is_stable(?v2)) { ret 0; }
-    if (!semver_is_prerelease(?v2)) { ret 0; }
-    ret 1;
+    if (!semver_is_stable(?v1)) { ret 1; }
+    if (semver_is_prerelease(?v1)) { ret 1; }
+    if (semver_is_stable(?v2)) { ret 1; }
+    if (!semver_is_prerelease(?v2)) { ret 1; }
+    ret 0;
 }
 
 test "semver: has_build" {
@@ -576,11 +576,11 @@ test "semver: has_build" {
 
     val r1: Result[Semver, str] = semver_parse("1.0.0", ?pa);
     val r2: Result[Semver, str] = semver_parse("1.0.0+meta", ?pa);
-    if (is_err[Semver, str](r1)) { ret 0; }
-    if (is_err[Semver, str](r2)) { ret 0; }
+    if (is_err[Semver, str](r1)) { ret 1; }
+    if (is_err[Semver, str](r2)) { ret 1; }
     val v1: Semver = unwrap_ok[Semver, str](r1);
     val v2: Semver = unwrap_ok[Semver, str](r2);
-    if (semver_has_build(?v1)) { ret 0; }
-    if (!semver_has_build(?v2)) { ret 0; }
-    ret 1;
+    if (semver_has_build(?v1)) { ret 1; }
+    if (!semver_has_build(?v2)) { ret 1; }
+    ret 0;
 }

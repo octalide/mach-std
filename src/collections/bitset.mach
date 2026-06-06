@@ -145,19 +145,19 @@ test "bitset: init and dnit" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Bitset, str] = init(?a, 128);
-    if (is_err[Bitset, str](r)) { ret 0; }
+    if (is_err[Bitset, str](r)) { ret 1; }
     var bs: Bitset = unwrap_ok[Bitset, str](r);
-    if (bs.nbits != 128) { ret 0; }
-    if (bs.nwords != 2) { ret 0; }
-    if (!dnit(?bs)) { ret 0; }
-    ret 1;
+    if (bs.nbits != 128) { ret 1; }
+    if (bs.nwords != 2) { ret 1; }
+    if (!dnit(?bs)) { ret 1; }
+    ret 0;
 }
 
 test "bitset: set and get" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Bitset, str] = init(?a, 256);
-    if (is_err[Bitset, str](r)) { ret 0; }
+    if (is_err[Bitset, str](r)) { ret 1; }
     var bs: Bitset = unwrap_ok[Bitset, str](r);
 
     set(?bs, 0);
@@ -165,126 +165,126 @@ test "bitset: set and get" {
     set(?bs, 64);
     set(?bs, 255);
 
-    if (!get(?bs, 0)) { ret 0; }
-    if (!get(?bs, 63)) { ret 0; }
-    if (!get(?bs, 64)) { ret 0; }
-    if (!get(?bs, 255)) { ret 0; }
-    if (get(?bs, 1)) { ret 0; }
-    if (get(?bs, 100)) { ret 0; }
+    if (!get(?bs, 0)) { ret 1; }
+    if (!get(?bs, 63)) { ret 1; }
+    if (!get(?bs, 64)) { ret 1; }
+    if (!get(?bs, 255)) { ret 1; }
+    if (get(?bs, 1)) { ret 1; }
+    if (get(?bs, 100)) { ret 1; }
 
     dnit(?bs);
-    ret 1;
+    ret 0;
 }
 
 test "bitset: clear bit" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Bitset, str] = init(?a, 64);
-    if (is_err[Bitset, str](r)) { ret 0; }
+    if (is_err[Bitset, str](r)) { ret 1; }
     var bs: Bitset = unwrap_ok[Bitset, str](r);
 
     set(?bs, 10);
-    if (!get(?bs, 10)) { ret 0; }
+    if (!get(?bs, 10)) { ret 1; }
     clear(?bs, 10);
-    if (get(?bs, 10)) { ret 0; }
+    if (get(?bs, 10)) { ret 1; }
 
     dnit(?bs);
-    ret 1;
+    ret 0;
 }
 
 test "bitset: toggle" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Bitset, str] = init(?a, 64);
-    if (is_err[Bitset, str](r)) { ret 0; }
+    if (is_err[Bitset, str](r)) { ret 1; }
     var bs: Bitset = unwrap_ok[Bitset, str](r);
 
-    if (get(?bs, 5)) { ret 0; }
+    if (get(?bs, 5)) { ret 1; }
     toggle(?bs, 5);
-    if (!get(?bs, 5)) { ret 0; }
+    if (!get(?bs, 5)) { ret 1; }
     toggle(?bs, 5);
-    if (get(?bs, 5)) { ret 0; }
+    if (get(?bs, 5)) { ret 1; }
 
     dnit(?bs);
-    ret 1;
+    ret 0;
 }
 
 test "bitset: count" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Bitset, str] = init(?a, 128);
-    if (is_err[Bitset, str](r)) { ret 0; }
+    if (is_err[Bitset, str](r)) { ret 1; }
     var bs: Bitset = unwrap_ok[Bitset, str](r);
 
-    if (count(?bs) != 0) { ret 0; }
+    if (count(?bs) != 0) { ret 1; }
 
     set(?bs, 0);
     set(?bs, 1);
     set(?bs, 64);
     set(?bs, 127);
-    if (count(?bs) != 4) { ret 0; }
+    if (count(?bs) != 4) { ret 1; }
 
     dnit(?bs);
-    ret 1;
+    ret 0;
 }
 
 test "bitset: clear_all" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Bitset, str] = init(?a, 128);
-    if (is_err[Bitset, str](r)) { ret 0; }
+    if (is_err[Bitset, str](r)) { ret 1; }
     var bs: Bitset = unwrap_ok[Bitset, str](r);
 
     set(?bs, 0);
     set(?bs, 50);
     set(?bs, 127);
     clear_all(?bs);
-    if (count(?bs) != 0) { ret 0; }
+    if (count(?bs) != 0) { ret 1; }
 
     dnit(?bs);
-    ret 1;
+    ret 0;
 }
 
 test "bitset: set_all" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Bitset, str] = init(?a, 100);
-    if (is_err[Bitset, str](r)) { ret 0; }
+    if (is_err[Bitset, str](r)) { ret 1; }
     var bs: Bitset = unwrap_ok[Bitset, str](r);
 
     set_all(?bs);
-    if (count(?bs) != 100) { ret 0; }
-    if (!get(?bs, 0)) { ret 0; }
-    if (!get(?bs, 99)) { ret 0; }
+    if (count(?bs) != 100) { ret 1; }
+    if (!get(?bs, 0)) { ret 1; }
+    if (!get(?bs, 99)) { ret 1; }
 
     dnit(?bs);
-    ret 1;
+    ret 0;
 }
 
 test "bitset: out of range is safe" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Bitset, str] = init(?a, 64);
-    if (is_err[Bitset, str](r)) { ret 0; }
+    if (is_err[Bitset, str](r)) { ret 1; }
     var bs: Bitset = unwrap_ok[Bitset, str](r);
 
     set(?bs, 100);
-    if (get(?bs, 100)) { ret 0; }
+    if (get(?bs, 100)) { ret 1; }
     clear(?bs, 200);
     toggle(?bs, 300);
 
     dnit(?bs);
-    ret 1;
+    ret 0;
 }
 
 test "bitset: zero bits" {
     var a: allocator.Allocator;
     page.make(?a);
     val r: Result[Bitset, str] = init(?a, 0);
-    if (is_err[Bitset, str](r)) { ret 0; }
+    if (is_err[Bitset, str](r)) { ret 1; }
     var bs: Bitset = unwrap_ok[Bitset, str](r);
-    if (bs.nwords != 0) { ret 0; }
-    if (count(?bs) != 0) { ret 0; }
+    if (bs.nwords != 0) { ret 1; }
+    if (count(?bs) != 0) { ret 1; }
     dnit(?bs);
-    ret 1;
+    ret 0;
 }

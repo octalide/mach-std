@@ -206,83 +206,83 @@ fun write_u8_decimal(v: u8, buf: *u8, off: usize, cap: usize) usize {
 
 test "ip: ipv4 constructor" {
     val ip: IPv4 = ipv4(10, 20, 30, 40);
-    if (ip.octets[0] != 10) { ret 0; }
-    if (ip.octets[1] != 20) { ret 0; }
-    if (ip.octets[2] != 30) { ret 0; }
-    if (ip.octets[3] != 40) { ret 0; }
-    ret 1;
+    if (ip.octets[0] != 10) { ret 1; }
+    if (ip.octets[1] != 20) { ret 1; }
+    if (ip.octets[2] != 30) { ret 1; }
+    if (ip.octets[3] != 40) { ret 1; }
+    ret 0;
 }
 
 test "ip: ipv4_loopback" {
     val ip: IPv4 = ipv4_loopback();
-    if (ip.octets[0] != 127) { ret 0; }
-    if (ip.octets[1] != 0) { ret 0; }
-    if (ip.octets[2] != 0) { ret 0; }
-    if (ip.octets[3] != 1) { ret 0; }
-    ret 1;
+    if (ip.octets[0] != 127) { ret 1; }
+    if (ip.octets[1] != 0) { ret 1; }
+    if (ip.octets[2] != 0) { ret 1; }
+    if (ip.octets[3] != 1) { ret 1; }
+    ret 0;
 }
 
 test "ip: ipv4_any" {
     val ip: IPv4 = ipv4_any();
-    if (ip.octets[0] != 0) { ret 0; }
-    if (ip.octets[3] != 0) { ret 0; }
-    ret 1;
+    if (ip.octets[0] != 0) { ret 1; }
+    if (ip.octets[3] != 0) { ret 1; }
+    ret 0;
 }
 
 test "ip: ipv4_to_u32 and ipv4_from_u32 roundtrip" {
     val ip: IPv4 = ipv4(192, 168, 1, 100);
     val n: u32 = ipv4_to_u32(ip);
     val ip2: IPv4 = ipv4_from_u32(n);
-    if (ip2.octets[0] != 192) { ret 0; }
-    if (ip2.octets[1] != 168) { ret 0; }
-    if (ip2.octets[2] != 1) { ret 0; }
-    if (ip2.octets[3] != 100) { ret 0; }
-    ret 1;
+    if (ip2.octets[0] != 192) { ret 1; }
+    if (ip2.octets[1] != 168) { ret 1; }
+    if (ip2.octets[2] != 1) { ret 1; }
+    if (ip2.octets[3] != 100) { ret 1; }
+    ret 0;
 }
 
 test "ip: ipv4_format" {
     val ip: IPv4 = ipv4(127, 0, 0, 1);
     var buf: [16]u8;
     val n: usize = ipv4_format(ip, ?buf[0], 16);
-    if (n != 7) { ret 0; }
-    if (!str_starts_with(?buf[0], "127.0.0.1")) { ret 0; }
-    ret 1;
+    if (n != 7) { ret 1; }
+    if (!str_starts_with(?buf[0], "127.0.0.1")) { ret 1; }
+    ret 0;
 }
 
 test "ip: ipv4_format three digit octets" {
     val ip: IPv4 = ipv4(255, 255, 255, 255);
     var buf: [20]u8;
     val n: usize = ipv4_format(ip, ?buf[0], 20);
-    if (n != 15) { ret 0; }
-    if (!str_starts_with(?buf[0], "255.255.255.255")) { ret 0; }
-    ret 1;
+    if (n != 15) { ret 1; }
+    if (!str_starts_with(?buf[0], "255.255.255.255")) { ret 1; }
+    ret 0;
 }
 
 test "ip: ipv6_loopback" {
     val ip: IPv6 = ipv6_loopback();
-    if (ip.octets[15] != 1) { ret 0; }
-    if (ip.octets[0] != 0) { ret 0; }
-    if (ip.octets[14] != 0) { ret 0; }
-    ret 1;
+    if (ip.octets[15] != 1) { ret 1; }
+    if (ip.octets[0] != 0) { ret 1; }
+    if (ip.octets[14] != 0) { ret 1; }
+    ret 0;
 }
 
 test "ip: addr_v4 tag" {
     val a: Addr = addr_v4(ipv4_loopback());
-    if (a.is_v6 != 0) { ret 0; }
-    if (a.v4.octets[0] != 127) { ret 0; }
-    ret 1;
+    if (a.is_v6 != 0) { ret 1; }
+    if (a.v4.octets[0] != 127) { ret 1; }
+    ret 0;
 }
 
 test "ip: addr_v6 tag" {
     val a: Addr = addr_v6(ipv6_loopback());
-    if (a.is_v6 != 1) { ret 0; }
-    if (a.v6.octets[15] != 1) { ret 0; }
-    ret 1;
+    if (a.is_v6 != 1) { ret 1; }
+    if (a.v6.octets[15] != 1) { ret 1; }
+    ret 0;
 }
 
 test "ip: endpoint constructor" {
     val ep: Endpoint = endpoint(10, 0, 0, 1, 8080);
-    if (ep.addr.octets[0] != 10) { ret 0; }
-    if (ep.port != 8080) { ret 0; }
-    ret 1;
+    if (ep.addr.octets[0] != 10) { ret 1; }
+    if (ep.port != 8080) { ret 1; }
+    ret 0;
 }

@@ -89,17 +89,17 @@ pub fun socket_close(s: *Socket) {
 
 test "udp: create and close socket" {
     val r: Result[Socket, str] = create();
-    if (is_err[Socket, str](r)) { ret 0; }
+    if (is_err[Socket, str](r)) { ret 1; }
     var s: Socket = unwrap_ok[Socket, str](r);
     socket_close(?s);
-    ret 1;
+    ret 0;
 }
 
 test "udp: bind to loopback" {
     val ep: ip.Endpoint = ip.endpoint(127, 0, 0, 1, 0);
     val r: Result[Socket, str] = bind(ep);
-    if (is_err[Socket, str](r)) { ret 0; }
+    if (is_err[Socket, str](r)) { ret 1; }
     var s: Socket = unwrap_ok[Socket, str](r);
     socket_close(?s);
-    ret 1;
+    ret 0;
 }
