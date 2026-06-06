@@ -1,9 +1,13 @@
 # process spawning and management.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
+use std.types.bool.bool;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.string.str;
 
 use os: std.system.os;
 
@@ -28,7 +32,7 @@ pub rec Child {
 # envp:     null-terminated environment array
 # ret:      exit status, or an error message
 pub fun run(pathname: str, argv: **u8, envp: **u8) Result[ExitStatus, str] {
-    val pid: i64 = os.spawn(pathname.data, argv, envp);
+    val pid: i64 = os.spawn(pathname, argv, envp);
     if (pid < 0) { ret err[ExitStatus, str]("spawn failed"); }
 
     var wstatus: i32 = 0;
@@ -45,7 +49,7 @@ pub fun run(pathname: str, argv: **u8, envp: **u8) Result[ExitStatus, str] {
 # envp:     null-terminated environment array
 # ret:      child handle, or an error message
 pub fun spawn(pathname: str, argv: **u8, envp: **u8) Result[Child, str] {
-    val pid: i64 = os.spawn(pathname.data, argv, envp);
+    val pid: i64 = os.spawn(pathname, argv, envp);
     if (pid < 0) { ret err[Child, str]("spawn failed"); }
     ret ok[Child, str](Child{pid: pid});
 }
@@ -102,7 +106,7 @@ pub fun exit(code: i64) {
 
 fun make_argv1(prog: str) [2]usize {
     var buf: [2]usize;
-    buf[0] = prog.data::usize;
+    buf[0] = prog::usize;
     buf[1] = 0;
     ret buf;
 }
@@ -110,32 +114,32 @@ fun make_argv1(prog: str) [2]usize {
 test "exec: run /bin/true exits 0" {
     var argv: [2]usize = make_argv1("/bin/true");
     val r: Result[ExitStatus, str] = run("/bin/true", (?argv[0])::**u8, nil);
-    if (is_err[ExitStatus, str](r)) { ret 0; }
+    if (is_err[ExitStatus, str](r)) { ret 1; }
     val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
-    if (!exited(s)) { ret 0; }
-    if (code(s) != 0) { ret 0; }
-    ret 1;
+    if (!exited(s)) { ret 1; }
+    if (code(s) != 0) { ret 1; }
+    ret 0;
 }
 
 test "exec: run /bin/false exits 1" {
     var argv: [2]usize = make_argv1("/bin/false");
     val r: Result[ExitStatus, str] = run("/bin/false", (?argv[0])::**u8, nil);
-    if (is_err[ExitStatus, str](r)) { ret 0; }
+    if (is_err[ExitStatus, str](r)) { ret 1; }
     val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
-    if (!exited(s)) { ret 0; }
-    if (code(s) != 1) { ret 0; }
-    ret 1;
+    if (!exited(s)) { ret 1; }
+    if (code(s) != 1) { ret 1; }
+    ret 0;
 }
 
 test "exec: spawn and wait matches run" {
     var argv: [2]usize = make_argv1("/bin/true");
     val sr: Result[Child, str] = spawn("/bin/true", (?argv[0])::**u8, nil);
-    if (is_err[Child, str](sr)) { ret 0; }
+    if (is_err[Child, str](sr)) { ret 1; }
     val child: Child = unwrap_ok[Child, str](sr);
     val wr: Result[ExitStatus, str] = wait(child);
-    if (is_err[ExitStatus, str](wr)) { ret 0; }
+    if (is_err[ExitStatus, str](wr)) { ret 1; }
     val s: ExitStatus = unwrap_ok[ExitStatus, str](wr);
-    if (!exited(s)) { ret 0; }
-    if (code(s) != 0) { ret 0; }
-    ret 1;
+    if (!exited(s)) { ret 1; }
+    if (code(s) != 0) { ret 1; }
+    ret 0;
 }

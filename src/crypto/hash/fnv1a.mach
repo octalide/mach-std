@@ -1,0 +1,43 @@
+# std.crypto.hash.fnv1a: incremental FNV-1a hashing.
+#
+# the type interners hash composite records field-by-field rather than over a
+# contiguous byte buffer, so they need an incremental folding API. this mirrors
+# the byte-wise FNV-1a used by the stdlib map's `hash_str`, exposed as an
+# `init` seed plus per-value `step_*` folds.
+
+# FNV-1a 64-bit offset basis.
+val FNV_OFFSET: u64 = 14695981039346656037;
+# FNV-1a 64-bit prime.
+val FNV_PRIME:  u64 = 1099511628211;
+
+# init: the FNV-1a seed value to begin a hash with.
+# ---
+# ret: the 64-bit offset basis
+pub fun init() u64 {
+    ret FNV_OFFSET;
+}
+
+# step_u8: fold one byte into the running hash.
+# ---
+# h: running hash
+# v: byte to fold in
+# ret: updated hash
+pub fun step_u8(h: u64, v: u8) u64 {
+    var x: u64 = h ^ v::u64;
+    x = x * FNV_PRIME;
+    ret x;
+}
+
+# step_u32: fold a 32-bit value into the running hash, byte by byte (little-endian).
+# ---
+# h: running hash
+# v: value to fold in
+# ret: updated hash
+pub fun step_u32(h: u64, v: u32) u64 {
+    var x: u64 = h;
+    x = step_u8(x, (v & 0xFF)::u8);
+    x = step_u8(x, ((v >> 8) & 0xFF)::u8);
+    x = step_u8(x, ((v >> 16) & 0xFF)::u8);
+    x = step_u8(x, ((v >> 24) & 0xFF)::u8);
+    ret x;
+}

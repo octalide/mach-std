@@ -2,8 +2,8 @@
 #
 # types here are target-independent. every OS implementation populates them.
 
-use std.types.size;
-use std.types.bool;
+use std.types.size.usize;
+use std.types.bool.bool;
 
 # Timespec: seconds and nanoseconds from a clock source.
 # ---

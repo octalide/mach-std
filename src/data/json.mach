@@ -4,11 +4,19 @@
 # pointers into the original input buffer (escape sequences are not
 # unescaped). the caller must keep the input alive while values are in use.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
-use std.memory;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
+use std.types.string.str;
+use std.types.string.str_equals;
+use std.memory.raw_copy;
 use allo: std.allocator;
 
 pub def Kind: u8;
@@ -162,12 +170,7 @@ pub fun value_get(v: *Value, index: usize) *Value {
 # index: zero-based index
 # ret:   key string (null-terminated), or nil if out of bounds
 pub fun value_key(v: *Value, index: usize) str {
-    if (v.kind != OBJECT || index >= v.count) {
-        var empty: str;
-        empty.len  = 0;
-        empty.data = nil;
-        ret empty;
-    }
+    if (v.kind != OBJECT || index >= v.count) { ret nil; }
     ret v.keys[index];
 }
 
@@ -207,8 +210,7 @@ fun make_null() Value {
     v.kind = NULL;
     v.bool_val = 0;
     v.num_val = 0;
-    v.str_val.len  = 0;
-    v.str_val.data = nil;
+    v.str_val = nil;
     v.str_len = 0;
     v.children = nil;
     v.keys = nil;
@@ -312,9 +314,6 @@ fun parse_null(p: *Parser) Result[Value, str] {
 }
 
 fun parse_bool(p: *Parser) Result[Value, str] {
-    if (p.pos >= p.len) {
-        ret err[Value, str]("unexpected end of input in boolean");
-    }
     if (p.src[p.pos] == 't') {
         if (p.pos + 4 > p.len) {
             ret err[Value, str]("unexpected end of input in true");
@@ -378,9 +377,7 @@ fun parse_string(p: *Parser) Result[Value, str] {
         }
         if (c == '"') {
             val slen: usize = p.pos - start;
-            var sptr: str;
-            sptr.len  = slen::u32;
-            sptr.data = (p.src::usize + start)::*u8;
+            val sptr: str = (p.src::usize + start)::str;
             p.pos = p.pos + 1;
             ret ok[Value, str](make_string(sptr, slen));
         }
@@ -538,10 +535,9 @@ fun emit_bytes(e: *Emitter, s: *u8, slen: usize) {
 }
 
 fun emit_str(e: *Emitter, s: str) {
-    val n: usize = s.len::usize;
     var i: usize = 0;
-    for (i < n) {
-        emit_byte(e, s.data[i]);
+    for (s[i] != 0) {
+        emit_byte(e, s[i]);
         i = i + 1;
     }
 }
@@ -640,10 +636,10 @@ test "json: parse null" {
     page.make(?a);
     val src: str = "null";
     val r: Result[Value, str] = parse(src::*u8, 4, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != NULL) { ret 0; }
-    ret 1;
+    if (v.kind != NULL) { ret 1; }
+    ret 0;
 }
 
 test "json: parse true" {
@@ -651,11 +647,11 @@ test "json: parse true" {
     page.make(?a);
     val src: str = "true";
     val r: Result[Value, str] = parse(src::*u8, 4, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != BOOL) { ret 0; }
-    if (v.bool_val != 1) { ret 0; }
-    ret 1;
+    if (v.kind != BOOL) { ret 1; }
+    if (v.bool_val != 1) { ret 1; }
+    ret 0;
 }
 
 test "json: parse false" {
@@ -663,11 +659,11 @@ test "json: parse false" {
     page.make(?a);
     val src: str = "false";
     val r: Result[Value, str] = parse(src::*u8, 5, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != BOOL) { ret 0; }
-    if (v.bool_val != 0) { ret 0; }
-    ret 1;
+    if (v.kind != BOOL) { ret 1; }
+    if (v.bool_val != 0) { ret 1; }
+    ret 0;
 }
 
 test "json: parse positive number" {
@@ -675,11 +671,11 @@ test "json: parse positive number" {
     page.make(?a);
     val src: str = "42";
     val r: Result[Value, str] = parse(src::*u8, 2, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != NUMBER) { ret 0; }
-    if (v.num_val != 42) { ret 0; }
-    ret 1;
+    if (v.kind != NUMBER) { ret 1; }
+    if (v.num_val != 42) { ret 1; }
+    ret 0;
 }
 
 test "json: parse negative number" {
@@ -687,11 +683,11 @@ test "json: parse negative number" {
     page.make(?a);
     val src: str = "-7";
     val r: Result[Value, str] = parse(src::*u8, 2, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != NUMBER) { ret 0; }
-    if (v.num_val != -7) { ret 0; }
-    ret 1;
+    if (v.kind != NUMBER) { ret 1; }
+    if (v.num_val != -7) { ret 1; }
+    ret 0;
 }
 
 test "json: parse zero" {
@@ -699,11 +695,11 @@ test "json: parse zero" {
     page.make(?a);
     val src: str = "0";
     val r: Result[Value, str] = parse(src::*u8, 1, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != NUMBER) { ret 0; }
-    if (v.num_val != 0) { ret 0; }
-    ret 1;
+    if (v.kind != NUMBER) { ret 1; }
+    if (v.num_val != 0) { ret 1; }
+    ret 0;
 }
 
 test "json: parse string" {
@@ -711,14 +707,14 @@ test "json: parse string" {
     page.make(?a);
     val src: str = "\"hello\"";
     val r: Result[Value, str] = parse(src::*u8, 7, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != STRING) { ret 0; }
-    if (v.str_len != 5) { ret 0; }
+    if (v.kind != STRING) { ret 1; }
+    if (v.str_len != 5) { ret 1; }
     val sp: *u8 = v.str_val::*u8;
-    if (sp[0] != 'h') { ret 0; }
-    if (sp[4] != 'o') { ret 0; }
-    ret 1;
+    if (sp[0] != 'h') { ret 1; }
+    if (sp[4] != 'o') { ret 1; }
+    ret 0;
 }
 
 test "json: parse empty array" {
@@ -726,11 +722,11 @@ test "json: parse empty array" {
     page.make(?a);
     val src: str = "[]";
     val r: Result[Value, str] = parse(src::*u8, 2, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != ARRAY) { ret 0; }
-    if (v.count != 0) { ret 0; }
-    ret 1;
+    if (v.kind != ARRAY) { ret 1; }
+    if (v.count != 0) { ret 1; }
+    ret 0;
 }
 
 test "json: parse array with elements" {
@@ -738,14 +734,14 @@ test "json: parse array with elements" {
     page.make(?a);
     val src: str = "[1,2,3]";
     val r: Result[Value, str] = parse(src::*u8, 7, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != ARRAY) { ret 0; }
-    if (v.count != 3) { ret 0; }
-    if (v.children[0].num_val != 1) { ret 0; }
-    if (v.children[1].num_val != 2) { ret 0; }
-    if (v.children[2].num_val != 3) { ret 0; }
-    ret 1;
+    if (v.kind != ARRAY) { ret 1; }
+    if (v.count != 3) { ret 1; }
+    if (v.children[0].num_val != 1) { ret 1; }
+    if (v.children[1].num_val != 2) { ret 1; }
+    if (v.children[2].num_val != 3) { ret 1; }
+    ret 0;
 }
 
 test "json: parse empty object" {
@@ -753,11 +749,11 @@ test "json: parse empty object" {
     page.make(?a);
     val src: str = "{}";
     val r: Result[Value, str] = parse(src::*u8, 2, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != OBJECT) { ret 0; }
-    if (v.count != 0) { ret 0; }
-    ret 1;
+    if (v.kind != OBJECT) { ret 1; }
+    if (v.count != 0) { ret 1; }
+    ret 0;
 }
 
 test "json: parse object with entry" {
@@ -765,12 +761,12 @@ test "json: parse object with entry" {
     page.make(?a);
     val src: str = "{\"a\":1}";
     val r: Result[Value, str] = parse(src::*u8, 7, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != OBJECT) { ret 0; }
-    if (v.count != 1) { ret 0; }
-    if (v.children[0].num_val != 1) { ret 0; }
-    ret 1;
+    if (v.kind != OBJECT) { ret 1; }
+    if (v.count != 1) { ret 1; }
+    if (v.children[0].num_val != 1) { ret 1; }
+    ret 0;
 }
 
 test "json: parse nested object with array" {
@@ -778,16 +774,16 @@ test "json: parse nested object with array" {
     page.make(?a);
     val src: str = "{\"x\":[1,2]}";
     val r: Result[Value, str] = parse(src::*u8, 11, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != OBJECT) { ret 0; }
-    if (v.count != 1) { ret 0; }
+    if (v.kind != OBJECT) { ret 1; }
+    if (v.count != 1) { ret 1; }
     val arr: *Value = ?v.children[0];
-    if (arr.kind != ARRAY) { ret 0; }
-    if (arr.count != 2) { ret 0; }
-    if (arr.children[0].num_val != 1) { ret 0; }
-    if (arr.children[1].num_val != 2) { ret 0; }
-    ret 1;
+    if (arr.kind != ARRAY) { ret 1; }
+    if (arr.count != 2) { ret 1; }
+    if (arr.children[0].num_val != 1) { ret 1; }
+    if (arr.children[1].num_val != 2) { ret 1; }
+    ret 0;
 }
 
 test "json: value_find on object" {
@@ -795,14 +791,14 @@ test "json: value_find on object" {
     page.make(?a);
     val src: str = "{\"a\":1,\"b\":2}";
     val r: Result[Value, str] = parse(src::*u8, 13, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
     val found: *Value = value_find(?v, "b");
-    if (found == nil) { ret 0; }
-    if (found.num_val != 2) { ret 0; }
+    if (found == nil) { ret 1; }
+    if (found.num_val != 2) { ret 1; }
     val missing: *Value = value_find(?v, "z");
-    if (missing != nil) { ret 0; }
-    ret 1;
+    if (missing != nil) { ret 1; }
+    ret 0;
 }
 
 test "json: emit null" {
@@ -810,16 +806,16 @@ test "json: emit null" {
     page.make(?a);
     val src: str = "null";
     val r: Result[Value, str] = parse(src::*u8, 4, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
     var buf: [16]u8;
     val n: usize = emit(?v, ?buf[0], 16);
-    if (n != 4) { ret 0; }
-    if (buf[0] != 'n') { ret 0; }
-    if (buf[1] != 'u') { ret 0; }
-    if (buf[2] != 'l') { ret 0; }
-    if (buf[3] != 'l') { ret 0; }
-    ret 1;
+    if (n != 4) { ret 1; }
+    if (buf[0] != 'n') { ret 1; }
+    if (buf[1] != 'u') { ret 1; }
+    if (buf[2] != 'l') { ret 1; }
+    if (buf[3] != 'l') { ret 1; }
+    ret 0;
 }
 
 test "json: emit number" {
@@ -827,15 +823,15 @@ test "json: emit number" {
     page.make(?a);
     val src: str = "123";
     val r: Result[Value, str] = parse(src::*u8, 3, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
     var buf: [16]u8;
     val n: usize = emit(?v, ?buf[0], 16);
-    if (n != 3) { ret 0; }
-    if (buf[0] != '1') { ret 0; }
-    if (buf[1] != '2') { ret 0; }
-    if (buf[2] != '3') { ret 0; }
-    ret 1;
+    if (n != 3) { ret 1; }
+    if (buf[0] != '1') { ret 1; }
+    if (buf[1] != '2') { ret 1; }
+    if (buf[2] != '3') { ret 1; }
+    ret 0;
 }
 
 test "json: emit true" {
@@ -843,14 +839,14 @@ test "json: emit true" {
     page.make(?a);
     val src: str = "true";
     val r: Result[Value, str] = parse(src::*u8, 4, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
     var buf: [16]u8;
     val n: usize = emit(?v, ?buf[0], 16);
-    if (n != 4) { ret 0; }
-    if (buf[0] != 't') { ret 0; }
-    if (buf[3] != 'e') { ret 0; }
-    ret 1;
+    if (n != 4) { ret 1; }
+    if (buf[0] != 't') { ret 1; }
+    if (buf[3] != 'e') { ret 1; }
+    ret 0;
 }
 
 test "json: roundtrip array" {
@@ -858,17 +854,17 @@ test "json: roundtrip array" {
     page.make(?a);
     val src: str = "[1,2,3]";
     val r: Result[Value, str] = parse(src::*u8, 7, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
     var buf: [32]u8;
     val n: usize = emit(?v, ?buf[0], 32);
-    if (n != 7) { ret 0; }
-    if (buf[0] != '[') { ret 0; }
-    if (buf[1] != '1') { ret 0; }
-    if (buf[2] != ',') { ret 0; }
-    if (buf[3] != '2') { ret 0; }
-    if (buf[6] != ']') { ret 0; }
-    ret 1;
+    if (n != 7) { ret 1; }
+    if (buf[0] != '[') { ret 1; }
+    if (buf[1] != '1') { ret 1; }
+    if (buf[2] != ',') { ret 1; }
+    if (buf[3] != '2') { ret 1; }
+    if (buf[6] != ']') { ret 1; }
+    ret 0;
 }
 
 test "json: whitespace tolerance" {
@@ -876,9 +872,9 @@ test "json: whitespace tolerance" {
     page.make(?a);
     val src: str = "  { \"a\" : 1 } ";
     val r: Result[Value, str] = parse(src::*u8, 14, ?a);
-    if (is_err[Value, str](r)) { ret 0; }
+    if (is_err[Value, str](r)) { ret 1; }
     val v: Value = unwrap_ok[Value, str](r);
-    if (v.kind != OBJECT) { ret 0; }
-    if (v.count != 1) { ret 0; }
-    ret 1;
+    if (v.kind != OBJECT) { ret 1; }
+    if (v.count != 1) { ret 1; }
+    ret 0;
 }

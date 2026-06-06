@@ -2,15 +2,15 @@
 # ---
 # Defines usize and isize for the target pointer width. Defaults to 64-bit when unknown.
 
-$if ($mach.build.target.pointer_width == 2) {
+$if ($mach.target.pointer_width == 2) {
 	pub def usize: u16;
 	pub def isize: i16;
 }
-$or ($mach.build.target.pointer_width == 4) {
+$or ($mach.target.pointer_width == 4) {
 	pub def usize: u32;
 	pub def isize: i32;
 }
-$or ($mach.build.target.pointer_width == 8) {
+$or ($mach.target.pointer_width == 8) {
 	pub def usize: u64;
 	pub def isize: i64;
 }

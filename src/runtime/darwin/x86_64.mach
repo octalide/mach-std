@@ -18,11 +18,11 @@
 #   $main.symbol = "main";
 #   fun main(argc: i64, argv: **u8) i64 { ... }
 
-$if ($mach.build.target.os.id != $mach.os.darwin.id) {
+$if ($mach.target.os != $mach.os.darwin) {
     $error("std.runtime.darwin.x86_64: requires darwin target");
 }
 
-$if ($mach.build.target.arch.id != $mach.arch.x86_64.id) {
+$if ($mach.target.arch != $mach.arch.x86_64) {
     $error("std.runtime.darwin.x86_64: requires x86_64 target");
 }
 

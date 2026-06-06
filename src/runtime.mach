@@ -16,13 +16,13 @@
 #
 # note: `use std.runtime;` is required to link the entrypoint into the binary.
 
-$if ($mach.build.target.os.id == $mach.os.linux.id) {
+$if ($mach.target.os == $mach.os.linux) {
     use std.runtime.linux;
 }
-$or ($mach.build.target.os.id == $mach.os.darwin.id) {
+$or ($mach.target.os == $mach.os.darwin) {
     use std.runtime.darwin;
 }
-$or ($mach.build.target.os.id == $mach.os.windows.id) {
+$or ($mach.target.os == $mach.os.windows) {
     use std.runtime.windows;
 }
 $or {

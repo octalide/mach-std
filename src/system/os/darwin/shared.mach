@@ -4,12 +4,17 @@
 # are identical across darwin architectures. arch-specific modules provide
 # only page_size and pipe.
 
-use std.types.size;
-use std.types.bool;
-use std.types.string;
+use std.types.size.usize;
+use std.types.size.isize;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.string.str;
+use std.types.string.str_len;
+use std.types.string.str_starts_with;
 use atomic: std.sync.atomic;
 
-$if ($mach.build.target.os.id != $mach.os.darwin.id) {
+$if ($mach.target.os != $mach.os.darwin) {
     $error("std.system.os.darwin.shared: requires darwin target");
 }
 
@@ -209,47 +214,235 @@ pub val ENOTSUP:   i64 = -45;
 
 pub val EINTR_MAX_RETRIES: usize = 8;
 
-# syscall wrappers (portable DSL — compiler emits arch-appropriate instructions)
+# syscall wrappers
+#
+# darwin uses the BSD trap convention: the syscall number carries the
+# UNIX class flag (0x2000000) on x86_64, or goes in x16 on aarch64. on
+# error the carry flag is set and the positive errno is returned; these
+# wrappers negate it so callers see a negative errno, matching the i64
+# contract used throughout this module.
 
 pub fun syscall0(n: usize) i64 {
     var out: i64;
-    asm { syscall {out}, {n} }
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, 0x2000000
+            or rax, {n}
+            syscall
+            jnc 1f
+            neg rax
+        1:
+            mov {out}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            mov x16, {n}
+            svc 0x80
+            b.cc 1f
+            neg x0, x0
+        1:
+            mov {out}, x0
+        }
+    }
     ret out;
 }
 
 pub fun syscall1(n: usize, a0: usize) i64 {
     var out: i64;
-    asm { syscall {out}, {n}, {a0} }
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, 0x2000000
+            or rax, {n}
+            mov rdi, {a0}
+            syscall
+            jnc 1f
+            neg rax
+        1:
+            mov {out}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            mov x16, {n}
+            mov x0, {a0}
+            svc 0x80
+            b.cc 1f
+            neg x0, x0
+        1:
+            mov {out}, x0
+        }
+    }
     ret out;
 }
 
 pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
     var out: i64;
-    asm { syscall {out}, {n}, {a0}, {a1} }
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, 0x2000000
+            or rax, {n}
+            mov rdi, {a0}
+            mov rsi, {a1}
+            syscall
+            jnc 1f
+            neg rax
+        1:
+            mov {out}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            mov x16, {n}
+            mov x0, {a0}
+            mov x1, {a1}
+            svc 0x80
+            b.cc 1f
+            neg x0, x0
+        1:
+            mov {out}, x0
+        }
+    }
     ret out;
 }
 
 pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
     var out: i64;
-    asm { syscall {out}, {n}, {a0}, {a1}, {a2} }
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, 0x2000000
+            or rax, {n}
+            mov rdi, {a0}
+            mov rsi, {a1}
+            mov rdx, {a2}
+            syscall
+            jnc 1f
+            neg rax
+        1:
+            mov {out}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            mov x16, {n}
+            mov x0, {a0}
+            mov x1, {a1}
+            mov x2, {a2}
+            svc 0x80
+            b.cc 1f
+            neg x0, x0
+        1:
+            mov {out}, x0
+        }
+    }
     ret out;
 }
 
 pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
     var out: i64;
-    asm { syscall {out}, {n}, {a0}, {a1}, {a2}, {a3} }
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, 0x2000000
+            or rax, {n}
+            mov rdi, {a0}
+            mov rsi, {a1}
+            mov rdx, {a2}
+            mov r10, {a3}
+            syscall
+            jnc 1f
+            neg rax
+        1:
+            mov {out}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            mov x16, {n}
+            mov x0, {a0}
+            mov x1, {a1}
+            mov x2, {a2}
+            mov x3, {a3}
+            svc 0x80
+            b.cc 1f
+            neg x0, x0
+        1:
+            mov {out}, x0
+        }
+    }
     ret out;
 }
 
 pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
     var out: i64;
-    asm { syscall {out}, {n}, {a0}, {a1}, {a2}, {a3}, {a4} }
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, 0x2000000
+            or rax, {n}
+            mov rdi, {a0}
+            mov rsi, {a1}
+            mov rdx, {a2}
+            mov r10, {a3}
+            mov r8, {a4}
+            syscall
+            jnc 1f
+            neg rax
+        1:
+            mov {out}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            mov x16, {n}
+            mov x0, {a0}
+            mov x1, {a1}
+            mov x2, {a2}
+            mov x3, {a3}
+            mov x4, {a4}
+            svc 0x80
+            b.cc 1f
+            neg x0, x0
+        1:
+            mov {out}, x0
+        }
+    }
     ret out;
 }
 
 pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
     var out: i64;
-    asm { syscall {out}, {n}, {a0}, {a1}, {a2}, {a3}, {a4}, {a5} }
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, 0x2000000
+            or rax, {n}
+            mov rdi, {a0}
+            mov rsi, {a1}
+            mov rdx, {a2}
+            mov r10, {a3}
+            mov r8, {a4}
+            mov r9, {a5}
+            syscall
+            jnc 1f
+            neg rax
+        1:
+            mov {out}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            mov x16, {n}
+            mov x0, {a0}
+            mov x1, {a1}
+            mov x2, {a2}
+            mov x3, {a3}
+            mov x4, {a4}
+            mov x5, {a5}
+            svc 0x80
+            b.cc 1f
+            neg x0, x0
+        1:
+            mov {out}, x0
+        }
+    }
     ret out;
 }
 
@@ -260,7 +453,12 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
 # code: exit code
 pub fun terminate(code: i64) {
     syscall1(SYS_EXIT, code::usize);
-    asm { trap }
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 { hlt }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 { brk 0 }
+    }
 }
 
 # abort: abort the process immediately with exit code 255.
@@ -508,13 +706,13 @@ pub fun wait_pid(pid: i64, wstatus: *i32, options: i32) i64 {
 }
 
 # wait status (POSIX encoding, shared across all targets)
-pub fwd os_shared.has_exited;
-pub fwd os_shared.exit_code;
-pub fwd os_shared.was_signaled;
-pub fwd os_shared.term_signal;
-pub fwd os_shared.was_stopped;
-pub fwd os_shared.stop_signal;
-pub fwd os_shared.was_continued;
+fwd os_shared.has_exited;
+fwd os_shared.exit_code;
+fwd os_shared.was_signaled;
+fwd os_shared.term_signal;
+fwd os_shared.was_stopped;
+fwd os_shared.stop_signal;
+fwd os_shared.was_continued;
 
 # spawn: create a child process running the given program.
 #
@@ -771,7 +969,7 @@ pub fun sock_setopt(fd: i32, level: i32, opt: i32, value: *u8, vallen: usize) i6
 
 # dns
 
-pub val DNS_HOSTS_PATH: zstr = `/etc/hosts`;
+pub val DNS_HOSTS_PATH: str = "/etc/hosts";
 
 # dns_nameserver: read the first nameserver from /etc/resolv.conf.
 # ---

@@ -4,7 +4,7 @@
 # allowing std.types.result and std.types.option to panic
 # without creating a circular import chain.
 
-use std.types.size;
+use std.types.size.usize;
 
 # panic: write a null-terminated message to stderr and abort.
 # ---
@@ -13,7 +13,7 @@ pub fun panic(msg: *u8) {
     var len: usize = 0;
     for (msg[len] != 0) { len = len + 1; }
 
-    $if ($mach.build.target.os.id == $mach.os.linux.id) {
+    $if ($mach.target.os == $mach.os.linux) {
         asm x86_64 {
             mov eax, 1        # SYS_write
             mov edi, 2        # fd = stderr
@@ -23,7 +23,7 @@ pub fun panic(msg: *u8) {
         }
     }
     $or {
-        $if ($mach.build.target.arch.id == $mach.arch.x86_64.id) {
+        $if ($mach.target.arch == $mach.arch.x86_64) {
             asm x86_64 {
                 mov eax, 0x2000004  # SYS_write (darwin)
                 mov edi, 2          # fd = stderr
@@ -32,16 +32,21 @@ pub fun panic(msg: *u8) {
                 syscall
             }
         }
-        $or ($mach.build.target.arch.id == $mach.arch.aarch64.id) {
+        $or ($mach.target.arch == $mach.arch.aarch64) {
             asm aarch64 {
                 mov x16, 4    # SYS_write (darwin aarch64)
                 mov x0, 2     # fd = stderr
-                ldr x1, {msg}
-                ldr x2, {len}
+                mov x1, {msg}
+                mov x2, {len}
                 svc 0x80
             }
         }
     }
 
-    asm { trap }
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 { hlt }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 { brk 0 }
+    }
 }

@@ -3,10 +3,19 @@
 # keys and values are stored in parallel arrays. a separate "state" array tracks
 # which slots are empty, occupied, or tombstones (deleted).
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.string.str_equals;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_ok;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
 
 use allocator: std.allocator;
 use page:      std.allocator.page;
@@ -359,12 +368,11 @@ pub fun hash_str(p: ptr) u64 {
     var hash: u64 = FNV_OFFSET;
     val sp: str = @s;
 
-    if (sp.data == nil) { ret hash; }
+    if (sp == nil) { ret hash; }
 
-    val n: usize = sp.len::usize;
     var i: usize = 0;
-    for (i < n) {
-        val byte: u64 = sp.data[i]::u64;
+    for (sp[i] != 0) {
+        val byte: u64 = sp[i]::u64;
         hash = hash ^ byte;
         hash = hash * FNV_PRIME;
         i = i + 1;
@@ -418,14 +426,33 @@ pub fun eq_u64(pa: ptr, pb: ptr) bool {
     ret @a == @b;
 }
 
+# hash_u32: splitmix64 hash for u32.
+pub fun hash_u32(p: ptr) u64 {
+    val n: *u32 = p::*u32;
+    var x: u64 = (@n)::u64;
+    x = x ^ (x >> 33);
+    x = x * 0xff51afd7ed558ccd;
+    x = x ^ (x >> 33);
+    x = x * 0xc4ceb9fe1a85ec53;
+    x = x ^ (x >> 33);
+    ret x;
+}
+
+# eq_u32: equality function for u32.
+pub fun eq_u32(pa: ptr, pb: ptr) bool {
+    val a: *u32 = pa::*u32;
+    val b: *u32 = pb::*u32;
+    ret @a == @b;
+}
+
 test "map: init creates empty map" {
     var a: allocator.Allocator;
     page.make(?a);
     val m: Map[i64, i64] = init[i64, i64](?a, hash_i64, eq_i64);
-    if (!is_empty[i64, i64](m)) { ret 0; }
-    if (length[i64, i64](m) != 0) { ret 0; }
-    if (capacity[i64, i64](m) != 0) { ret 0; }
-    ret 1;
+    if (!is_empty[i64, i64](m)) { ret 1; }
+    if (length[i64, i64](m) != 0) { ret 1; }
+    if (capacity[i64, i64](m) != 0) { ret 1; }
+    ret 0;
 }
 
 test "map: insert and get" {
@@ -434,20 +461,20 @@ test "map: insert and get" {
     var m: Map[i64, i64] = init[i64, i64](?a, hash_i64, eq_i64);
 
     val r: Result[bool, str] = insert[i64, i64](?m, 42, 100);
-    if (is_err[bool, str](r)) { ret 0; }
-    if (!unwrap_ok[bool, str](r)) { ret 0; }
+    if (is_err[bool, str](r)) { ret 1; }
+    if (!unwrap_ok[bool, str](r)) { ret 1; }
 
-    if (length[i64, i64](m) != 1) { ret 0; }
-    if (is_empty[i64, i64](m)) { ret 0; }
+    if (length[i64, i64](m) != 1) { ret 1; }
+    if (is_empty[i64, i64](m)) { ret 1; }
 
     val key: i64 = 42;
     val gr: Result[*i64, str] = get[i64, i64](?m, ?key);
-    if (is_err[*i64, str](gr)) { ret 0; }
-    if (@unwrap_ok[*i64, str](gr) != 100) { ret 0; }
+    if (is_err[*i64, str](gr)) { ret 1; }
+    if (@unwrap_ok[*i64, str](gr) != 100) { ret 1; }
 
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: insert updates existing" {
@@ -457,19 +484,19 @@ test "map: insert updates existing" {
 
     insert[i64, i64](?m, 10, 100);
     val r: Result[bool, str] = insert[i64, i64](?m, 10, 200);
-    if (is_err[bool, str](r)) { ret 0; }
-    if (unwrap_ok[bool, str](r)) { ret 0; }
+    if (is_err[bool, str](r)) { ret 1; }
+    if (unwrap_ok[bool, str](r)) { ret 1; }
 
-    if (length[i64, i64](m) != 1) { ret 0; }
+    if (length[i64, i64](m) != 1) { ret 1; }
 
     val key: i64 = 10;
     val gr: Result[*i64, str] = get[i64, i64](?m, ?key);
-    if (is_err[*i64, str](gr)) { ret 0; }
-    if (@unwrap_ok[*i64, str](gr) != 200) { ret 0; }
+    if (is_err[*i64, str](gr)) { ret 1; }
+    if (@unwrap_ok[*i64, str](gr) != 200) { ret 1; }
 
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: contains" {
@@ -484,13 +511,13 @@ test "map: contains" {
     val k2: i64 = 10;
     val k3: i64 = 15;
 
-    if (!contains[i64, i64](?m, ?k1)) { ret 0; }
-    if (!contains[i64, i64](?m, ?k2)) { ret 0; }
-    if (contains[i64, i64](?m, ?k3)) { ret 0; }
+    if (!contains[i64, i64](?m, ?k1)) { ret 1; }
+    if (!contains[i64, i64](?m, ?k2)) { ret 1; }
+    if (contains[i64, i64](?m, ?k3)) { ret 1; }
 
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: remove" {
@@ -502,24 +529,24 @@ test "map: remove" {
     insert[i64, i64](?m, 2, 20);
     insert[i64, i64](?m, 3, 30);
 
-    if (length[i64, i64](m) != 3) { ret 0; }
+    if (length[i64, i64](m) != 3) { ret 1; }
 
     val k2: i64 = 2;
     val rr: Result[bool, str] = remove[i64, i64](?m, ?k2);
-    if (is_err[bool, str](rr)) { ret 0; }
-    if (!unwrap_ok[bool, str](rr)) { ret 0; }
+    if (is_err[bool, str](rr)) { ret 1; }
+    if (!unwrap_ok[bool, str](rr)) { ret 1; }
 
-    if (length[i64, i64](m) != 2) { ret 0; }
-    if (contains[i64, i64](?m, ?k2)) { ret 0; }
+    if (length[i64, i64](m) != 2) { ret 1; }
+    if (contains[i64, i64](?m, ?k2)) { ret 1; }
 
     val k1: i64 = 1;
     val k3: i64 = 3;
-    if (!contains[i64, i64](?m, ?k1)) { ret 0; }
-    if (!contains[i64, i64](?m, ?k3)) { ret 0; }
+    if (!contains[i64, i64](?m, ?k1)) { ret 1; }
+    if (!contains[i64, i64](?m, ?k3)) { ret 1; }
 
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: remove non-existent" {
@@ -531,12 +558,12 @@ test "map: remove non-existent" {
 
     val k: i64 = 999;
     val rr: Result[bool, str] = remove[i64, i64](?m, ?k);
-    if (is_err[bool, str](rr)) { ret 0; }
-    if (unwrap_ok[bool, str](rr)) { ret 0; }
+    if (is_err[bool, str](rr)) { ret 1; }
+    if (unwrap_ok[bool, str](rr)) { ret 1; }
 
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: get non-existent returns error" {
@@ -548,11 +575,11 @@ test "map: get non-existent returns error" {
 
     val k: i64 = 999;
     val gr: Result[*i64, str] = get[i64, i64](?m, ?k);
-    if (is_ok[*i64, str](gr)) { ret 0; }
+    if (is_ok[*i64, str](gr)) { ret 1; }
 
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: clear" {
@@ -567,13 +594,13 @@ test "map: clear" {
     val cap_before: usize = capacity[i64, i64](m);
     clear[i64, i64](?m);
 
-    if (length[i64, i64](m) != 0) { ret 0; }
-    if (!is_empty[i64, i64](m)) { ret 0; }
-    if (capacity[i64, i64](m) != cap_before) { ret 0; }
+    if (length[i64, i64](m) != 0) { ret 1; }
+    if (!is_empty[i64, i64](m)) { ret 1; }
+    if (capacity[i64, i64](m) != cap_before) { ret 1; }
 
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: many insertions trigger growth" {
@@ -584,24 +611,24 @@ test "map: many insertions trigger growth" {
     var i: i64 = 0;
     for (i < 100) {
         val r: Result[bool, str] = insert[i64, i64](?m, i, i * 10);
-        if (is_err[bool, str](r)) { ret 0; }
+        if (is_err[bool, str](r)) { ret 1; }
         i = i + 1;
     }
 
-    if (length[i64, i64](m) != 100) { ret 0; }
-    if (capacity[i64, i64](m) < 100) { ret 0; }
+    if (length[i64, i64](m) != 100) { ret 1; }
+    if (capacity[i64, i64](m) < 100) { ret 1; }
 
     var j: i64 = 0;
     for (j < 100) {
         val gr: Result[*i64, str] = get[i64, i64](?m, ?j);
-        if (is_err[*i64, str](gr)) { ret 0; }
-        if (@unwrap_ok[*i64, str](gr) != j * 10) { ret 0; }
+        if (is_err[*i64, str](gr)) { ret 1; }
+        if (@unwrap_ok[*i64, str](gr) != j * 10) { ret 1; }
         j = j + 1;
     }
 
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: insert after remove reuses tombstone" {
@@ -617,17 +644,17 @@ test "map: insert after remove reuses tombstone" {
 
     insert[i64, i64](?m, 3, 30);
 
-    if (length[i64, i64](m) != 2) { ret 0; }
+    if (length[i64, i64](m) != 2) { ret 1; }
 
     val k2: i64 = 2;
     val k3: i64 = 3;
-    if (!contains[i64, i64](?m, ?k2)) { ret 0; }
-    if (!contains[i64, i64](?m, ?k3)) { ret 0; }
-    if (contains[i64, i64](?m, ?k)) { ret 0; }
+    if (!contains[i64, i64](?m, ?k2)) { ret 1; }
+    if (!contains[i64, i64](?m, ?k3)) { ret 1; }
+    if (contains[i64, i64](?m, ?k)) { ret 1; }
 
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: dnit on empty map" {
@@ -635,8 +662,8 @@ test "map: dnit on empty map" {
     page.make(?a);
     var m: Map[i64, i64] = init[i64, i64](?a, hash_i64, eq_i64);
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: string keys" {
@@ -648,25 +675,25 @@ test "map: string keys" {
     insert[str, i64](?m, "world", 2);
     insert[str, i64](?m, "foo", 3);
 
-    if (length[str, i64](m) != 3) { ret 0; }
+    if (length[str, i64](m) != 3) { ret 1; }
 
     val k1: str = "hello";
     val k2: str = "world";
     val k3: str = "bar";
 
     val r1: Result[*i64, str] = get[str, i64](?m, ?k1);
-    if (is_err[*i64, str](r1)) { ret 0; }
-    if (@unwrap_ok[*i64, str](r1) != 1) { ret 0; }
+    if (is_err[*i64, str](r1)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r1) != 1) { ret 1; }
 
     val r2: Result[*i64, str] = get[str, i64](?m, ?k2);
-    if (is_err[*i64, str](r2)) { ret 0; }
-    if (@unwrap_ok[*i64, str](r2) != 2) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r2) != 2) { ret 1; }
 
-    if (contains[str, i64](?m, ?k3)) { ret 0; }
+    if (contains[str, i64](?m, ?k3)) { ret 1; }
 
     val ok: bool = dnit[str, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "map: get allows mutation" {
@@ -678,16 +705,16 @@ test "map: get allows mutation" {
 
     val k: i64 = 42;
     val r: Result[*i64, str] = get[i64, i64](?m, ?k);
-    if (is_err[*i64, str](r)) { ret 0; }
+    if (is_err[*i64, str](r)) { ret 1; }
 
     val p: *i64 = unwrap_ok[*i64, str](r);
     @p = 999;
 
     val r2: Result[*i64, str] = get[i64, i64](?m, ?k);
-    if (is_err[*i64, str](r2)) { ret 0; }
-    if (@unwrap_ok[*i64, str](r2) != 999) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r2) != 999) { ret 1; }
 
     val ok: bool = dnit[i64, i64](?m);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }

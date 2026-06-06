@@ -1,9 +1,16 @@
 # resizable dynamic array backed by an allocator
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use std.types.string;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_ok;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
 
 use allo: std.allocator;
 use page: std.allocator.page;
@@ -166,10 +173,10 @@ test "vector: init creates empty vector" {
     var a: allo.Allocator;
     page.make(?a);
     val v: Vector[i64] = init[i64](?a);
-    if (!is_empty[i64](v)) { ret 0; }
-    if (length[i64](v) != 0) { ret 0; }
-    if (capacity[i64](v) != 0) { ret 0; }
-    ret 1;
+    if (!is_empty[i64](v)) { ret 1; }
+    if (length[i64](v) != 0) { ret 1; }
+    if (capacity[i64](v) != 0) { ret 1; }
+    ret 0;
 }
 
 test "vector: push adds element" {
@@ -178,13 +185,13 @@ test "vector: push adds element" {
     var v: Vector[i64] = init[i64](?a);
 
     val r: Result[usize, str] = push[i64](?v, 42);
-    if (is_err[usize, str](r)) { ret 0; }
-    if (length[i64](v) != 1) { ret 0; }
-    if (is_empty[i64](v)) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
+    if (length[i64](v) != 1) { ret 1; }
+    if (is_empty[i64](v)) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: push multiple elements" {
@@ -194,17 +201,17 @@ test "vector: push multiple elements" {
 
     var r: Result[usize, str];
     r = push[i64](?v, 10);
-    if (is_err[usize, str](r)) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
     r = push[i64](?v, 20);
-    if (is_err[usize, str](r)) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
     r = push[i64](?v, 30);
-    if (is_err[usize, str](r)) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
 
-    if (length[i64](v) != 3) { ret 0; }
+    if (length[i64](v) != 3) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: pop returns last element" {
@@ -217,13 +224,13 @@ test "vector: pop returns last element" {
     push[i64](?v, 300);
 
     val r: Result[i64, str] = pop[i64](?v);
-    if (is_err[i64, str](r)) { ret 0; }
-    if (unwrap_ok[i64, str](r) != 300) { ret 0; }
-    if (length[i64](v) != 2) { ret 0; }
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 300) { ret 1; }
+    if (length[i64](v) != 2) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: pop from empty returns error" {
@@ -232,11 +239,11 @@ test "vector: pop from empty returns error" {
     var v: Vector[i64] = init[i64](?a);
 
     val r: Result[i64, str] = pop[i64](?v);
-    if (is_ok[i64, str](r)) { ret 0; }
+    if (is_ok[i64, str](r)) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: get returns pointer to element" {
@@ -249,13 +256,13 @@ test "vector: get returns pointer to element" {
     push[i64](?v, 333);
 
     val r: Result[*i64, str] = get[i64](?v, 1);
-    if (is_err[*i64, str](r)) { ret 0; }
+    if (is_err[*i64, str](r)) { ret 1; }
     val p: *i64 = unwrap_ok[*i64, str](r);
-    if (@p != 222) { ret 0; }
+    if (@p != 222) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: get out of bounds returns error" {
@@ -266,11 +273,11 @@ test "vector: get out of bounds returns error" {
     push[i64](?v, 42);
 
     val r: Result[*i64, str] = get[i64](?v, 5);
-    if (is_ok[*i64, str](r)) { ret 0; }
+    if (is_ok[*i64, str](r)) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: get allows mutation" {
@@ -281,17 +288,17 @@ test "vector: get allows mutation" {
     push[i64](?v, 100);
 
     val r: Result[*i64, str] = get[i64](?v, 0);
-    if (is_err[*i64, str](r)) { ret 0; }
+    if (is_err[*i64, str](r)) { ret 1; }
     val p: *i64 = unwrap_ok[*i64, str](r);
     @p = 999;
 
     val r2: Result[*i64, str] = get[i64](?v, 0);
-    if (is_err[*i64, str](r2)) { ret 0; }
-    if (@unwrap_ok[*i64, str](r2) != 999) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r2) != 999) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: reserve increases capacity" {
@@ -300,13 +307,13 @@ test "vector: reserve increases capacity" {
     var v: Vector[i64] = init[i64](?a);
 
     val r: Result[usize, str] = reserve[i64](?v, 100);
-    if (is_err[usize, str](r)) { ret 0; }
-    if (capacity[i64](v) < 100) { ret 0; }
-    if (length[i64](v) != 0) { ret 0; }
+    if (is_err[usize, str](r)) { ret 1; }
+    if (capacity[i64](v) < 100) { ret 1; }
+    if (length[i64](v) != 0) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: reserve when already sufficient is noop" {
@@ -320,11 +327,11 @@ test "vector: reserve when already sufficient is noop" {
     reserve[i64](?v, 10);
     val cap2: usize = capacity[i64](v);
 
-    if (cap2 != cap1) { ret 0; }
+    if (cap2 != cap1) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: clear resets length but keeps capacity" {
@@ -339,13 +346,13 @@ test "vector: clear resets length but keeps capacity" {
 
     clear[i64](?v);
 
-    if (length[i64](v) != 0) { ret 0; }
-    if (!is_empty[i64](v)) { ret 0; }
-    if (capacity[i64](v) != cap_before) { ret 0; }
+    if (length[i64](v) != 0) { ret 1; }
+    if (!is_empty[i64](v)) { ret 1; }
+    if (capacity[i64](v) != cap_before) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: dnit on empty vector succeeds" {
@@ -353,8 +360,8 @@ test "vector: dnit on empty vector succeeds" {
     page.make(?a);
     var v: Vector[i64] = init[i64](?a);
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: push triggers capacity growth" {
@@ -366,25 +373,25 @@ test "vector: push triggers capacity growth" {
     var i: i64 = 0;
     for (i < 100) {
         val r: Result[usize, str] = push[i64](?v, i);
-        if (is_err[usize, str](r)) { ret 0; }
+        if (is_err[usize, str](r)) { ret 1; }
         i = i + 1;
     }
 
-    if (length[i64](v) != 100) { ret 0; }
-    if (capacity[i64](v) < 100) { ret 0; }
+    if (length[i64](v) != 100) { ret 1; }
+    if (capacity[i64](v) < 100) { ret 1; }
 
     # verify all values
     var j: usize = 0;
     for (j < 100) {
         val r: Result[*i64, str] = get[i64](?v, j);
-        if (is_err[*i64, str](r)) { ret 0; }
-        if (@unwrap_ok[*i64, str](r) != j::i64) { ret 0; }
+        if (is_err[*i64, str](r)) { ret 1; }
+        if (@unwrap_ok[*i64, str](r) != j::i64) { ret 1; }
         j = j + 1;
     }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }
 
 test "vector: push and pop sequence" {
@@ -399,26 +406,26 @@ test "vector: push and pop sequence" {
     var r: Result[i64, str];
 
     r = pop[i64](?v);
-    if (unwrap_ok[i64, str](r) != 3) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 3) { ret 1; }
 
     push[i64](?v, 4);
     push[i64](?v, 5);
 
     r = pop[i64](?v);
-    if (unwrap_ok[i64, str](r) != 5) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 5) { ret 1; }
 
     r = pop[i64](?v);
-    if (unwrap_ok[i64, str](r) != 4) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 4) { ret 1; }
 
     r = pop[i64](?v);
-    if (unwrap_ok[i64, str](r) != 2) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 2) { ret 1; }
 
     r = pop[i64](?v);
-    if (unwrap_ok[i64, str](r) != 1) { ret 0; }
+    if (unwrap_ok[i64, str](r) != 1) { ret 1; }
 
-    if (!is_empty[i64](v)) { ret 0; }
+    if (!is_empty[i64](v)) { ret 1; }
 
     val ok: bool = dnit[i64](?v);
-    if (!ok) { ret 0; }
-    ret 1;
+    if (!ok) { ret 1; }
+    ret 0;
 }

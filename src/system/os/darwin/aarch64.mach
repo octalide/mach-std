@@ -5,11 +5,11 @@
 
 use shared: std.system.os.darwin.shared;
 
-$if ($mach.build.target.os.id != $mach.os.darwin.id) {
+$if ($mach.target.os != $mach.os.darwin) {
     $error("std.system.os.darwin.aarch64: requires darwin target");
 }
 
-$if ($mach.build.target.arch.id != $mach.arch.aarch64.id) {
+$if ($mach.target.arch != $mach.arch.aarch64) {
     $error("std.system.os.darwin.aarch64: requires aarch64 target");
 }
 
@@ -44,172 +44,172 @@ pub fun pipe(fds: *i32) i64 {
 }
 
 # kernel ABI types
-pub fwd shared.stat_t;
-pub fwd shared.timespec;
-pub fwd shared.dirent64;
+fwd shared.stat_t;
+fwd shared.timespec;
+fwd shared.dirent64;
 
 # path
-pub fwd shared.separator;
+fwd shared.separator;
 
 # constants
-pub fwd shared.STDIN_FD;
-pub fwd shared.STDOUT_FD;
-pub fwd shared.STDERR_FD;
+fwd shared.STDIN_FD;
+fwd shared.STDOUT_FD;
+fwd shared.STDERR_FD;
 
-pub fwd shared.O_RDONLY;
-pub fwd shared.O_WRONLY;
-pub fwd shared.O_RDWR;
-pub fwd shared.O_CREAT;
-pub fwd shared.O_EXCL;
-pub fwd shared.O_TRUNC;
-pub fwd shared.O_APPEND;
-pub fwd shared.O_DIRECTORY;
+fwd shared.O_RDONLY;
+fwd shared.O_WRONLY;
+fwd shared.O_RDWR;
+fwd shared.O_CREAT;
+fwd shared.O_EXCL;
+fwd shared.O_TRUNC;
+fwd shared.O_APPEND;
+fwd shared.O_DIRECTORY;
 
-pub fwd shared.AT_FDCWD;
-pub fwd shared.AT_SYMLINK_NOFOLLOW;
-pub fwd shared.AT_REMOVEDIR;
+fwd shared.AT_FDCWD;
+fwd shared.AT_SYMLINK_NOFOLLOW;
+fwd shared.AT_REMOVEDIR;
 
-pub fwd shared.S_IFMT;
-pub fwd shared.S_IFDIR;
-pub fwd shared.S_IFREG;
-pub fwd shared.S_IFLNK;
+fwd shared.S_IFMT;
+fwd shared.S_IFDIR;
+fwd shared.S_IFREG;
+fwd shared.S_IFLNK;
 
-pub fwd shared.WNOHANG;
-pub fwd shared.WUNTRACED;
-pub fwd shared.WCONTINUED;
+fwd shared.WNOHANG;
+fwd shared.WUNTRACED;
+fwd shared.WCONTINUED;
 
-pub fwd shared.CLOCK_REALTIME;
-pub fwd shared.CLOCK_MONOTONIC;
+fwd shared.CLOCK_REALTIME;
+fwd shared.CLOCK_MONOTONIC;
 
-pub fwd shared.EPERM;
-pub fwd shared.ENOENT;
-pub fwd shared.ESRCH;
-pub fwd shared.EINTR;
-pub fwd shared.EIO;
-pub fwd shared.ENXIO;
-pub fwd shared.E2BIG;
-pub fwd shared.EBADF;
-pub fwd shared.ECHILD;
-pub fwd shared.EAGAIN;
-pub fwd shared.ENOMEM;
-pub fwd shared.EACCES;
-pub fwd shared.EFAULT;
-pub fwd shared.EBUSY;
-pub fwd shared.EEXIST;
-pub fwd shared.ENODEV;
-pub fwd shared.ENOTDIR;
-pub fwd shared.EISDIR;
-pub fwd shared.EINVAL;
-pub fwd shared.ENFILE;
-pub fwd shared.EMFILE;
-pub fwd shared.ETXTBSY;
-pub fwd shared.ENOSPC;
-pub fwd shared.EROFS;
-pub fwd shared.EPIPE;
-pub fwd shared.ENOTEMPTY;
-pub fwd shared.ENOTSUP;
+fwd shared.EPERM;
+fwd shared.ENOENT;
+fwd shared.ESRCH;
+fwd shared.EINTR;
+fwd shared.EIO;
+fwd shared.ENXIO;
+fwd shared.E2BIG;
+fwd shared.EBADF;
+fwd shared.ECHILD;
+fwd shared.EAGAIN;
+fwd shared.ENOMEM;
+fwd shared.EACCES;
+fwd shared.EFAULT;
+fwd shared.EBUSY;
+fwd shared.EEXIST;
+fwd shared.ENODEV;
+fwd shared.ENOTDIR;
+fwd shared.EISDIR;
+fwd shared.EINVAL;
+fwd shared.ENFILE;
+fwd shared.EMFILE;
+fwd shared.ETXTBSY;
+fwd shared.ENOSPC;
+fwd shared.EROFS;
+fwd shared.EPIPE;
+fwd shared.ENOTEMPTY;
+fwd shared.ENOTSUP;
 
-pub fwd shared.EINTR_MAX_RETRIES;
+fwd shared.EINTR_MAX_RETRIES;
 
 # syscall wrappers
-pub fwd shared.syscall0;
-pub fwd shared.syscall1;
-pub fwd shared.syscall2;
-pub fwd shared.syscall3;
-pub fwd shared.syscall4;
-pub fwd shared.syscall5;
-pub fwd shared.syscall6;
+fwd shared.syscall0;
+fwd shared.syscall1;
+fwd shared.syscall2;
+fwd shared.syscall3;
+fwd shared.syscall4;
+fwd shared.syscall5;
+fwd shared.syscall6;
 
 # process
-pub fwd shared.terminate;
-pub fwd shared.abort;
-pub fwd shared.spawn;
-pub fwd shared.getpid;
-pub fwd shared.sleep;
-pub fwd shared.getcwd;
-pub fwd shared.getenv;
-pub fwd shared.fork;
-pub fwd shared.vfork;
-pub fwd shared.exec;
-pub fwd shared.wait;
-pub fwd shared.wait_pid;
-pub fwd shared.has_exited;
-pub fwd shared.exit_code;
-pub fwd shared.was_signaled;
-pub fwd shared.term_signal;
-pub fwd shared.was_stopped;
-pub fwd shared.stop_signal;
-pub fwd shared.was_continued;
+fwd shared.terminate;
+fwd shared.abort;
+fwd shared.spawn;
+fwd shared.getpid;
+fwd shared.sleep;
+fwd shared.getcwd;
+fwd shared.getenv;
+fwd shared.fork;
+fwd shared.vfork;
+fwd shared.exec;
+fwd shared.wait;
+fwd shared.wait_pid;
+fwd shared.has_exited;
+fwd shared.exit_code;
+fwd shared.was_signaled;
+fwd shared.term_signal;
+fwd shared.was_stopped;
+fwd shared.stop_signal;
+fwd shared.was_continued;
 
 # memory
-pub fwd shared.allocate;
-pub fwd shared.deallocate;
-pub fwd shared.reallocate;
-pub fwd shared.heap_region_base;
-pub fwd shared.heap_region_extend;
-pub fwd shared.protect;
-pub fwd shared.lock;
-pub fwd shared.unlock;
-pub fwd shared.advise;
-pub fwd shared.map_file;
-pub fwd shared.sync_file;
+fwd shared.allocate;
+fwd shared.deallocate;
+fwd shared.reallocate;
+fwd shared.heap_region_base;
+fwd shared.heap_region_extend;
+fwd shared.protect;
+fwd shared.lock;
+fwd shared.unlock;
+fwd shared.advise;
+fwd shared.map_file;
+fwd shared.sync_file;
 
 # environment
-pub fwd shared._envp;
+fwd shared._envp;
 
 # filesystem
-pub fwd shared.read;
-pub fwd shared.write;
-pub fwd shared.open;
-pub fwd shared.close;
-pub fwd shared.stat;
-pub fwd shared.stat_path;
-pub fwd shared.unlink;
-pub fwd shared.rename;
-pub fwd shared.make_dir;
-pub fwd shared.read_dir;
-pub fwd shared.access;
-pub fwd shared.seek;
+fwd shared.read;
+fwd shared.write;
+fwd shared.open;
+fwd shared.close;
+fwd shared.stat;
+fwd shared.stat_path;
+fwd shared.unlink;
+fwd shared.rename;
+fwd shared.make_dir;
+fwd shared.read_dir;
+fwd shared.access;
+fwd shared.seek;
 
 # sockets
-pub fwd shared.AF_INET;
-pub fwd shared.SOCK_STREAM;
-pub fwd shared.SOCK_DGRAM;
-pub fwd shared.SOL_SOCKET;
-pub fwd shared.SO_REUSEADDR;
-pub fwd shared.SHUT_RD;
-pub fwd shared.SHUT_WR;
-pub fwd shared.SHUT_RDWR;
-pub fwd shared.SOCKADDR_IN_SIZE;
-pub fwd shared.sock_addr_init;
-pub fwd shared.sock_addr_read;
-pub fwd shared.sock_send;
-pub fwd shared.sock_recv;
-pub fwd shared.sock_close;
-pub fwd shared.sock_create;
-pub fwd shared.sock_bind;
-pub fwd shared.sock_listen;
-pub fwd shared.sock_accept;
-pub fwd shared.sock_connect;
-pub fwd shared.sock_sendto;
-pub fwd shared.sock_recvfrom;
-pub fwd shared.sock_shutdown;
-pub fwd shared.sock_setopt;
+fwd shared.AF_INET;
+fwd shared.SOCK_STREAM;
+fwd shared.SOCK_DGRAM;
+fwd shared.SOL_SOCKET;
+fwd shared.SO_REUSEADDR;
+fwd shared.SHUT_RD;
+fwd shared.SHUT_WR;
+fwd shared.SHUT_RDWR;
+fwd shared.SOCKADDR_IN_SIZE;
+fwd shared.sock_addr_init;
+fwd shared.sock_addr_read;
+fwd shared.sock_send;
+fwd shared.sock_recv;
+fwd shared.sock_close;
+fwd shared.sock_create;
+fwd shared.sock_bind;
+fwd shared.sock_listen;
+fwd shared.sock_accept;
+fwd shared.sock_connect;
+fwd shared.sock_sendto;
+fwd shared.sock_recvfrom;
+fwd shared.sock_shutdown;
+fwd shared.sock_setopt;
 
 # dns
-pub fwd shared.DNS_HOSTS_PATH;
-pub fwd shared.dns_nameserver;
+fwd shared.DNS_HOSTS_PATH;
+fwd shared.dns_nameserver;
 
 # random
-pub fwd shared.random_fill;
+fwd shared.random_fill;
 
 # threads
-pub fwd shared.thread_spawn;
-pub fwd shared.thread_wait;
-pub fwd shared.thread_wake;
+fwd shared.thread_spawn;
+fwd shared.thread_wait;
+fwd shared.thread_wake;
 
 # time
-pub fwd shared.clock_gettime;
+fwd shared.clock_gettime;
 
 # errno
-pub fwd shared.error_message;
+fwd shared.error_message;

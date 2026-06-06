@@ -4,14 +4,14 @@
 # consumers who need darwin-specific functionality import this module
 # directly rather than going through std.system.os.
 
-$if ($mach.build.target.os.id != $mach.os.darwin.id) {
+$if ($mach.target.os != $mach.os.darwin) {
     $error("std.system.os.darwin: requires darwin target");
 }
 
-$if ($mach.build.target.arch.id == $mach.arch.aarch64.id) {
+$if ($mach.target.arch == $mach.arch.aarch64) {
     use impl: std.system.os.darwin.aarch64;
 }
-$or ($mach.build.target.arch.id == $mach.arch.x86_64.id) {
+$or ($mach.target.arch == $mach.arch.x86_64) {
     use impl: std.system.os.darwin.x86_64;
 }
 $or {
@@ -19,171 +19,171 @@ $or {
 }
 
 # kernel ABI types
-pub fwd impl.stat_t;
-pub fwd impl.timespec;
-pub fwd impl.dirent64;
+fwd impl.stat_t;
+fwd impl.timespec;
+fwd impl.dirent64;
 
 # path
-pub fwd impl.separator;
+fwd impl.separator;
 
 # constants
-pub fwd impl.STDIN_FD;
-pub fwd impl.STDOUT_FD;
-pub fwd impl.STDERR_FD;
+fwd impl.STDIN_FD;
+fwd impl.STDOUT_FD;
+fwd impl.STDERR_FD;
 
-pub fwd impl.O_RDONLY;
-pub fwd impl.O_WRONLY;
-pub fwd impl.O_RDWR;
-pub fwd impl.O_CREAT;
-pub fwd impl.O_EXCL;
-pub fwd impl.O_TRUNC;
-pub fwd impl.O_APPEND;
-pub fwd impl.O_DIRECTORY;
+fwd impl.O_RDONLY;
+fwd impl.O_WRONLY;
+fwd impl.O_RDWR;
+fwd impl.O_CREAT;
+fwd impl.O_EXCL;
+fwd impl.O_TRUNC;
+fwd impl.O_APPEND;
+fwd impl.O_DIRECTORY;
 
-pub fwd impl.AT_FDCWD;
-pub fwd impl.AT_SYMLINK_NOFOLLOW;
-pub fwd impl.AT_REMOVEDIR;
+fwd impl.AT_FDCWD;
+fwd impl.AT_SYMLINK_NOFOLLOW;
+fwd impl.AT_REMOVEDIR;
 
-pub fwd impl.S_IFMT;
-pub fwd impl.S_IFDIR;
-pub fwd impl.S_IFREG;
-pub fwd impl.S_IFLNK;
+fwd impl.S_IFMT;
+fwd impl.S_IFDIR;
+fwd impl.S_IFREG;
+fwd impl.S_IFLNK;
 
-pub fwd impl.WNOHANG;
-pub fwd impl.WUNTRACED;
-pub fwd impl.WCONTINUED;
+fwd impl.WNOHANG;
+fwd impl.WUNTRACED;
+fwd impl.WCONTINUED;
 
-pub fwd impl.CLOCK_REALTIME;
-pub fwd impl.CLOCK_MONOTONIC;
+fwd impl.CLOCK_REALTIME;
+fwd impl.CLOCK_MONOTONIC;
 
-pub fwd impl.EPERM;
-pub fwd impl.ENOENT;
-pub fwd impl.ESRCH;
-pub fwd impl.EINTR;
-pub fwd impl.EIO;
-pub fwd impl.ENXIO;
-pub fwd impl.E2BIG;
-pub fwd impl.EBADF;
-pub fwd impl.ECHILD;
-pub fwd impl.EAGAIN;
-pub fwd impl.ENOMEM;
-pub fwd impl.EACCES;
-pub fwd impl.EFAULT;
-pub fwd impl.EBUSY;
-pub fwd impl.EEXIST;
-pub fwd impl.ENODEV;
-pub fwd impl.ENOTDIR;
-pub fwd impl.EISDIR;
-pub fwd impl.EINVAL;
-pub fwd impl.ENFILE;
-pub fwd impl.EMFILE;
-pub fwd impl.ETXTBSY;
-pub fwd impl.ENOSPC;
-pub fwd impl.EROFS;
-pub fwd impl.EPIPE;
-pub fwd impl.ENOTEMPTY;
-pub fwd impl.ENOTSUP;
+fwd impl.EPERM;
+fwd impl.ENOENT;
+fwd impl.ESRCH;
+fwd impl.EINTR;
+fwd impl.EIO;
+fwd impl.ENXIO;
+fwd impl.E2BIG;
+fwd impl.EBADF;
+fwd impl.ECHILD;
+fwd impl.EAGAIN;
+fwd impl.ENOMEM;
+fwd impl.EACCES;
+fwd impl.EFAULT;
+fwd impl.EBUSY;
+fwd impl.EEXIST;
+fwd impl.ENODEV;
+fwd impl.ENOTDIR;
+fwd impl.EISDIR;
+fwd impl.EINVAL;
+fwd impl.ENFILE;
+fwd impl.EMFILE;
+fwd impl.ETXTBSY;
+fwd impl.ENOSPC;
+fwd impl.EROFS;
+fwd impl.EPIPE;
+fwd impl.ENOTEMPTY;
+fwd impl.ENOTSUP;
 
-pub fwd impl.EINTR_MAX_RETRIES;
+fwd impl.EINTR_MAX_RETRIES;
 
 # syscall wrappers
-pub fwd impl.syscall0;
-pub fwd impl.syscall1;
-pub fwd impl.syscall2;
-pub fwd impl.syscall3;
-pub fwd impl.syscall4;
-pub fwd impl.syscall5;
-pub fwd impl.syscall6;
+fwd impl.syscall0;
+fwd impl.syscall1;
+fwd impl.syscall2;
+fwd impl.syscall3;
+fwd impl.syscall4;
+fwd impl.syscall5;
+fwd impl.syscall6;
 
 # memory
-pub fwd impl.allocate;
-pub fwd impl.deallocate;
-pub fwd impl.reallocate;
-pub fwd impl.heap_region_base;
-pub fwd impl.heap_region_extend;
-pub fwd impl.protect;
-pub fwd impl.lock;
-pub fwd impl.unlock;
-pub fwd impl.advise;
-pub fwd impl.page_size;
-pub fwd impl.map_file;
-pub fwd impl.sync_file;
+fwd impl.allocate;
+fwd impl.deallocate;
+fwd impl.reallocate;
+fwd impl.heap_region_base;
+fwd impl.heap_region_extend;
+fwd impl.protect;
+fwd impl.lock;
+fwd impl.unlock;
+fwd impl.advise;
+fwd impl.page_size;
+fwd impl.map_file;
+fwd impl.sync_file;
 
 # filesystem
-pub fwd impl.read;
-pub fwd impl.write;
-pub fwd impl.open;
-pub fwd impl.close;
-pub fwd impl.stat;
-pub fwd impl.stat_path;
-pub fwd impl.unlink;
-pub fwd impl.rename;
-pub fwd impl.make_dir;
-pub fwd impl.read_dir;
-pub fwd impl.access;
-pub fwd impl.seek;
+fwd impl.read;
+fwd impl.write;
+fwd impl.open;
+fwd impl.close;
+fwd impl.stat;
+fwd impl.stat_path;
+fwd impl.unlink;
+fwd impl.rename;
+fwd impl.make_dir;
+fwd impl.read_dir;
+fwd impl.access;
+fwd impl.seek;
 
 # process
-pub fwd impl.terminate;
-pub fwd impl.abort;
-pub fwd impl.spawn;
-pub fwd impl.getpid;
-pub fwd impl.pipe;
-pub fwd impl.sleep;
-pub fwd impl.getcwd;
-pub fwd impl.getenv;
-pub fwd impl.fork;
-pub fwd impl.vfork;
-pub fwd impl.exec;
-pub fwd impl.wait;
-pub fwd impl.wait_pid;
-pub fwd impl.has_exited;
-pub fwd impl.exit_code;
-pub fwd impl.was_signaled;
-pub fwd impl.term_signal;
-pub fwd impl.was_stopped;
-pub fwd impl.stop_signal;
-pub fwd impl.was_continued;
+fwd impl.terminate;
+fwd impl.abort;
+fwd impl.spawn;
+fwd impl.getpid;
+fwd impl.pipe;
+fwd impl.sleep;
+fwd impl.getcwd;
+fwd impl.getenv;
+fwd impl.fork;
+fwd impl.vfork;
+fwd impl.exec;
+fwd impl.wait;
+fwd impl.wait_pid;
+fwd impl.has_exited;
+fwd impl.exit_code;
+fwd impl.was_signaled;
+fwd impl.term_signal;
+fwd impl.was_stopped;
+fwd impl.stop_signal;
+fwd impl.was_continued;
 
 # sockets
-pub fwd impl.AF_INET;
-pub fwd impl.SOCK_STREAM;
-pub fwd impl.SOCK_DGRAM;
-pub fwd impl.SOL_SOCKET;
-pub fwd impl.SO_REUSEADDR;
-pub fwd impl.SHUT_RD;
-pub fwd impl.SHUT_WR;
-pub fwd impl.SHUT_RDWR;
-pub fwd impl.SOCKADDR_IN_SIZE;
-pub fwd impl.sock_addr_init;
-pub fwd impl.sock_addr_read;
-pub fwd impl.sock_send;
-pub fwd impl.sock_recv;
-pub fwd impl.sock_close;
-pub fwd impl.sock_create;
-pub fwd impl.sock_bind;
-pub fwd impl.sock_listen;
-pub fwd impl.sock_accept;
-pub fwd impl.sock_connect;
-pub fwd impl.sock_sendto;
-pub fwd impl.sock_recvfrom;
-pub fwd impl.sock_shutdown;
-pub fwd impl.sock_setopt;
+fwd impl.AF_INET;
+fwd impl.SOCK_STREAM;
+fwd impl.SOCK_DGRAM;
+fwd impl.SOL_SOCKET;
+fwd impl.SO_REUSEADDR;
+fwd impl.SHUT_RD;
+fwd impl.SHUT_WR;
+fwd impl.SHUT_RDWR;
+fwd impl.SOCKADDR_IN_SIZE;
+fwd impl.sock_addr_init;
+fwd impl.sock_addr_read;
+fwd impl.sock_send;
+fwd impl.sock_recv;
+fwd impl.sock_close;
+fwd impl.sock_create;
+fwd impl.sock_bind;
+fwd impl.sock_listen;
+fwd impl.sock_accept;
+fwd impl.sock_connect;
+fwd impl.sock_sendto;
+fwd impl.sock_recvfrom;
+fwd impl.sock_shutdown;
+fwd impl.sock_setopt;
 
 # dns
-pub fwd impl.DNS_HOSTS_PATH;
-pub fwd impl.dns_nameserver;
+fwd impl.DNS_HOSTS_PATH;
+fwd impl.dns_nameserver;
 
 # random
-pub fwd impl.random_fill;
+fwd impl.random_fill;
 
 # threads
-pub fwd impl.thread_spawn;
-pub fwd impl.thread_wait;
-pub fwd impl.thread_wake;
+fwd impl.thread_spawn;
+fwd impl.thread_wait;
+fwd impl.thread_wake;
 
 # time
-pub fwd impl.clock_gettime;
+fwd impl.clock_gettime;
 
 # errno
-pub fwd impl.error_message;
+fwd impl.error_message;

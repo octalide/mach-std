@@ -8,8 +8,8 @@
 # limitations:
 #   - no thread-local storage support.
 
-use std.types.bool;
-use std.types.size;
+use std.types.bool.bool;
+use std.types.size.usize;
 use atomic: std.sync.atomic;
 use sys: std.system.os;
 
@@ -96,25 +96,25 @@ test "thread: Thread record initializes" {
     t.tid = 0;
     t.stack = 0;
     t.done = 0;
-    if (t.tid != 0) { ret 0; }
-    if (t.done != 0) { ret 0; }
-    ret 1;
+    if (t.tid != 0) { ret 1; }
+    if (t.done != 0) { ret 1; }
+    ret 0;
 }
 
 test "thread: spawn and join" {
     atomic_mod.store(?test_flag, 0);
     var t: Thread = spawn(test_worker);
-    if (t.tid < 0) { ret 0; }
+    if (t.tid < 0) { ret 1; }
     join(?t);
-    if (atomic_mod.load(?test_flag) != 1) { ret 0; }
-    ret 1;
+    if (atomic_mod.load(?test_flag) != 1) { ret 1; }
+    ret 0;
 }
 
 test "thread: is_done after join" {
     atomic_mod.store(?test_flag, 0);
     var t: Thread = spawn(test_worker);
-    if (t.tid < 0) { ret 0; }
+    if (t.tid < 0) { ret 1; }
     join(?t);
-    if (!is_done(?t)) { ret 0; }
-    ret 1;
+    if (!is_done(?t)) { ret 1; }
+    ret 0;
 }

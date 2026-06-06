@@ -1,9 +1,16 @@
 # in-place sorting, searching, and array utilities.
 
-use std.types.bool;
-use std.types.size;
-use std.types.result;
-use mem: std.memory;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_ok;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
 
 # swap: exchange the values at two pointers.
 # ---
@@ -132,8 +139,8 @@ test "sort: empty and single" {
     data[0] = 42;
     sort[i64](?data[0], 0, cmp_i64);
     sort[i64](?data[0], 1, cmp_i64);
-    if (data[0] != 42) { ret 0; }
-    ret 1;
+    if (data[0] != 42) { ret 1; }
+    ret 0;
 }
 
 test "sort: sorts array" {
@@ -146,12 +153,12 @@ test "sort: sorts array" {
 
     sort[i64](?data[0], 5, cmp_i64);
 
-    if (data[0] != 1) { ret 0; }
-    if (data[1] != 2) { ret 0; }
-    if (data[2] != 3) { ret 0; }
-    if (data[3] != 4) { ret 0; }
-    if (data[4] != 5) { ret 0; }
-    ret 1;
+    if (data[0] != 1) { ret 1; }
+    if (data[1] != 2) { ret 1; }
+    if (data[2] != 3) { ret 1; }
+    if (data[3] != 4) { ret 1; }
+    if (data[4] != 5) { ret 1; }
+    ret 0;
 }
 
 test "sort: already sorted" {
@@ -163,11 +170,11 @@ test "sort: already sorted" {
 
     sort[i64](?data[0], 4, cmp_i64);
 
-    if (data[0] != 1) { ret 0; }
-    if (data[1] != 2) { ret 0; }
-    if (data[2] != 3) { ret 0; }
-    if (data[3] != 4) { ret 0; }
-    ret 1;
+    if (data[0] != 1) { ret 1; }
+    if (data[1] != 2) { ret 1; }
+    if (data[2] != 3) { ret 1; }
+    if (data[3] != 4) { ret 1; }
+    ret 0;
 }
 
 test "sort: reverse sorted" {
@@ -179,11 +186,11 @@ test "sort: reverse sorted" {
 
     sort[i64](?data[0], 4, cmp_i64);
 
-    if (data[0] != 1) { ret 0; }
-    if (data[1] != 2) { ret 0; }
-    if (data[2] != 3) { ret 0; }
-    if (data[3] != 4) { ret 0; }
-    ret 1;
+    if (data[0] != 1) { ret 1; }
+    if (data[1] != 2) { ret 1; }
+    if (data[2] != 3) { ret 1; }
+    if (data[3] != 4) { ret 1; }
+    ret 0;
 }
 
 test "sort: is_sorted" {
@@ -193,11 +200,11 @@ test "sort: is_sorted" {
     data[2] = 3;
     data[3] = 4;
 
-    if (!is_sorted[i64](?data[0], 4, cmp_i64)) { ret 0; }
+    if (!is_sorted[i64](?data[0], 4, cmp_i64)) { ret 1; }
 
     data[2] = 99;
-    if (is_sorted[i64](?data[0], 4, cmp_i64)) { ret 0; }
-    ret 1;
+    if (is_sorted[i64](?data[0], 4, cmp_i64)) { ret 1; }
+    ret 0;
 }
 
 test "sort: binary_search found" {
@@ -210,9 +217,9 @@ test "sort: binary_search found" {
 
     val t: i64 = 30;
     val r: Result[usize, usize] = binary_search[i64](?data[0], 5, ?t, cmp_i64);
-    if (!is_ok[usize, usize](r)) { ret 0; }
-    if (unwrap_ok[usize, usize](r) != 2) { ret 0; }
-    ret 1;
+    if (!is_ok[usize, usize](r)) { ret 1; }
+    if (unwrap_ok[usize, usize](r) != 2) { ret 1; }
+    ret 0;
 }
 
 test "sort: binary_search not found" {
@@ -225,9 +232,9 @@ test "sort: binary_search not found" {
 
     val t: i64 = 25;
     val r: Result[usize, usize] = binary_search[i64](?data[0], 5, ?t, cmp_i64);
-    if (!is_err[usize, usize](r)) { ret 0; }
-    if (unwrap_err[usize, usize](r) != 2) { ret 0; }
-    ret 1;
+    if (!is_err[usize, usize](r)) { ret 1; }
+    if (unwrap_err[usize, usize](r) != 2) { ret 1; }
+    ret 0;
 }
 
 test "sort: binary_search empty" {
@@ -235,9 +242,9 @@ test "sort: binary_search empty" {
     data[0] = 0;
     val t: i64 = 42;
     val r: Result[usize, usize] = binary_search[i64](?data[0], 0, ?t, cmp_i64);
-    if (!is_err[usize, usize](r)) { ret 0; }
-    if (unwrap_err[usize, usize](r) != 0) { ret 0; }
-    ret 1;
+    if (!is_err[usize, usize](r)) { ret 1; }
+    if (unwrap_err[usize, usize](r) != 0) { ret 1; }
+    ret 0;
 }
 
 test "sort: reverse array" {
@@ -250,21 +257,21 @@ test "sort: reverse array" {
 
     reverse[i64](?data[0], 5);
 
-    if (data[0] != 5) { ret 0; }
-    if (data[1] != 4) { ret 0; }
-    if (data[2] != 3) { ret 0; }
-    if (data[3] != 2) { ret 0; }
-    if (data[4] != 1) { ret 0; }
-    ret 1;
+    if (data[0] != 5) { ret 1; }
+    if (data[1] != 4) { ret 1; }
+    if (data[2] != 3) { ret 1; }
+    if (data[3] != 2) { ret 1; }
+    if (data[4] != 1) { ret 1; }
+    ret 0;
 }
 
 test "sort: swap" {
     var a: i64 = 10;
     var b: i64 = 20;
     swap[i64](?a, ?b);
-    if (a != 20) { ret 0; }
-    if (b != 10) { ret 0; }
-    ret 1;
+    if (a != 20) { ret 1; }
+    if (b != 10) { ret 1; }
+    ret 0;
 }
 
 test "sort: sort with duplicates" {
@@ -278,11 +285,11 @@ test "sort: sort with duplicates" {
 
     sort[i64](?data[0], 6, cmp_i64);
 
-    if (data[0] != 1) { ret 0; }
-    if (data[1] != 1) { ret 0; }
-    if (data[2] != 2) { ret 0; }
-    if (data[3] != 2) { ret 0; }
-    if (data[4] != 3) { ret 0; }
-    if (data[5] != 3) { ret 0; }
-    ret 1;
+    if (data[0] != 1) { ret 1; }
+    if (data[1] != 1) { ret 1; }
+    if (data[2] != 2) { ret 1; }
+    if (data[3] != 2) { ret 1; }
+    if (data[4] != 3) { ret 1; }
+    if (data[5] != 3) { ret 1; }
+    ret 0;
 }

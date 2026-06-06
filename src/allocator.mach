@@ -3,11 +3,17 @@
 # this is intended to be the glue between platform memory primitives and higher
 # level containers/types
 
-use std.types.bool;
-use std.types.option;
-use std.types.result;
-use std.types.size;
-use std.types.string;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
+use std.types.option.Option;
+use std.types.option.is_none;
+use std.types.option.unwrap;
+use std.types.size.usize;
+use std.types.string.str;
 
 use mem:    std.memory;
 

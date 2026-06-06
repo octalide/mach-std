@@ -6,15 +6,24 @@
 # allocation when space permits, otherwise alloc+copy. grows
 # automatically by allocating new chunks from the backing allocator.
 
-use      std.types.bool;
-use      std.types.option;
-use      std.types.result;
-use      std.types.size;
-use      std.types.string;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.option.Option;
+use std.types.option.some;
+use std.types.option.none;
+use std.types.option.is_some;
+use std.types.option.is_none;
+use std.types.option.unwrap;
+use std.types.result.Result;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.size.usize;
+use std.types.string.str;
+
 use allo: std.allocator;
 use page: std.allocator.page;
-
-use mem: std.memory;
+use mem:  std.memory;
 
 # Chunk: header for each backing allocation.
 # ---
@@ -322,9 +331,9 @@ test "arena: init with zero capacity succeeds" {
     page.make(?pa);
 
     var ar: Arena;
-    if (is_some[str](init(?ar, ?pa, 0))) { ret 0; }
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (is_some[str](init(?ar, ?pa, 0))) { ret 1; }
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: init with capacity allocates backing storage" {
@@ -332,9 +341,9 @@ test "arena: init with capacity allocates backing storage" {
     page.make(?pa);
 
     var ar: Arena;
-    if (is_some[str](init(?ar, ?pa, 1024))) { ret 0; }
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (is_some[str](init(?ar, ?pa, 1024))) { ret 1; }
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: allocator returns functional allocator" {
@@ -343,21 +352,21 @@ test "arena: allocator returns functional allocator" {
 
     var ar: Arena;
     var aa: allo.Allocator;
-    if (is_some[str](init(?ar, ?pa, 4096))) { ret 0; }
-    if (is_some[str](make(?aa, ?ar))) { ret 0; }
+    if (is_some[str](init(?ar, ?pa, 4096))) { ret 1; }
+    if (is_some[str](make(?aa, ?ar))) { ret 1; }
 
     val r: Result[*i64, str] = allo.allocate[i64](?aa, 4);
-    if (is_err[*i64, str](r)) { ret 0; }
+    if (is_err[*i64, str](r)) { ret 1; }
     val p: *i64 = unwrap_ok[*i64, str](r);
-    if (p == nil) { ret 0; }
+    if (p == nil) { ret 1; }
 
     p[0] = 100;
     p[1] = 200;
-    if (p[0] != 100) { ret 0; }
-    if (p[1] != 200) { ret 0; }
+    if (p[0] != 100) { ret 1; }
+    if (p[1] != 200) { ret 1; }
 
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: multiple allocations bump offset" {
@@ -366,26 +375,26 @@ test "arena: multiple allocations bump offset" {
 
     var ar: Arena;
     var aa: allo.Allocator;
-    if (is_some[str](init(?ar, ?pa, 4096))) { ret 0; }
-    if (is_some[str](make(?aa, ?ar))) { ret 0; }
+    if (is_some[str](init(?ar, ?pa, 4096))) { ret 1; }
+    if (is_some[str](make(?aa, ?ar))) { ret 1; }
 
     val r1: Result[*i64, str] = allo.allocate[i64](?aa, 2);
-    if (is_err[*i64, str](r1)) { ret 0; }
+    if (is_err[*i64, str](r1)) { ret 1; }
     val p1: *i64 = unwrap_ok[*i64, str](r1);
 
     val r2: Result[*i64, str] = allo.allocate[i64](?aa, 2);
-    if (is_err[*i64, str](r2)) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 1; }
     val p2: *i64 = unwrap_ok[*i64, str](r2);
 
-    if (p2::usize <= p1::usize) { ret 0; }
+    if (p2::usize <= p1::usize) { ret 1; }
 
     p1[0] = 111;
     p2[0] = 222;
-    if (p1[0] != 111) { ret 0; }
-    if (p2[0] != 222) { ret 0; }
+    if (p1[0] != 111) { ret 1; }
+    if (p2[0] != 222) { ret 1; }
 
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: reset clears allocations" {
@@ -394,23 +403,23 @@ test "arena: reset clears allocations" {
 
     var ar: Arena;
     var aa: allo.Allocator;
-    if (is_some[str](init(?ar, ?pa, 4096))) { ret 0; }
-    if (is_some[str](make(?aa, ?ar))) { ret 0; }
+    if (is_some[str](init(?ar, ?pa, 4096))) { ret 1; }
+    if (is_some[str](make(?aa, ?ar))) { ret 1; }
 
     val r1: Result[*i64, str] = allo.allocate[i64](?aa, 100);
-    if (is_err[*i64, str](r1)) { ret 0; }
+    if (is_err[*i64, str](r1)) { ret 1; }
     val p1: *i64 = unwrap_ok[*i64, str](r1);
 
     reset(?ar);
 
     val r2: Result[*i64, str] = allo.allocate[i64](?aa, 100);
-    if (is_err[*i64, str](r2)) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 1; }
     val p2: *i64 = unwrap_ok[*i64, str](r2);
 
-    if (p2 != p1) { ret 0; }
+    if (p2 != p1) { ret 1; }
 
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: free is noop for non-last allocation" {
@@ -419,24 +428,24 @@ test "arena: free is noop for non-last allocation" {
 
     var ar: Arena;
     var aa: allo.Allocator;
-    if (is_some[str](init(?ar, ?pa, 4096))) { ret 0; }
-    if (is_some[str](make(?aa, ?ar))) { ret 0; }
+    if (is_some[str](init(?ar, ?pa, 4096))) { ret 1; }
+    if (is_some[str](make(?aa, ?ar))) { ret 1; }
 
     val r1: Result[*i64, str] = allo.allocate[i64](?aa, 2);
-    if (is_err[*i64, str](r1)) { ret 0; }
+    if (is_err[*i64, str](r1)) { ret 1; }
     val p1: *i64 = unwrap_ok[*i64, str](r1);
 
     val r2: Result[*i64, str] = allo.allocate[i64](?aa, 2);
-    if (is_err[*i64, str](r2)) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 1; }
     val p2: *i64 = unwrap_ok[*i64, str](r2);
 
-    if (allo.deallocate[i64](?aa, p1, 2) < 0) { ret 0; }
+    if (allo.deallocate[i64](?aa, p1, 2) < 0) { ret 1; }
 
     p2[0] = 999;
-    if (p2[0] != 999) { ret 0; }
+    if (p2[0] != 999) { ret 1; }
 
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: free last allocation rolls back" {
@@ -445,26 +454,26 @@ test "arena: free last allocation rolls back" {
 
     var ar: Arena;
     var aa: allo.Allocator;
-    if (is_some[str](init(?ar, ?pa, 4096))) { ret 0; }
-    if (is_some[str](make(?aa, ?ar))) { ret 0; }
+    if (is_some[str](init(?ar, ?pa, 4096))) { ret 1; }
+    if (is_some[str](make(?aa, ?ar))) { ret 1; }
 
     val r1: Result[*i64, str] = allo.allocate[i64](?aa, 2);
-    if (is_err[*i64, str](r1)) { ret 0; }
+    if (is_err[*i64, str](r1)) { ret 1; }
 
     val r2: Result[*i64, str] = allo.allocate[i64](?aa, 2);
-    if (is_err[*i64, str](r2)) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 1; }
     val p2: *i64 = unwrap_ok[*i64, str](r2);
 
-    if (allo.deallocate[i64](?aa, p2, 2) < 0) { ret 0; }
+    if (allo.deallocate[i64](?aa, p2, 2) < 0) { ret 1; }
 
     val r3: Result[*i64, str] = allo.allocate[i64](?aa, 2);
-    if (is_err[*i64, str](r3)) { ret 0; }
+    if (is_err[*i64, str](r3)) { ret 1; }
     val p3: *i64 = unwrap_ok[*i64, str](r3);
 
-    if (p3 != p2) { ret 0; }
+    if (p3 != p2) { ret 1; }
 
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: resize last allocation in-place" {
@@ -473,30 +482,30 @@ test "arena: resize last allocation in-place" {
 
     var ar: Arena;
     var aa: allo.Allocator;
-    if (is_some[str](init(?ar, ?pa, 4096))) { ret 0; }
-    if (is_some[str](make(?aa, ?ar))) { ret 0; }
+    if (is_some[str](init(?ar, ?pa, 4096))) { ret 1; }
+    if (is_some[str](make(?aa, ?ar))) { ret 1; }
 
     val r1: Result[*i64, str] = allo.allocate[i64](?aa, 2);
-    if (is_err[*i64, str](r1)) { ret 0; }
+    if (is_err[*i64, str](r1)) { ret 1; }
     val p1: *i64 = unwrap_ok[*i64, str](r1);
     p1[0] = 111;
     p1[1] = 222;
 
     val r2: Result[*i64, str] = allo.reallocate[i64](?aa, p1, 2, 4);
-    if (is_err[*i64, str](r2)) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 1; }
     val p2: *i64 = unwrap_ok[*i64, str](r2);
 
-    if (p2 != p1) { ret 0; }
-    if (p2[0] != 111) { ret 0; }
-    if (p2[1] != 222) { ret 0; }
+    if (p2 != p1) { ret 1; }
+    if (p2[0] != 111) { ret 1; }
+    if (p2[1] != 222) { ret 1; }
 
     p2[2] = 333;
     p2[3] = 444;
-    if (p2[2] != 333) { ret 0; }
-    if (p2[3] != 444) { ret 0; }
+    if (p2[2] != 333) { ret 1; }
+    if (p2[3] != 444) { ret 1; }
 
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: dnit on empty arena succeeds" {
@@ -504,9 +513,9 @@ test "arena: dnit on empty arena succeeds" {
     page.make(?pa);
 
     var ar: Arena;
-    if (is_some[str](init(?ar, ?pa, 0))) { ret 0; }
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (is_some[str](init(?ar, ?pa, 0))) { ret 1; }
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: allocation respects alignment" {
@@ -515,20 +524,20 @@ test "arena: allocation respects alignment" {
 
     var ar: Arena;
     var aa: allo.Allocator;
-    if (is_some[str](init(?ar, ?pa, 4096))) { ret 0; }
-    if (is_some[str](make(?aa, ?ar))) { ret 0; }
+    if (is_some[str](init(?ar, ?pa, 4096))) { ret 1; }
+    if (is_some[str](make(?aa, ?ar))) { ret 1; }
 
     val r1: Result[ptr, str] = allo.allocate_raw(?aa, 1, 1);
-    if (is_err[ptr, str](r1)) { ret 0; }
+    if (is_err[ptr, str](r1)) { ret 1; }
 
     val r2: Result[ptr, str] = allo.allocate_raw(?aa, 8, 8);
-    if (is_err[ptr, str](r2)) { ret 0; }
+    if (is_err[ptr, str](r2)) { ret 1; }
     val p2: ptr = unwrap_ok[ptr, str](r2);
 
-    if ((p2::usize % 8) != 0) { ret 0; }
+    if ((p2::usize % 8) != 0) { ret 1; }
 
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: grows automatically when chunk is full" {
@@ -537,30 +546,30 @@ test "arena: grows automatically when chunk is full" {
 
     var ar: Arena;
     var aa: allo.Allocator;
-    if (is_some[str](init(?ar, ?pa, 64))) { ret 0; }
-    if (is_some[str](make(?aa, ?ar))) { ret 0; }
+    if (is_some[str](init(?ar, ?pa, 64))) { ret 1; }
+    if (is_some[str](make(?aa, ?ar))) { ret 1; }
 
     val r1: Result[*i64, str] = allo.allocate[i64](?aa, 4);
-    if (is_err[*i64, str](r1)) { ret 0; }
+    if (is_err[*i64, str](r1)) { ret 1; }
     val p1: *i64 = unwrap_ok[*i64, str](r1);
     p1[0] = 100;
 
     val r2: Result[*i64, str] = allo.allocate[i64](?aa, 4);
-    if (is_err[*i64, str](r2)) { ret 0; }
+    if (is_err[*i64, str](r2)) { ret 1; }
     val p2: *i64 = unwrap_ok[*i64, str](r2);
     p2[0] = 200;
 
     val r3: Result[*i64, str] = allo.allocate[i64](?aa, 4);
-    if (is_err[*i64, str](r3)) { ret 0; }
+    if (is_err[*i64, str](r3)) { ret 1; }
     val p3: *i64 = unwrap_ok[*i64, str](r3);
     p3[0] = 300;
 
-    if (p1[0] != 100) { ret 0; }
-    if (p2[0] != 200) { ret 0; }
-    if (p3[0] != 300) { ret 0; }
+    if (p1[0] != 100) { ret 1; }
+    if (p2[0] != 200) { ret 1; }
+    if (p3[0] != 300) { ret 1; }
 
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
 
 test "arena: zero-cap arena grows on first alloc" {
@@ -569,17 +578,17 @@ test "arena: zero-cap arena grows on first alloc" {
 
     var ar: Arena;
     var aa: allo.Allocator;
-    if (is_some[str](init(?ar, ?pa, 0))) { ret 0; }
-    if (is_some[str](make(?aa, ?ar))) { ret 0; }
+    if (is_some[str](init(?ar, ?pa, 0))) { ret 1; }
+    if (is_some[str](make(?aa, ?ar))) { ret 1; }
 
     val r1: Result[*i64, str] = allo.allocate[i64](?aa, 2);
-    if (is_err[*i64, str](r1)) { ret 0; }
+    if (is_err[*i64, str](r1)) { ret 1; }
     val p1: *i64 = unwrap_ok[*i64, str](r1);
-    if (p1 == nil) { ret 0; }
+    if (p1 == nil) { ret 1; }
 
     p1[0] = 42;
-    if (p1[0] != 42) { ret 0; }
+    if (p1[0] != 42) { ret 1; }
 
-    if (dnit(?ar) < 0) { ret 0; }
-    ret 1;
+    if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
 }
