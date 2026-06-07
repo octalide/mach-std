@@ -10,13 +10,13 @@ To use the standard library in your Mach project, you can include it as a depend
 [dep.std]
 type="remote"
 path="https://github.com/octalide/mach-std"
-version="branch/main"
+version="branch/dev"
 ```
 
 You can also use the Mach dependency manager to add it to your project:
 
 ```bash
-mach dep add https://github.com/octalide/mach-std --version branch/main
+mach dep add https://github.com/octalide/mach-std --version branch/dev
 ```
 
 ## Documentation
