@@ -7,6 +7,17 @@ use std.types.size.usize;
 
 use shared: std.system.os.linux.shared;
 
+# imported unaliased so the clone-flag constants bind under their bare names
+# into this module's comptime context; `THREAD_CLONE_FLAGS` then folds at
+# compile time (a module-qualified `shared.CLONE_*` member path is not
+# comptime-evaluable, so the global would otherwise have no constant value).
+use std.system.os.linux.shared.CLONE_VM;
+use std.system.os.linux.shared.CLONE_FS;
+use std.system.os.linux.shared.CLONE_FILES;
+use std.system.os.linux.shared.CLONE_SIGHAND;
+use std.system.os.linux.shared.CLONE_THREAD;
+use std.system.os.linux.shared.CLONE_SYSVSEM;
+
 $if ($mach.target.os != $mach.os.linux) {
     $error("std.system.os.linux.x86_64: requires linux target");
 }
@@ -22,7 +33,7 @@ pub fun page_size() usize {
     ret 4096;
 }
 
-val THREAD_CLONE_FLAGS: usize = shared.CLONE_VM | shared.CLONE_FS | shared.CLONE_FILES | shared.CLONE_SIGHAND | shared.CLONE_THREAD | shared.CLONE_SYSVSEM;
+val THREAD_CLONE_FLAGS: usize = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD | CLONE_SYSVSEM;
 
 fun thread_trampoline() {
     var fn_addr: usize = 0;
