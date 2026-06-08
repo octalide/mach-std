@@ -96,9 +96,6 @@ fwd shared.page_size;
 fwd shared.map_file;
 fwd shared.sync_file;
 
-# environment
-fwd shared._envp;
-
 # filesystem
 fwd shared.read;
 fwd shared.write;

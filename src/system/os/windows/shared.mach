@@ -155,91 +155,91 @@ val ENOTSOCK:      i64 = -88;
 
 # Win32 API imports (kernel32.dll)
 
-ext ExitProcess: fun(u32);
-ext GetLastError: fun() u32;
-ext GetStdHandle: fun(u32) isize;
-ext CloseHandle: fun(isize) i32;
+ext fun ExitProcess(p0: u32);
+ext fun GetLastError() u32;
+ext fun GetStdHandle(p0: u32) isize;
+ext fun CloseHandle(p0: isize) i32;
 
-ext VirtualAlloc: fun(ptr, usize, u32, u32) ptr;
-ext VirtualFree: fun(ptr, usize, u32) i32;
-ext VirtualProtect: fun(ptr, usize, u32, *u32) i32;
-ext VirtualLock: fun(ptr, usize) i32;
-ext VirtualUnlock: fun(ptr, usize) i32;
-ext GetProcessHeap: fun() isize;
-ext HeapAlloc: fun(isize, u32, usize) ptr;
-ext HeapFree: fun(isize, u32, ptr) i32;
-ext HeapReAlloc: fun(isize, u32, ptr, usize) ptr;
-ext GetSystemInfo: fun(*u8);
+ext fun VirtualAlloc(p0: ptr, p1: usize, p2: u32, p3: u32) ptr;
+ext fun VirtualFree(p0: ptr, p1: usize, p2: u32) i32;
+ext fun VirtualProtect(p0: ptr, p1: usize, p2: u32, p3: *u32) i32;
+ext fun VirtualLock(p0: ptr, p1: usize) i32;
+ext fun VirtualUnlock(p0: ptr, p1: usize) i32;
+ext fun GetProcessHeap() isize;
+ext fun HeapAlloc(p0: isize, p1: u32, p2: usize) ptr;
+ext fun HeapFree(p0: isize, p1: u32, p2: ptr) i32;
+ext fun HeapReAlloc(p0: isize, p1: u32, p2: ptr, p3: usize) ptr;
+ext fun GetSystemInfo(p0: *u8);
 
-ext CreateFileA: fun(*u8, u32, u32, ptr, u32, u32, isize) isize;
-ext ReadFile: fun(isize, *u8, u32, *u32, ptr) i32;
-ext WriteFile: fun(isize, *u8, u32, *u32, ptr) i32;
-ext SetFilePointerEx: fun(isize, i64, *i64, u32) i32;
-ext GetFileInformationByHandle: fun(isize, *u8) i32;
-ext CreateFileMappingA: fun(isize, ptr, u32, u32, u32, ptr) isize;
-ext MapViewOfFile: fun(isize, u32, u32, u32, usize) ptr;
-ext UnmapViewOfFile: fun(ptr) i32;
-ext FlushViewOfFile: fun(ptr, usize) i32;
-ext DeleteFileA: fun(*u8) i32;
-ext MoveFileA: fun(*u8, *u8) i32;
-ext CreateDirectoryA: fun(*u8, ptr) i32;
-ext RemoveDirectoryA: fun(*u8) i32;
-ext GetFileAttributesA: fun(*u8) u32;
-ext FindFirstFileA: fun(*u8, *u8) isize;
-ext FindNextFileA: fun(isize, *u8) i32;
-ext FindClose: fun(isize) i32;
-ext GetFinalPathNameByHandleA: fun(isize, *u8, u32, u32) u32;
+ext fun CreateFileA(p0: *u8, p1: u32, p2: u32, p3: ptr, p4: u32, p5: u32, p6: isize) isize;
+ext fun ReadFile(p0: isize, p1: *u8, p2: u32, p3: *u32, p4: ptr) i32;
+ext fun WriteFile(p0: isize, p1: *u8, p2: u32, p3: *u32, p4: ptr) i32;
+ext fun SetFilePointerEx(p0: isize, p1: i64, p2: *i64, p3: u32) i32;
+ext fun GetFileInformationByHandle(p0: isize, p1: *u8) i32;
+ext fun CreateFileMappingA(p0: isize, p1: ptr, p2: u32, p3: u32, p4: u32, p5: ptr) isize;
+ext fun MapViewOfFile(p0: isize, p1: u32, p2: u32, p3: u32, p4: usize) ptr;
+ext fun UnmapViewOfFile(p0: ptr) i32;
+ext fun FlushViewOfFile(p0: ptr, p1: usize) i32;
+ext fun DeleteFileA(p0: *u8) i32;
+ext fun MoveFileA(p0: *u8, p1: *u8) i32;
+ext fun CreateDirectoryA(p0: *u8, p1: ptr) i32;
+ext fun RemoveDirectoryA(p0: *u8) i32;
+ext fun GetFileAttributesA(p0: *u8) u32;
+ext fun FindFirstFileA(p0: *u8, p1: *u8) isize;
+ext fun FindNextFileA(p0: isize, p1: *u8) i32;
+ext fun FindClose(p0: isize) i32;
+ext fun GetFinalPathNameByHandleA(p0: isize, p1: *u8, p2: u32, p3: u32) u32;
 
-ext GetSystemTimeAsFileTime: fun(*u8);
-ext QueryPerformanceCounter: fun(*i64) i32;
-ext QueryPerformanceFrequency: fun(*i64) i32;
+ext fun GetSystemTimeAsFileTime(p0: *u8);
+ext fun QueryPerformanceCounter(p0: *i64) i32;
+ext fun QueryPerformanceFrequency(p0: *i64) i32;
 
-ext CreateThread: fun(ptr, usize, usize, ptr, u32, *u32) isize;
-ext WaitOnAddress: fun(ptr, ptr, usize, u32) i32;
-ext WakeByAddressSingle: fun(ptr);
+ext fun CreateThread(p0: ptr, p1: usize, p2: usize, p3: ptr, p4: u32, p5: *u32) isize;
+ext fun WaitOnAddress(p0: ptr, p1: ptr, p2: usize, p3: u32) i32;
+ext fun WakeByAddressSingle(p0: ptr);
 
 # Winsock2 API imports (ws2_32.dll)
 
-ext WSAStartup: fun(u16, *u8) i32;
-ext WSAGetLastError: fun() i32;
-ext ws2_socket: fun(i32, i32, i32) usize;
+ext fun WSAStartup(p0: u16, p1: *u8) i32;
+ext fun WSAGetLastError() i32;
 $ws2_socket.symbol = "socket";
-ext ws2_bind: fun(usize, *u8, i32) i32;
+ext fun ws2_socket(p0: i32, p1: i32, p2: i32) usize;
 $ws2_bind.symbol = "bind";
-ext ws2_listen: fun(usize, i32) i32;
+ext fun ws2_bind(p0: usize, p1: *u8, p2: i32) i32;
 $ws2_listen.symbol = "listen";
-ext ws2_accept: fun(usize, *u8, *i32) usize;
+ext fun ws2_listen(p0: usize, p1: i32) i32;
 $ws2_accept.symbol = "accept";
-ext ws2_connect: fun(usize, *u8, i32) i32;
+ext fun ws2_accept(p0: usize, p1: *u8, p2: *i32) usize;
 $ws2_connect.symbol = "connect";
-ext ws2_sendto: fun(usize, *u8, i32, i32, *u8, i32) i32;
+ext fun ws2_connect(p0: usize, p1: *u8, p2: i32) i32;
 $ws2_sendto.symbol = "sendto";
-ext ws2_recvfrom: fun(usize, *u8, i32, i32, *u8, *i32) i32;
+ext fun ws2_sendto(p0: usize, p1: *u8, p2: i32, p3: i32, p4: *u8, p5: i32) i32;
 $ws2_recvfrom.symbol = "recvfrom";
-ext ws2_shutdown: fun(usize, i32) i32;
+ext fun ws2_recvfrom(p0: usize, p1: *u8, p2: i32, p3: i32, p4: *u8, p5: *i32) i32;
 $ws2_shutdown.symbol = "shutdown";
-ext ws2_setsockopt: fun(usize, i32, i32, *u8, i32) i32;
+ext fun ws2_shutdown(p0: usize, p1: i32) i32;
 $ws2_setsockopt.symbol = "setsockopt";
-ext ws2_send: fun(usize, *u8, i32, i32) i32;
+ext fun ws2_setsockopt(p0: usize, p1: i32, p2: i32, p3: *u8, p4: i32) i32;
 $ws2_send.symbol = "send";
-ext ws2_recv: fun(usize, *u8, i32, i32) i32;
+ext fun ws2_send(p0: usize, p1: *u8, p2: i32, p3: i32) i32;
 $ws2_recv.symbol = "recv";
-ext closesocket: fun(usize) i32;
+ext fun ws2_recv(p0: usize, p1: *u8, p2: i32, p3: i32) i32;
+ext fun closesocket(p0: usize) i32;
 
 # advapi32.dll
-ext SystemFunction036: fun(*u8, u32) i32;
+ext fun SystemFunction036(p0: *u8, p1: u32) i32;
 
-ext GetCurrentProcessId: fun() u32;
-ext TerminateProcess: fun(isize, u32) i32;
-ext CreateProcessA: fun(*u8, *u8, ptr, ptr, i32, u32, ptr, ptr, *u8, *u8) i32;
-ext WaitForSingleObject: fun(isize, u32) u32;
-ext WaitForMultipleObjects: fun(u32, ptr, i32, u32) u32;
-ext GetExitCodeProcess: fun(isize, *u32) i32;
-ext CreatePipe: fun(*isize, *isize, ptr, u32) i32;
-ext SleepW: fun(u32);
+ext fun GetCurrentProcessId() u32;
+ext fun TerminateProcess(p0: isize, p1: u32) i32;
+ext fun CreateProcessA(p0: *u8, p1: *u8, p2: ptr, p3: ptr, p4: i32, p5: u32, p6: ptr, p7: ptr, p8: *u8, p9: *u8) i32;
+ext fun WaitForSingleObject(p0: isize, p1: u32) u32;
+ext fun WaitForMultipleObjects(p0: u32, p1: ptr, p2: i32, p3: u32) u32;
+ext fun GetExitCodeProcess(p0: isize, p1: *u32) i32;
+ext fun CreatePipe(p0: *isize, p1: *isize, p2: ptr, p3: u32) i32;
 $SleepW.symbol = "Sleep";
-ext GetCurrentDirectoryA: fun(u32, *u8) u32;
-ext GetEnvironmentVariableA: fun(*u8, *u8, u32) u32;
+ext fun SleepW(p0: u32);
+ext fun GetCurrentDirectoryA(p0: u32, p1: *u8) u32;
+ext fun GetEnvironmentVariableA(p0: *u8, p1: *u8, p2: u32) u32;
 
 # Win32 structures
 
@@ -925,7 +925,7 @@ pub fun stat(fd: i32, st: *stat_t) i64 {
         ret EBADF;
     }
     var info: BY_HANDLE_FILE_INFORMATION;
-    if (GetFileInformationByHandle(h, ?info::*u8) == 0) {
+    if (GetFileInformationByHandle(h, (?info)::*u8) == 0) {
         ret last_error();
     }
     st.st_dev = info.dwVolumeSerialNumber::u64;
@@ -1030,14 +1030,14 @@ pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
         path_buf[path_len] = '\\'::u8;
         path_buf[path_len + 1] = '*'::u8;
         path_buf[path_len + 2] = 0;
-        fh = FindFirstFileA(?path_buf[0]::*u8, ?data::*u8);
+        fh = FindFirstFileA((?path_buf[0])::*u8, (?data)::*u8);
         if (fh == INVALID_HANDLE_VALUE) {
             ret last_error();
         }
         _find_handles[fd::usize] = fh;
     }
     or {
-        found = FindNextFileA(fh, ?data::*u8);
+        found = FindNextFileA(fh, (?data)::*u8);
     }
     var written: usize = 0;
     var buf: *u8 = dirp::*u8;
@@ -1063,7 +1063,7 @@ pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
         }
         entry.d_name[i] = 0;
         written = written + entry_size;
-        found = FindNextFileA(fh, ?data::*u8);
+        found = FindNextFileA(fh, (?data)::*u8);
     }
     if (written == 0) {
         FindClose(fh);
@@ -1139,7 +1139,7 @@ pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
         nil, nil,
         1, 0,
         nil, nil,
-        ?si[0], ?pi::*u8
+        ?si[0], (?pi)::*u8
     );
     if (ok == 0) {
         ret last_error();
@@ -1288,7 +1288,7 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
             timeout = 0;
         }
 
-        val result: u32 = WaitForMultipleObjects(n::u32, ?wait_handles[0]::ptr, 0, timeout);
+        val result: u32 = WaitForMultipleObjects(n::u32, (?wait_handles[0])::ptr, 0, timeout);
         if (result == WAIT_TIMEOUT) {
             ret 0;
         }
@@ -1394,7 +1394,7 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
 # ret:      0 on wake, or negative errno
 pub fun thread_wait(addr: *i64, expected: i64) i64 {
     var cmp: i64 = expected;
-    val ok: i32 = WaitOnAddress(addr::ptr, ?cmp::ptr, 8, INFINITE);
+    val ok: i32 = WaitOnAddress(addr::ptr, (?cmp)::ptr, 8, INFINITE);
     if (ok == 0) {
         ret last_error();
     }
@@ -1592,7 +1592,7 @@ pub fun clock_gettime(clock_id: i32, ts: *timespec) i64 {
         ret 0;
     }
     var ft: FILETIME;
-    GetSystemTimeAsFileTime(?ft::*u8);
+    GetSystemTimeAsFileTime((?ft)::*u8);
     filetime_to_unix(ft, ?ts.tv_sec, ?ts.tv_nsec);
     ret 0;
 }
