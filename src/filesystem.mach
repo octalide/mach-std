@@ -288,17 +288,17 @@ pub fun write_file(p: str, data: *u8, len: usize, mode: i32) Result[bool, str] {
 
 # info_is_dir: check whether FileInfo describes a directory.
 pub fun info_is_dir(fi: *FileInfo) bool {
-    ret (fi.mode::i32 & os.S_IFMT) == os.S_IFDIR;
+    ret (fi.mode & os.S_IFMT) == os.S_IFDIR;
 }
 
 # info_is_file: check whether FileInfo describes a regular file.
 pub fun info_is_file(fi: *FileInfo) bool {
-    ret (fi.mode::i32 & os.S_IFMT) == os.S_IFREG;
+    ret (fi.mode & os.S_IFMT) == os.S_IFREG;
 }
 
 # info_is_symlink: check whether FileInfo describes a symbolic link.
 pub fun info_is_symlink(fi: *FileInfo) bool {
-    ret (fi.mode::i32 & os.S_IFMT) == os.S_IFLNK;
+    ret (fi.mode & os.S_IFMT) == os.S_IFLNK;
 }
 
 # info_path: get metadata for a path.
