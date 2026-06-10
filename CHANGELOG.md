@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-06-10
+
+First tagged release carrying the 0.3.0 and 0.4.0 work (neither was tagged);
+`main` advances from 0.2.5 straight to 0.4.1.
+
+### Fixed
+- Corrected the expected length in the `ip: ipv4_format` test — a single-octet
+  address such as `127.0.0.1` formats to 9 bytes, not 7. The function was
+  correct; only the test assertion was wrong.
+
+### Known Issues
+These tests fail or hang under `mach test` and are tracked for follow-up. All
+three are gaps in modules added during the 0.4.x rework (after 0.2.5), not
+regressions:
+- `thread: spawn and join` / `thread: is_done after join` deadlock — the clone
+  parent/child discrimination is a shared-memory race ([#195](https://github.com/octalide/mach-std/issues/195)).
+- `json: value_find on object` never matches — object keys are stored as
+  non-null-terminated source slices but compared with `str_equals` ([#196](https://github.com/octalide/mach-std/issues/196)).
+- `env: get PATH returns positive length` — the std code is correct; `mach test`
+  execs the test binary with an empty environment ([#197](https://github.com/octalide/mach-std/issues/197)).
+
 ## [0.4.0] - 2026-03-10
 
 ### Added
