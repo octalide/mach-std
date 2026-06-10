@@ -11,8 +11,9 @@
 #
 # this entrypoint:
 #   1. extracts argc, argv, and envp from the initial stack
-#   2. calls _rt_init to store envp into the OS layer
-#   3. aligns the stack to 16 bytes (required by SysV ABI before CALL)
+#   2. aligns the stack to 16 bytes (the SysV call-boundary invariant: RSP is
+#      16-aligned at the CALL site, so the callee is entered with RSP%16==8)
+#   3. calls _rt_init to store envp into the OS layer
 #   4. calls user-supplied `main(argc, argv)`
 #   5. exits via sys_exit with the return code from main
 #
@@ -50,8 +51,7 @@ pub fun _start() {
         mov [_rt_argv], rsi
         mov [_rt_envp], rcx
 
-        and rsp, -16      # align stack to 16 bytes
-        sub rsp, 8        # adjust for CALL (pushes 8-byte return address)
+        and rsp, -16      # 16-align rsp for the SysV call boundary
         call _rt_init
 
         mov rdi, [_rt_argc]
