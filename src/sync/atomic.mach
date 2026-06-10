@@ -1,0 +1,333 @@
+# atomic operations for lock-free programming.
+#
+# all operations have sequential-consistency ordering, implemented with
+# real per-arch instruction sequences selected at comptime on
+# $mach.target.arch:
+#   - x86_64: the ISA's TSO model makes plain aligned MOV ordered for
+#     load/store; LOCK XADD / XCHG / CMPXCHG carry an implicit full barrier
+#     for the read-modify-write ops; MFENCE is the standalone full barrier;
+#     PAUSE is the spin hint.
+#   - aarch64: LDAR / STLR give acquire/release; the LDAXR/STLXR loop with a
+#     trailing DMB ISH provides seq-cst read-modify-write; DMB ISH is the
+#     standalone full barrier; YIELD is the spin hint.
+
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+
+# atomic 64-bit load with sequential consistency.
+# ---
+# ptr: address to load from
+# ret: loaded value
+pub fun load(ptr: *i64) i64 {
+    var result: i64 = 0;
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        # aligned MOV is ordered under x86-TSO; gives seq-cst load semantics
+        # {ptr} binds to a stack slot, so stage the address in rcx first
+        asm x86_64 {
+            mov rcx, {ptr}
+            mov rax, [rcx]
+            mov {result}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        # load-acquire pairs with STLR stores for seq-cst ordering
+        # {ptr} binds to a stack slot, so stage the address in x12 first
+        asm aarch64 {
+            mov x12, {ptr}
+            ldar {result}, [x12]
+        }
+    }
+    ret result;
+}
+
+# atomic 64-bit store with sequential consistency.
+# ---
+# ptr: address to store to
+# v:   value to store
+pub fun store(ptr: *i64, v: i64) {
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        # XCHG to memory carries an implicit LOCK, giving a seq-cst store
+        # {ptr} binds to a stack slot, so stage the address in rcx first
+        asm x86_64 {
+            mov rax, {v}
+            mov rcx, {ptr}
+            xchg [rcx], rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        # store-release pairs with LDAR loads for seq-cst ordering
+        # {ptr} binds to a stack slot, so stage the address in x12 first
+        asm aarch64 {
+            mov x12, {ptr}
+            stlr {v}, [x12]
+        }
+    }
+}
+
+# atomic compare-and-swap.
+# if *ptr == *expected, stores desired and returns true.
+# otherwise, writes actual value to *expected and returns false.
+# ---
+# ptr:      address of the atomic variable
+# expected: pointer to expected value (updated on failure)
+# desired:  value to store on success
+# ret:      true if the swap succeeded
+pub fun cas(ptr: *i64, expected: *i64, desired: i64) bool {
+    var old: i64 = 0;
+    val exp: i64 = @expected;
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        # LOCK CMPXCHG: RAX holds the comparand and receives the prior value
+        # {ptr} binds to a stack slot, so stage the address in rcx first
+        asm x86_64 {
+            mov rax, {exp}
+            mov rdx, {desired}
+            mov rcx, {ptr}
+            lock cmpxchg [rcx], rdx
+            mov {old}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        # LDAXR/STLXR retry loop; trailing DMB ISH gives full seq-cst order
+        # {ptr} binds to a stack slot, so stage the address in x12 first
+        asm aarch64 {
+            mov x9, {exp}
+            mov x12, {ptr}
+        cas_retry:
+            ldaxr x10, [x12]
+            cmp x10, x9
+            b.ne cas_done
+            stlxr w11, {desired}, [x12]
+            cbnz w11, cas_retry
+        cas_done:
+            mov {old}, x10
+            dmb ish
+        }
+    }
+    if (old == exp) { ret true; }
+    @expected = old;
+    ret false;
+}
+
+# atomic fetch-and-add. returns the old value.
+# ---
+# ptr: address of the atomic variable
+# v:   value to add
+# ret: previous value
+pub fun fetch_add(ptr: *i64, v: i64) i64 {
+    var old: i64 = 0;
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        # LOCK XADD returns the prior value in the source register
+        # {ptr} binds to a stack slot, so stage the address in rcx first
+        asm x86_64 {
+            mov rax, {v}
+            mov rcx, {ptr}
+            lock xadd [rcx], rax
+            mov {old}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        # LDAXR/STLXR add loop; trailing DMB ISH gives full seq-cst order
+        # {ptr} binds to a stack slot, so stage the address in x12 first
+        asm aarch64 {
+            mov x12, {ptr}
+        fadd_retry:
+            ldaxr x9, [x12]
+            add x10, x9, {v}
+            stlxr w11, x10, [x12]
+            cbnz w11, fadd_retry
+            mov {old}, x9
+            dmb ish
+        }
+    }
+    ret old;
+}
+
+# atomic fetch-and-subtract. returns the old value.
+# ---
+# ptr: address of the atomic variable
+# v:   value to subtract
+# ret: previous value
+pub fun fetch_sub(ptr: *i64, v: i64) i64 {
+    var old: i64 = 0;
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        # negate then LOCK XADD; returns the prior value
+        # {ptr} binds to a stack slot, so stage the address in rcx first
+        asm x86_64 {
+            mov rax, {v}
+            neg rax
+            mov rcx, {ptr}
+            lock xadd [rcx], rax
+            mov {old}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        # LDAXR/STLXR sub loop; trailing DMB ISH gives full seq-cst order
+        # {ptr} binds to a stack slot, so stage the address in x12 first
+        asm aarch64 {
+            mov x12, {ptr}
+        fsub_retry:
+            ldaxr x9, [x12]
+            sub x10, x9, {v}
+            stlxr w11, x10, [x12]
+            cbnz w11, fsub_retry
+            mov {old}, x9
+            dmb ish
+        }
+    }
+    ret old;
+}
+
+# atomic exchange. returns the old value.
+# ---
+# ptr: address of the atomic variable
+# v:   new value
+# ret: previous value
+pub fun exchange(ptr: *i64, v: i64) i64 {
+    var old: i64 = 0;
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        # XCHG with memory carries an implicit LOCK (full barrier)
+        # {ptr} binds to a stack slot, so stage the address in rcx first
+        asm x86_64 {
+            mov rax, {v}
+            mov rcx, {ptr}
+            xchg [rcx], rax
+            mov {old}, rax
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        # LDAXR/STLXR swap loop; trailing DMB ISH gives full seq-cst order
+        # {ptr} binds to a stack slot, so stage the address in x12 first
+        asm aarch64 {
+            mov x12, {ptr}
+        xchg_retry:
+            ldaxr x9, [x12]
+            stlxr w11, {v}, [x12]
+            cbnz w11, xchg_retry
+            mov {old}, x9
+            dmb ish
+        }
+    }
+    ret old;
+}
+
+# full memory barrier.
+pub fun fence() {
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mfence
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            dmb ish
+        }
+    }
+}
+
+# cpu yield hint for spin loops.
+pub fun spin_hint() {
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            pause
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            yield
+        }
+    }
+}
+
+test "atomic: load returns stored value" {
+    var x: i64 = 42;
+    val v: i64 = load(?x);
+    if (v != 42) { ret 1; }
+    ret 0;
+}
+
+test "atomic: store writes value" {
+    var x: i64 = 0;
+    store(?x, 99);
+    if (x != 99) { ret 1; }
+    ret 0;
+}
+
+test "atomic: exchange basic" {
+    var x: i64 = 42;
+    val old: i64 = exchange(?x, 99);
+    if (old != 42) { ret 1; }
+    if (x != 99) { ret 1; }
+    ret 0;
+}
+
+test "atomic: cas succeeds when expected matches" {
+    var x: i64 = 10;
+    var expected: i64 = 10;
+    val ok: bool = cas(?x, ?expected, 20);
+    if (!ok) { ret 1; }
+    if (x != 20) { ret 1; }
+    if (expected != 10) { ret 1; }
+    ret 0;
+}
+
+test "atomic: cas fails and updates expected when mismatch" {
+    var x: i64 = 30;
+    var expected: i64 = 10;
+    val ok: bool = cas(?x, ?expected, 20);
+    if (ok) { ret 1; }
+    if (x != 30) { ret 1; }
+    if (expected != 30) { ret 1; }
+    ret 0;
+}
+
+test "atomic: fetch_add returns old value and increments" {
+    var x: i64 = 5;
+    val old: i64 = fetch_add(?x, 3);
+    if (old != 5) { ret 1; }
+    if (x != 8) { ret 1; }
+    ret 0;
+}
+
+test "atomic: fetch_sub returns old value and decrements" {
+    var x: i64 = 10;
+    val old: i64 = fetch_sub(?x, 4);
+    if (old != 10) { ret 1; }
+    if (x != 6) { ret 1; }
+    ret 0;
+}
+
+test "atomic: exchange returns old value and writes new" {
+    var x: i64 = 7;
+    val old: i64 = exchange(?x, 13);
+    if (old != 7) { ret 1; }
+    if (x != 13) { ret 1; }
+    ret 0;
+}
+
+test "atomic: fence does not crash" {
+    fence();
+    ret 0;
+}
+
+test "atomic: spin_hint does not crash" {
+    spin_hint();
+    ret 0;
+}
+
+test "atomic: cas on zero value" {
+    var x: i64 = 0;
+    var expected: i64 = 0;
+    val ok: bool = cas(?x, ?expected, 1);
+    if (!ok) { ret 1; }
+    if (x != 1) { ret 1; }
+    ret 0;
+}
+
+test "atomic: fetch_add with negative" {
+    var x: i64 = 10;
+    val old: i64 = fetch_add(?x, -3);
+    if (old != 10) { ret 1; }
+    if (x != 7) { ret 1; }
+    ret 0;
+}

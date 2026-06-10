@@ -1,0 +1,69 @@
+# std.text.string: owned null-terminated string helpers over the allocator.
+#
+# these helpers allocate, copy, and free null-terminated `str` buffers using a
+# caller-supplied allocator. they live above `std.types.string` (which operates
+# on borrowed views and does not own storage) because they depend on
+# `std.allocator`, which itself builds on `std.types.string`.
+
+use std.types.char.char;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.string.str_len;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
+
+use std.allocator.Allocator;
+use std.allocator.allocate;
+use std.allocator.deallocate;
+
+# str_dup: allocate an owned, null-terminated copy of `s`.
+# ---
+# a:   allocator backing the copy
+# s:   borrowed null-terminated string to copy
+# ret: an owned copy (freed via str_free), or an allocation error
+pub fun str_dup(a: *Allocator, s: str) Result[str, str] {
+    val n: usize = str_len(s);
+    ret dup_bytes(a, s, 0, n);
+}
+
+# str_dup_range: allocate an owned, null-terminated copy of `len` bytes of
+# `source` starting at `offset`.
+# ---
+# a:      allocator backing the copy
+# source: borrowed string to slice from
+# offset: starting byte offset into source
+# len:    number of bytes to copy
+# ret:    an owned copy (freed via str_free), or an allocation error
+pub fun str_dup_range(a: *Allocator, source: str, offset: usize, len: usize) Result[str, str] {
+    ret dup_bytes(a, source, offset, len);
+}
+
+# str_free: release a string previously returned by str_dup / str_dup_range.
+# ---
+# a: allocator the string was allocated from
+# s: owned string to free (nil is a no-op)
+pub fun str_free(a: *Allocator, s: str) {
+    if (s == nil) { ret; }
+    val n: usize = str_len(s);
+    deallocate[char](a, s, n + 1);
+}
+
+# dup_bytes: allocate `len + 1` chars, copy `len` bytes from `src + offset`,
+# and null-terminate.
+fun dup_bytes(a: *Allocator, src: str, offset: usize, len: usize) Result[str, str] {
+    val r: Result[*char, str] = allocate[char](a, len + 1);
+    if (is_err[*char, str](r)) { ret err[str, str](unwrap_err[*char, str](r)); }
+    val buf: str = unwrap_ok[*char, str](r);
+
+    var i: usize = 0;
+    for (i < len) {
+        buf[i] = src[offset + i];
+        i = i + 1;
+    }
+    buf[len] = 0;
+    ret ok[str, str](buf);
+}

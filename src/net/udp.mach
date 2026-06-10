@@ -1,0 +1,105 @@
+# UDP socket operations.
+
+use std.types.bool.bool;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.string.str;
+use os: std.system.os;
+use ip: std.net.ip;
+
+# Socket: a bound or unbound UDP socket.
+# ---
+# fd: the underlying socket file descriptor
+pub rec Socket {
+    fd: i32;
+}
+
+# create: create an unbound UDP socket.
+# ---
+# ret: the Socket, or an error message
+pub fun create() Result[Socket, str] {
+    val fd: i64 = os.sock_create(os.AF_INET, os.SOCK_DGRAM, 0);
+    if (fd < 0) { ret err[Socket, str]("socket failed"); }
+    ret ok[Socket, str](Socket{fd: fd::i32});
+}
+
+# bind: create a UDP socket bound to an endpoint.
+# ---
+# ep:  endpoint to bind to
+# ret: the bound Socket, or an error message
+pub fun bind(ep: ip.Endpoint) Result[Socket, str] {
+    val fd: i64 = os.sock_create(os.AF_INET, os.SOCK_DGRAM, 0);
+    if (fd < 0) { ret err[Socket, str]("socket failed"); }
+
+    var opt: i32 = 1;
+    os.sock_setopt(fd::i32, os.SOL_SOCKET, os.SO_REUSEADDR, (?opt)::*u8, 4);
+
+    var sa: [16]u8;
+    ip.to_sockaddr(ep, ?sa[0]);
+
+    val br: i64 = os.sock_bind(fd::i32, ?sa[0], os.SOCKADDR_IN_SIZE);
+    if (br < 0) {
+        os.sock_close(fd::i32);
+        ret err[Socket, str]("bind failed");
+    }
+
+    ret ok[Socket, str](Socket{fd: fd::i32});
+}
+
+# send_to: send a datagram to a remote endpoint.
+# ---
+# s:   the socket to send from
+# buf: source buffer
+# len: number of bytes to send
+# ep:  destination endpoint
+# ret: number of bytes sent, or negative on error
+pub fun send_to(s: *Socket, buf: *u8, len: usize, ep: ip.Endpoint) i64 {
+    var sa: [16]u8;
+    ip.to_sockaddr(ep, ?sa[0]);
+    ret os.sock_sendto(s.fd, buf, len, 0, ?sa[0], os.SOCKADDR_IN_SIZE);
+}
+
+# recv_from: receive a datagram and populate the source endpoint.
+# ---
+# s:   the socket to receive on
+# buf: destination buffer
+# len: maximum bytes to receive
+# ep:  pointer to an Endpoint to fill with the source address
+# ret: number of bytes received, or negative on error
+pub fun recv_from(s: *Socket, buf: *u8, len: usize, ep: *ip.Endpoint) i64 {
+    var sa: [16]u8;
+    var sa_len: u32 = os.SOCKADDR_IN_SIZE::u32;
+    val n: i64 = os.sock_recvfrom(s.fd, buf, len, 0, ?sa[0], ?sa_len);
+    if (n >= 0 && ep != nil) {
+        ip.from_sockaddr(?sa[0], ep);
+    }
+    ret n;
+}
+
+# socket_close: close a UDP socket.
+# ---
+# s: the socket to close
+pub fun socket_close(s: *Socket) {
+    os.sock_close(s.fd);
+}
+
+test "udp: create and close socket" {
+    val r: Result[Socket, str] = create();
+    if (is_err[Socket, str](r)) { ret 1; }
+    var s: Socket = unwrap_ok[Socket, str](r);
+    socket_close(?s);
+    ret 0;
+}
+
+test "udp: bind to loopback" {
+    val ep: ip.Endpoint = ip.endpoint(127, 0, 0, 1, 0);
+    val r: Result[Socket, str] = bind(ep);
+    if (is_err[Socket, str](r)) { ret 1; }
+    var s: Socket = unwrap_ok[Socket, str](r);
+    socket_close(?s);
+    ret 0;
+}

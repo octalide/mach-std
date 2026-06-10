@@ -1,0 +1,145 @@
+# process spawning and management.
+
+use std.types.bool.bool;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.string.str;
+
+use os: std.system.os;
+
+# ExitStatus: raw wait status from a terminated process.
+# ---
+# raw: wait status as returned by wait_pid
+pub rec ExitStatus {
+    raw: i32;
+}
+
+# Child: handle to a spawned child process.
+# ---
+# pid: process id of the child
+pub rec Child {
+    pid: i64;
+}
+
+# run: spawn a process and wait for it to exit.
+# ---
+# pathname: path to executable
+# argv:     null-terminated argument array
+# envp:     null-terminated environment array
+# ret:      exit status, or an error message
+pub fun run(pathname: str, argv: **u8, envp: **u8) Result[ExitStatus, str] {
+    val pid: i64 = os.spawn(pathname, argv, envp);
+    if (pid < 0) { ret err[ExitStatus, str]("spawn failed"); }
+
+    var wstatus: i32 = 0;
+    val r: i64 = os.wait_pid(pid, ?wstatus, 0);
+    if (r < 0) { ret err[ExitStatus, str]("wait failed"); }
+
+    ret ok[ExitStatus, str](ExitStatus{raw: wstatus});
+}
+
+# spawn: start a process without waiting.
+# ---
+# pathname: path to executable
+# argv:     null-terminated argument array
+# envp:     null-terminated environment array
+# ret:      child handle, or an error message
+pub fun spawn(pathname: str, argv: **u8, envp: **u8) Result[Child, str] {
+    val pid: i64 = os.spawn(pathname, argv, envp);
+    if (pid < 0) { ret err[Child, str]("spawn failed"); }
+    ret ok[Child, str](Child{pid: pid});
+}
+
+# wait: wait for a child process to exit.
+# ---
+# child: child handle from spawn
+# ret:   exit status, or an error message
+pub fun wait(child: Child) Result[ExitStatus, str] {
+    var wstatus: i32 = 0;
+    val r: i64 = os.wait_pid(child.pid, ?wstatus, 0);
+    if (r < 0) { ret err[ExitStatus, str]("wait failed"); }
+    ret ok[ExitStatus, str](ExitStatus{raw: wstatus});
+}
+
+# exited: check if the process exited normally.
+# ---
+# status: exit status to inspect
+# ret:    true if the process called exit
+pub fun exited(status: ExitStatus) bool {
+    ret os.has_exited(status.raw);
+}
+
+# code: get the exit code of a normally exited process.
+# ---
+# status: exit status to inspect
+# ret:    exit code (0-255), only valid if exited() is true
+pub fun code(status: ExitStatus) i32 {
+    ret os.exit_code(status.raw);
+}
+
+# signaled: check if the process was killed by a signal.
+# ---
+# status: exit status to inspect
+# ret:    true if terminated by signal
+pub fun signaled(status: ExitStatus) bool {
+    ret os.was_signaled(status.raw);
+}
+
+# signal: get the signal number that killed the process.
+# ---
+# status: exit status to inspect
+# ret:    signal number
+pub fun signal(status: ExitStatus) i32 {
+    ret os.term_signal(status.raw);
+}
+
+# exit: terminate the current process.
+# ---
+# code: exit code
+pub fun exit(code: i64) {
+    os.terminate(code);
+}
+
+fun make_argv1(prog: str) [2]usize {
+    var buf: [2]usize;
+    buf[0] = prog::usize;
+    buf[1] = 0;
+    ret buf;
+}
+
+test "exec: run /bin/true exits 0" {
+    var argv: [2]usize = make_argv1("/bin/true");
+    val r: Result[ExitStatus, str] = run("/bin/true", (?argv[0])::**u8, nil);
+    if (is_err[ExitStatus, str](r)) { ret 1; }
+    val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
+    if (!exited(s)) { ret 1; }
+    if (code(s) != 0) { ret 1; }
+    ret 0;
+}
+
+test "exec: run /bin/false exits 1" {
+    var argv: [2]usize = make_argv1("/bin/false");
+    val r: Result[ExitStatus, str] = run("/bin/false", (?argv[0])::**u8, nil);
+    if (is_err[ExitStatus, str](r)) { ret 1; }
+    val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
+    if (!exited(s)) { ret 1; }
+    if (code(s) != 1) { ret 1; }
+    ret 0;
+}
+
+test "exec: spawn and wait matches run" {
+    var argv: [2]usize = make_argv1("/bin/true");
+    val sr: Result[Child, str] = spawn("/bin/true", (?argv[0])::**u8, nil);
+    if (is_err[Child, str](sr)) { ret 1; }
+    val child: Child = unwrap_ok[Child, str](sr);
+    val wr: Result[ExitStatus, str] = wait(child);
+    if (is_err[ExitStatus, str](wr)) { ret 1; }
+    val s: ExitStatus = unwrap_ok[ExitStatus, str](wr);
+    if (!exited(s)) { ret 1; }
+    if (code(s) != 0) { ret 1; }
+    ret 0;
+}

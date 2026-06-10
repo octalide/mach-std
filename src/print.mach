@@ -1,0 +1,168 @@
+# formatted output to stdout/stderr.
+#
+# convenience wrappers around std.format backed by filesystem stdout/stderr.
+
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.string.str;
+
+use f:      std.format;
+use writer: std.io.writer;
+use fs:     std.filesystem;
+
+fun stdout_writer(w: *writer.Writer) {
+    fs.get_writer(?fs.stdout, w);
+}
+
+fun stderr_writer(w: *writer.Writer) {
+    fs.get_writer(?fs.stderr, w);
+}
+
+# write s to stdout.
+# ---
+# s:   string to write
+# ret: bytes written, or an error
+pub fun print(s: str) Result[usize, str] {
+    var w: writer.Writer;
+    stdout_writer(?w);
+    ret f.write_str(?w, s);
+}
+
+# write s followed by a newline to stdout.
+# ---
+# s:   string to write
+# ret: bytes written, or an error
+pub fun println(s: str) Result[usize, str] {
+    var w: writer.Writer;
+    stdout_writer(?w);
+
+    val r1: Result[usize, str] = f.write_str(?w, s);
+    if (is_err[usize, str](r1)) { ret r1; }
+
+    val r2: Result[usize, str] = f.write_newline(?w);
+    if (is_err[usize, str](r2)) { ret r2; }
+
+    ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
+}
+
+# write s to stderr.
+# ---
+# s:   string to write
+# ret: bytes written, or an error
+pub fun eprint(s: str) Result[usize, str] {
+    var w: writer.Writer;
+    stderr_writer(?w);
+    ret f.write_str(?w, s);
+}
+
+# write s followed by a newline to stderr.
+# ---
+# s:   string to write
+# ret: bytes written, or an error
+pub fun eprintln(s: str) Result[usize, str] {
+    var w: writer.Writer;
+    stderr_writer(?w);
+
+    val r1: Result[usize, str] = f.write_str(?w, s);
+    if (is_err[usize, str](r1)) { ret r1; }
+
+    val r2: Result[usize, str] = f.write_newline(?w);
+    if (is_err[usize, str](r2)) { ret r2; }
+
+    ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
+}
+
+# write unsigned 64-bit integer to stdout.
+# ---
+# n:   value to write
+# ret: bytes written, or an error
+pub fun u64(n: u64) Result[usize, str] {
+    var w: writer.Writer;
+    stdout_writer(?w);
+    ret f.write_u64(?w, n);
+}
+
+# write unsigned 64-bit integer to stderr.
+# ---
+# n:   value to write
+# ret: bytes written, or an error
+pub fun eu64(n: u64) Result[usize, str] {
+    var w: writer.Writer;
+    stderr_writer(?w);
+    ret f.write_u64(?w, n);
+}
+
+# formatted output to stdout.
+# ---
+# format: format string (see std.format.vformat for specifiers)
+# ret:    bytes written, or an error
+pub fun printf(format: str, ...) Result[usize, str] {
+    var w: writer.Writer;
+    stdout_writer(?w);
+
+    var ap: va_list;
+    va_start(?ap);
+    val r: Result[usize, str] = f.vformat(?w, format, ?ap);
+    va_end(?ap);
+
+    ret r;
+}
+
+# formatted output to stderr.
+# ---
+# format: format string (see std.format.vformat for specifiers)
+# ret:    bytes written, or an error
+pub fun eprintf(format: str, ...) Result[usize, str] {
+    var w: writer.Writer;
+    stderr_writer(?w);
+
+    var ap: va_list;
+    va_start(?ap);
+    val r: Result[usize, str] = f.vformat(?w, format, ?ap);
+    va_end(?ap);
+
+    ret r;
+}
+
+# formatted output to stdout followed by a newline.
+# ---
+# format: format string (see std.format.vformat for specifiers)
+# ret:    bytes written, or an error
+pub fun printlnf(format: str, ...) Result[usize, str] {
+    var w: writer.Writer;
+    stdout_writer(?w);
+
+    var ap: va_list;
+    va_start(?ap);
+    val r1: Result[usize, str] = f.vformat(?w, format, ?ap);
+    va_end(?ap);
+    if (is_err[usize, str](r1)) { ret r1; }
+
+    val r2: Result[usize, str] = f.write_newline(?w);
+    if (is_err[usize, str](r2)) { ret r2; }
+
+    ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
+}
+
+# formatted output to stderr followed by a newline.
+# ---
+# format: format string (see std.format.vformat for specifiers)
+# ret:    bytes written, or an error
+pub fun eprintlnf(format: str, ...) Result[usize, str] {
+    var w: writer.Writer;
+    stderr_writer(?w);
+
+    var ap: va_list;
+    va_start(?ap);
+    val r1: Result[usize, str] = f.vformat(?w, format, ?ap);
+    va_end(?ap);
+    if (is_err[usize, str](r1)) { ret r1; }
+
+    val r2: Result[usize, str] = f.write_newline(?w);
+    if (is_err[usize, str](r2)) { ret r2; }
+
+    ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
+}

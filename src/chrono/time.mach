@@ -1,0 +1,304 @@
+# instant in time with nanosecond precision.
+#
+# Time represents an absolute point in time as seconds + nanoseconds
+# since the Unix epoch (1970-01-01 00:00:00 UTC).
+
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.chrono.duration.Duration;
+use std.chrono.duration.MICROSECOND;
+use std.chrono.duration.MILLISECOND;
+use std.chrono.duration.SECOND;
+
+use os: std.system.os;
+
+# Time: an instant in time with nanosecond precision.
+# ---
+# sec:  seconds since Unix epoch (1970-01-01 00:00:00 UTC)
+# nsec: nanoseconds within second [0, 999999999]
+pub rec Time {
+    sec:  i64;
+    nsec: i64;
+}
+
+# now: return the current wall-clock time.
+# ---
+# ret: current Time from system clock, zero on error
+pub fun now() Time {
+    var ts: os.Timespec;
+    os.realtime(?ts);
+    ret Time{sec: ts.sec, nsec: ts.nsec};
+}
+
+# monotonic: return the current monotonic clock time.
+# ---
+# ret: current Time from monotonic clock (for measuring elapsed time), zero on error
+pub fun monotonic() Time {
+    var ts: os.Timespec;
+    os.monotonic(?ts);
+    ret Time{sec: ts.sec, nsec: ts.nsec};
+}
+
+# unix: create a Time from a Unix timestamp.
+# ---
+# sec:  seconds since Unix epoch
+# nsec: nanoseconds within second
+# ret:  Time with nsec normalized to [0, 999999999]
+pub fun unix(sec: i64, nsec: i64) Time {
+    var s: i64 = sec;
+    var n: i64 = nsec;
+
+    if (n >= SECOND) {
+        s = s + n / SECOND;
+        n = n % SECOND;
+    }
+    if (n < 0) {
+        val borrow: i64 = (0 - n - 1) / SECOND + 1;
+        s = s - borrow;
+        n = n + borrow * SECOND;
+    }
+
+    ret Time{sec: s, nsec: n};
+}
+
+# since: return the time elapsed since t.
+# ---
+# t:   start time
+# ret: duration since t
+pub fun since(t: Time) Duration {
+    ret time_sub(now(), t);
+}
+
+# until: return the duration until t.
+# ---
+# t:   target time
+# ret: duration until t
+pub fun until(t: Time) Duration {
+    ret time_sub(t, now());
+}
+
+# time_unix_sec: return seconds since Unix epoch.
+# ---
+# t:   time to query
+# ret: seconds component
+pub fun time_unix_sec(t: Time) i64 {
+    ret t.sec;
+}
+
+# time_unix_nsec: return nanoseconds since Unix epoch.
+# ---
+# t:   time to query
+# ret: total nanoseconds since epoch
+pub fun time_unix_nsec(t: Time) i64 {
+    ret t.sec * SECOND + t.nsec;
+}
+
+# time_unix_usec: return microseconds since Unix epoch.
+# ---
+# t:   time to query
+# ret: total microseconds since epoch
+pub fun time_unix_usec(t: Time) i64 {
+    ret t.sec * (SECOND / MICROSECOND) + t.nsec / MICROSECOND;
+}
+
+# time_unix_msec: return milliseconds since Unix epoch.
+# ---
+# t:   time to query
+# ret: total milliseconds since epoch
+pub fun time_unix_msec(t: Time) i64 {
+    ret t.sec * (SECOND / MILLISECOND) + t.nsec / MILLISECOND;
+}
+
+# time_add: return t + d.
+# ---
+# t:   base time
+# d:   duration to add
+# ret: new Time offset by d
+pub fun time_add(t: Time, d: Duration) Time {
+    var sec: i64 = t.sec + d / SECOND;
+    var nsec: i64 = t.nsec + d % SECOND;
+
+    if (nsec >= SECOND) {
+        sec = sec + 1;
+        nsec = nsec - SECOND;
+    }
+    if (nsec < 0) {
+        sec = sec - 1;
+        nsec = nsec + SECOND;
+    }
+
+    ret Time{sec: sec, nsec: nsec};
+}
+
+# time_sub: return the duration t - u.
+# ---
+# t:   minuend time
+# u:   subtrahend time
+# ret: duration between t and u
+pub fun time_sub(t: Time, u: Time) Duration {
+    ret (t.sec - u.sec) * SECOND + (t.nsec - u.nsec);
+}
+
+# time_before: report whether t is before u.
+# ---
+# t:   time to test
+# u:   time to compare against
+# ret: true if t < u
+pub fun time_before(t: Time, u: Time) bool {
+    if (t.sec < u.sec) { ret true; }
+    if (t.sec > u.sec) { ret false; }
+    ret t.nsec < u.nsec;
+}
+
+# time_after: report whether t is after u.
+# ---
+# t:   time to test
+# u:   time to compare against
+# ret: true if t > u
+pub fun time_after(t: Time, u: Time) bool {
+    if (t.sec > u.sec) { ret true; }
+    if (t.sec < u.sec) { ret false; }
+    ret t.nsec > u.nsec;
+}
+
+# time_equal: report whether t and u represent the same instant.
+# ---
+# t:   first time
+# u:   second time
+# ret: true if t == u
+pub fun time_equal(t: Time, u: Time) bool {
+    ret t.sec == u.sec && t.nsec == u.nsec;
+}
+
+# time_is_zero: report whether t represents the zero time instant.
+# ---
+# t:   time to test
+# ret: true if t is the zero time (Unix epoch)
+pub fun time_is_zero(t: Time) bool {
+    ret t.sec == 0 && t.nsec == 0;
+}
+
+test "time: now returns non-zero" {
+    val t: Time = now();
+    if (t.sec < 1000000000) { ret 1; }
+    ret 0;
+}
+
+test "time: unix constructor" {
+    val t: Time = unix(1234567890, 123456789);
+    if (t.sec != 1234567890) { ret 1; }
+    if (t.nsec != 123456789) { ret 2; }
+    ret 0;
+}
+
+test "time: unix normalizes overflow nsec" {
+    val t: Time = unix(100, 2500000000);
+    if (t.sec != 102) { ret 1; }
+    if (t.nsec != 500000000) { ret 2; }
+    ret 0;
+}
+
+test "time: unix normalizes negative nsec" {
+    val t: Time = unix(100, -500000000);
+    if (t.sec != 99) { ret 1; }
+    if (t.nsec != 500000000) { ret 2; }
+    ret 0;
+}
+
+test "time: add positive duration" {
+    val t: Time = unix(100, 0);
+    val t2: Time = time_add(t, 5 * SECOND);
+    if (t2.sec != 105) { ret 1; }
+    if (t2.nsec != 0) { ret 2; }
+    ret 0;
+}
+
+test "time: add duration with nsec overflow" {
+    val t: Time = unix(100, 800000000);
+    val t2: Time = time_add(t, 500 * MILLISECOND);
+    if (t2.sec != 101) { ret 1; }
+    if (t2.nsec != 300000000) { ret 2; }
+    ret 0;
+}
+
+test "time: add negative duration" {
+    val t: Time = unix(100, 0);
+    val t2: Time = time_add(t, 0 - 5 * SECOND);
+    if (t2.sec != 95) { ret 1; }
+    ret 0;
+}
+
+test "time: sub returns correct duration" {
+    val t1: Time = unix(100, 500000000);
+    val t2: Time = unix(95, 0);
+    val d: Duration = time_sub(t1, t2);
+    if (d != 5500000000) { ret 1; }
+    ret 0;
+}
+
+test "time: before" {
+    val t1: Time = unix(100, 0);
+    val t2: Time = unix(200, 0);
+    if (!time_before(t1, t2)) { ret 1; }
+    if (time_before(t2, t1)) { ret 2; }
+    if (time_before(t1, t1)) { ret 3; }
+    ret 0;
+}
+
+test "time: after" {
+    val t1: Time = unix(100, 0);
+    val t2: Time = unix(200, 0);
+    if (time_after(t1, t2)) { ret 1; }
+    if (!time_after(t2, t1)) { ret 2; }
+    if (time_after(t1, t1)) { ret 3; }
+    ret 0;
+}
+
+test "time: equal" {
+    val t1: Time = unix(100, 500);
+    val t2: Time = unix(100, 500);
+    val t3: Time = unix(100, 501);
+    if (!time_equal(t1, t2)) { ret 1; }
+    if (time_equal(t1, t3)) { ret 2; }
+    ret 0;
+}
+
+test "time: is_zero" {
+    val zero: Time = unix(0, 0);
+    val nonzero: Time = unix(1, 0);
+    if (!time_is_zero(zero)) { ret 1; }
+    if (time_is_zero(nonzero)) { ret 2; }
+    ret 0;
+}
+
+test "time: unix_nsec" {
+    val t: Time = unix(1, 500000000);
+    if (time_unix_nsec(t) != 1500000000) { ret 1; }
+    ret 0;
+}
+
+test "time: unix_msec" {
+    val t: Time = unix(1, 500000000);
+    if (time_unix_msec(t) != 1500) { ret 1; }
+    ret 0;
+}
+
+test "time: unix_usec" {
+    val t: Time = unix(1, 500000000);
+    if (time_unix_usec(t) != 1500000) { ret 1; }
+    ret 0;
+}
+
+test "time: since returns positive for past time" {
+    val past: Time = unix(1000000000, 0);
+    val d: Duration = since(past);
+    if (d <= 0) { ret 1; }
+    ret 0;
+}
+
+test "time: monotonic returns non-zero" {
+    val t: Time = monotonic();
+    if (t.sec == 0 && t.nsec == 0) { ret 1; }
+    ret 0;
+}

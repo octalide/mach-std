@@ -1,0 +1,189 @@
+# std.system.os.darwin: darwin OS interface with ISA dispatch.
+#
+# forwards the complete surface from the selected ISA backend.
+# consumers who need darwin-specific functionality import this module
+# directly rather than going through std.system.os.
+
+$if ($mach.target.os != $mach.os.darwin) {
+    $error("std.system.os.darwin: requires darwin target");
+}
+
+$if ($mach.target.arch == $mach.arch.aarch64) {
+    use impl: std.system.os.darwin.aarch64;
+}
+$or ($mach.target.arch == $mach.arch.x86_64) {
+    use impl: std.system.os.darwin.x86_64;
+}
+$or {
+    $error("std.system.os.darwin: unsupported architecture");
+}
+
+# kernel ABI types
+fwd impl.stat_t;
+fwd impl.timespec;
+fwd impl.dirent64;
+
+# path
+fwd impl.separator;
+
+# constants
+fwd impl.STDIN_FD;
+fwd impl.STDOUT_FD;
+fwd impl.STDERR_FD;
+
+fwd impl.O_RDONLY;
+fwd impl.O_WRONLY;
+fwd impl.O_RDWR;
+fwd impl.O_CREAT;
+fwd impl.O_EXCL;
+fwd impl.O_TRUNC;
+fwd impl.O_APPEND;
+fwd impl.O_DIRECTORY;
+
+fwd impl.AT_FDCWD;
+fwd impl.AT_SYMLINK_NOFOLLOW;
+fwd impl.AT_REMOVEDIR;
+
+fwd impl.S_IFMT;
+fwd impl.S_IFDIR;
+fwd impl.S_IFREG;
+fwd impl.S_IFLNK;
+
+fwd impl.WNOHANG;
+fwd impl.WUNTRACED;
+fwd impl.WCONTINUED;
+
+fwd impl.CLOCK_REALTIME;
+fwd impl.CLOCK_MONOTONIC;
+
+fwd impl.EPERM;
+fwd impl.ENOENT;
+fwd impl.ESRCH;
+fwd impl.EINTR;
+fwd impl.EIO;
+fwd impl.ENXIO;
+fwd impl.E2BIG;
+fwd impl.EBADF;
+fwd impl.ECHILD;
+fwd impl.EAGAIN;
+fwd impl.ENOMEM;
+fwd impl.EACCES;
+fwd impl.EFAULT;
+fwd impl.EBUSY;
+fwd impl.EEXIST;
+fwd impl.ENODEV;
+fwd impl.ENOTDIR;
+fwd impl.EISDIR;
+fwd impl.EINVAL;
+fwd impl.ENFILE;
+fwd impl.EMFILE;
+fwd impl.ETXTBSY;
+fwd impl.ENOSPC;
+fwd impl.EROFS;
+fwd impl.EPIPE;
+fwd impl.ENOTEMPTY;
+fwd impl.ENOTSUP;
+
+fwd impl.EINTR_MAX_RETRIES;
+
+# syscall wrappers
+fwd impl.syscall0;
+fwd impl.syscall1;
+fwd impl.syscall2;
+fwd impl.syscall3;
+fwd impl.syscall4;
+fwd impl.syscall5;
+fwd impl.syscall6;
+
+# memory
+fwd impl.allocate;
+fwd impl.deallocate;
+fwd impl.reallocate;
+fwd impl.heap_region_base;
+fwd impl.heap_region_extend;
+fwd impl.protect;
+fwd impl.lock;
+fwd impl.unlock;
+fwd impl.advise;
+fwd impl.page_size;
+fwd impl.map_file;
+fwd impl.sync_file;
+
+# filesystem
+fwd impl.read;
+fwd impl.write;
+fwd impl.open;
+fwd impl.close;
+fwd impl.stat;
+fwd impl.stat_path;
+fwd impl.unlink;
+fwd impl.rename;
+fwd impl.make_dir;
+fwd impl.read_dir;
+fwd impl.access;
+fwd impl.seek;
+
+# process
+fwd impl.terminate;
+fwd impl.abort;
+fwd impl.spawn;
+fwd impl.getpid;
+fwd impl.pipe;
+fwd impl.sleep;
+fwd impl.getcwd;
+fwd impl.getenv;
+fwd impl.fork;
+fwd impl.vfork;
+fwd impl.exec;
+fwd impl.wait;
+fwd impl.wait_pid;
+fwd impl.has_exited;
+fwd impl.exit_code;
+fwd impl.was_signaled;
+fwd impl.term_signal;
+fwd impl.was_stopped;
+fwd impl.stop_signal;
+fwd impl.was_continued;
+
+# sockets
+fwd impl.AF_INET;
+fwd impl.SOCK_STREAM;
+fwd impl.SOCK_DGRAM;
+fwd impl.SOL_SOCKET;
+fwd impl.SO_REUSEADDR;
+fwd impl.SHUT_RD;
+fwd impl.SHUT_WR;
+fwd impl.SHUT_RDWR;
+fwd impl.SOCKADDR_IN_SIZE;
+fwd impl.sock_addr_init;
+fwd impl.sock_addr_read;
+fwd impl.sock_send;
+fwd impl.sock_recv;
+fwd impl.sock_close;
+fwd impl.sock_create;
+fwd impl.sock_bind;
+fwd impl.sock_listen;
+fwd impl.sock_accept;
+fwd impl.sock_connect;
+fwd impl.sock_sendto;
+fwd impl.sock_recvfrom;
+fwd impl.sock_shutdown;
+fwd impl.sock_setopt;
+
+# dns
+fwd impl.DNS_HOSTS_PATH;
+fwd impl.dns_nameserver;
+
+# random
+fwd impl.random_fill;
+
+# threads
+fwd impl.thread_spawn;
+fwd impl.thread_wait;
+fwd impl.thread_wake;
+
+# time
+fwd impl.clock_gettime;
+
+# errno
+fwd impl.error_message;

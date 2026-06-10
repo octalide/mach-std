@@ -1,720 +1,880 @@
-use      std.types.bool;
-use      std.types.list;
-use      std.types.option;
-use      std.types.result;
-use      std.types.size;
-use      std.types.string;
-use      std.text.ascii;
-use mem: std.system.memory;
+# JSON parser and emitter (integer numbers only).
+#
+# parses JSON text into a tree of Value nodes. strings are zero-copy
+# pointers into the original input buffer (escape sequences are not
+# unescaped). the caller must keep the input alive while values are in use.
 
-# json value types
-pub val JSON_NULL:   u32 = 0;
-pub val JSON_BOOL:   u32 = 1;
-pub val JSON_NUMBER: u32 = 2;
-pub val JSON_STRING: u32 = 3;
-pub val JSON_ARRAY:  u32 = 4;
-pub val JSON_OBJECT: u32 = 5;
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
+use std.types.string.str;
+use std.types.string.str_equals;
+use std.memory.raw_copy;
+use allo: std.allocator;
 
-pub rec JsonValue {
-    tag:  u32;
-    data: uni {
-        bool_val:   bool;
-        number_val: f64;
-        string_val: String;
-        array_val:  List[JsonValue];
-        object_val: List[JsonProperty];
-    };
+pub def Kind: u8;
+pub val NULL:   Kind = 0;
+pub val BOOL:   Kind = 1;
+pub val NUMBER: Kind = 2;
+pub val STRING: Kind = 3;
+pub val ARRAY:  Kind = 4;
+pub val OBJECT: Kind = 5;
+
+val VALUE_SIZE: usize = $size_of(Value);
+val STR_SIZE:   usize = $size_of(str);
+
+# a parsed JSON value.
+# ---
+# kind:     type discriminator (NULL, BOOL, NUMBER, STRING, ARRAY, OBJECT)
+# bool_val: boolean value (1 = true, 0 = false) when kind == BOOL
+# num_val:  integer value when kind == NUMBER
+# str_val:  pointer into original input when kind == STRING
+# str_len:  byte length of string (not null-terminated)
+# children: heap-allocated array of child Values (ARRAY or OBJECT)
+# keys:     heap-allocated array of key strings (OBJECT only, parallel with children)
+# count:    number of children/keys
+# cap:      allocated capacity of children/keys arrays
+pub rec Value {
+    kind:     Kind;
+    bool_val: u8;
+    num_val:  i64;
+    str_val:  str;
+    str_len:  usize;
+    children: *Value;
+    keys:     *str;
+    count:    usize;
+    cap:      usize;
 }
 
-pub rec JsonProperty {
-    key:   String;
-    value: JsonValue;
-}
-
-rec JsonParser {
-    input: String;
+rec Parser {
+    src:   *u8;
+    len:   usize;
     pos:   usize;
+    alloc: *allo.Allocator;
 }
 
-# constructors
-pub fun json_null() JsonValue {
-    var v: JsonValue;
-    v.tag = JSON_NULL;
-    ret v;
+rec Emitter {
+    buf: *u8;
+    len: usize;
+    pos: usize;
 }
 
-pub fun json_bool(value: bool) JsonValue {
-    var v: JsonValue;
-    v.tag           = JSON_BOOL;
-    v.data.bool_val = value;
-    ret v;
-}
-
-pub fun json_number(value: f64) JsonValue {
-    var v: JsonValue;
-    v.tag             = JSON_NUMBER;
-    v.data.number_val = value;
-    ret v;
-}
-
-pub fun json_string(value: String) JsonValue {
-    var v: JsonValue;
-    v.tag             = JSON_STRING;
-    v.data.string_val = value;
-    ret v;
-}
-
-pub fun json_array(value: List[JsonValue]) JsonValue {
-    var v: JsonValue;
-    v.tag            = JSON_ARRAY;
-    v.data.array_val = value;
-    ret v;
-}
-
-pub fun json_object(value: List[JsonProperty]) JsonValue {
-    var v: JsonValue;
-    v.tag             = JSON_OBJECT;
-    v.data.object_val = value;
-    ret v;
-}
-
-pub fun (this: *JsonValue) init() {
-    mem.zero[JsonValue](this, 1);
-
-    this.tag = JSON_NULL;
-}
-
-pub fun (this: *JsonValue) dnit() {
-    if (this.tag == JSON_STRING) {
-        var s: *String = ?this.data.string_val;
-        s.dnit();
+# parse: parse JSON text into a Value tree.
+# ---
+# src:     pointer to JSON source bytes
+# src_len: length of source in bytes
+# alloc:   allocator for array/object storage
+# ret:     root Value on success, or error message
+pub fun parse(src: *u8, src_len: usize, alloc: *allo.Allocator) Result[Value, str] {
+    if (src == nil) {
+        ret err[Value, str]("source is nil");
     }
-    or (this.tag == JSON_ARRAY) {
-        var i: usize = 0;
-        for (i < this.data.array_val.len) {
-            val item: *JsonValue = this.data.array_val.data + i;
-            item.dnit();
-            i = i + 1;
+    if (alloc == nil) {
+        ret err[Value, str]("allocator is nil");
+    }
+
+    var p: Parser;
+    p.src = src;
+    p.len = src_len;
+    p.pos = 0;
+    p.alloc = alloc;
+
+    skip_ws(?p);
+    val r: Result[Value, str] = parse_value(?p);
+    if (is_err[Value, str](r)) {
+        ret r;
+    }
+
+    skip_ws(?p);
+    if (p.pos < p.len) {
+        ret err[Value, str]("trailing content after value");
+    }
+
+    ret r;
+}
+
+# value_is_null: check if a value is null.
+pub fun value_is_null(v: *Value) bool {
+    ret v.kind == NULL;
+}
+
+# value_is_bool: check if a value is a boolean.
+pub fun value_is_bool(v: *Value) bool {
+    ret v.kind == BOOL;
+}
+
+# value_is_number: check if a value is a number.
+pub fun value_is_number(v: *Value) bool {
+    ret v.kind == NUMBER;
+}
+
+# value_is_string: check if a value is a string.
+pub fun value_is_string(v: *Value) bool {
+    ret v.kind == STRING;
+}
+
+# value_is_array: check if a value is an array.
+pub fun value_is_array(v: *Value) bool {
+    ret v.kind == ARRAY;
+}
+
+# value_is_object: check if a value is an object.
+pub fun value_is_object(v: *Value) bool {
+    ret v.kind == OBJECT;
+}
+
+# value_bool: get the boolean value.
+# ---
+# ret: true if bool_val is nonzero
+pub fun value_bool(v: *Value) bool {
+    ret v.bool_val != 0;
+}
+
+# value_number: get the integer value.
+pub fun value_number(v: *Value) i64 {
+    ret v.num_val;
+}
+
+# value_string: get the string pointer and length.
+# ---
+# len: receives the byte length of the string
+# ret: pointer to the first byte of the string content
+pub fun value_string(v: *Value, len: *usize) *u8 {
+    @len = v.str_len;
+    ret v.str_val::*u8;
+}
+
+# value_count: get the number of children (array elements or object entries).
+pub fun value_count(v: *Value) usize {
+    ret v.count;
+}
+
+# value_get: get an array element or object value by index.
+# ---
+# index: zero-based index
+# ret:   pointer to the child Value, or nil if out of bounds
+pub fun value_get(v: *Value, index: usize) *Value {
+    if (index >= v.count) { ret nil; }
+    ret ?v.children[index];
+}
+
+# value_key: get an object key by index.
+# ---
+# index: zero-based index
+# ret:   key string (null-terminated), or nil if out of bounds
+pub fun value_key(v: *Value, index: usize) str {
+    if (v.kind != OBJECT || index >= v.count) { ret nil; }
+    ret v.keys[index];
+}
+
+# value_find: find an object value by key name (linear search).
+# ---
+# key: null-terminated key to search for
+# ret: pointer to the Value, or nil if not found
+pub fun value_find(v: *Value, key: str) *Value {
+    if (v.kind != OBJECT) { ret nil; }
+    var i: usize = 0;
+    for (i < v.count) {
+        if (str_equals(v.keys[i], key)) {
+            ret ?v.children[i];
         }
-
-        this.data.array_val.dnit();
+        i = i + 1;
     }
-    or (this.tag == JSON_OBJECT) {
-        var i: usize = 0;
-        for (i < this.data.object_val.len) {
-            val item: *JsonProperty = this.data.object_val.data + i;
-            var k: *String = ?item.key;
-            k.dnit();
-            item.value.dnit();
-            i = i + 1;
-        }
-        this.data.object_val.dnit();
-    }
-
-    mem.zero[JsonValue](this, 1);
-
-    this.tag = JSON_NULL;
+    ret nil;
 }
 
-# type checks
-pub fun (this: JsonValue) is_null() bool {
-    ret this.tag == JSON_NULL;
+# emit: emit a Value as JSON text into a buffer.
+# ---
+# v:   value to emit
+# buf: destination buffer
+# len: size of destination buffer in bytes
+# ret: number of bytes written (may exceed len if buffer too small)
+pub fun emit(v: *Value, buf: *u8, len: usize) usize {
+    var e: Emitter;
+    e.buf = buf;
+    e.len = len;
+    e.pos = 0;
+    emit_value(?e, v);
+    ret e.pos;
 }
 
-pub fun (this: JsonValue) is_bool() bool {
-    ret this.tag == JSON_BOOL;
+fun make_null() Value {
+    var v: Value;
+    v.kind = NULL;
+    v.bool_val = 0;
+    v.num_val = 0;
+    v.str_val = nil;
+    v.str_len = 0;
+    v.children = nil;
+    v.keys = nil;
+    v.count = 0;
+    v.cap = 0;
+    ret v;
 }
 
-pub fun (this: JsonValue) is_number() bool {
-    ret this.tag == JSON_NUMBER;
+fun make_bool(b: u8) Value {
+    var v: Value = make_null();
+    v.kind = BOOL;
+    v.bool_val = b;
+    ret v;
 }
 
-pub fun (this: JsonValue) is_string() bool {
-    ret this.tag == JSON_STRING;
+fun make_number(n: i64) Value {
+    var v: Value = make_null();
+    v.kind = NUMBER;
+    v.num_val = n;
+    ret v;
 }
 
-pub fun (this: JsonValue) is_array() bool {
-    ret this.tag == JSON_ARRAY;
+fun make_string(s: str, slen: usize) Value {
+    var v: Value = make_null();
+    v.kind = STRING;
+    v.str_val = s;
+    v.str_len = slen;
+    ret v;
 }
 
-pub fun (this: JsonValue) is_object() bool {
-    ret this.tag == JSON_OBJECT;
+fun make_array() Value {
+    var v: Value = make_null();
+    v.kind = ARRAY;
+    ret v;
 }
 
-# value getters
-pub fun (this: JsonValue) as_bool() Option[bool] {
-    if (this.tag == JSON_BOOL) {
-        ret some[bool](this.data.bool_val);
-    }
-    ret none[bool]();
+fun make_object() Value {
+    var v: Value = make_null();
+    v.kind = OBJECT;
+    ret v;
 }
 
-pub fun (this: JsonValue) as_number() Option[f64] {
-    if (this.tag == JSON_NUMBER) {
-        ret some[f64](this.data.number_val);
-    }
-    ret none[f64]();
-}
-
-pub fun (this: JsonValue) as_string() Option[str] {
-    if (this.tag == JSON_STRING) {
-        var s: *String = ?this.data.string_val;
-        ret some[str](s.as_str());
-    }
-    ret none[str]();
-}
-
-pub fun (this: JsonValue) as_array() Option[*List[JsonValue]] {
-    if (this.tag == JSON_ARRAY) {
-        ret some[*List[JsonValue]](?this.data.array_val);
-    }
-    ret none[*List[JsonValue]]();
-}
-
-pub fun (this: JsonValue) as_object() Option[*List[JsonProperty]] {
-    if (this.tag == JSON_OBJECT) {
-        ret some[*List[JsonProperty]](?this.data.object_val);
-    }
-    ret none[*List[JsonProperty]]();
-}
-
-# parser helpers
-fun (this: *JsonParser) current() char {
-    if (this.pos >= this.input.len) {
-        ret 0;
-    }
-    ret @(this.input.data + this.pos);
-}
-
-fun (this: *JsonParser) peek(offset: usize) char {
-    val idx: usize = this.pos + offset;
-    if (idx >= this.input.len) {
-        ret 0;
-    }
-    ret @(this.input.data + idx);
-}
-
-fun (this: *JsonParser) advance() {
-    if (this.pos < this.input.len) {
-        this.pos = this.pos + 1;
-    }
-}
-
-fun (this: *JsonParser) skip_whitespace() {
-    for (this.pos < this.input.len) {
-        val ch: char = this.current();
-        if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
-            this.advance();
+fun skip_ws(p: *Parser) {
+    for (p.pos < p.len) {
+        val c: u8 = p.src[p.pos];
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            p.pos = p.pos + 1;
         } or {
-            brk;
+            ret;
         }
     }
 }
 
-fun (this: *JsonParser) match_keyword(keyword: str) bool {
-    var i: usize = 0;
-    for (i < keyword.len) {
-        if (this.peek(i) != @(keyword.data + i)) {
-            ret false;
-        }
-        i = i + 1;
-    }
-
-    this.pos = this.pos + keyword.len;
-
-    ret true;
+fun peek(p: *Parser) u8 {
+    if (p.pos >= p.len) { ret 0; }
+    ret p.src[p.pos];
 }
 
-fun (this: *JsonParser) parse_string_content() Result[String, str] {
-    val start: usize = this.pos;
-    var len:   usize = 0;
+fun advance(p: *Parser) u8 {
+    if (p.pos >= p.len) { ret 0; }
+    val c: u8 = p.src[p.pos];
+    p.pos = p.pos + 1;
+    ret c;
+}
 
-    for (this.pos < this.input.len) {
-        val ch: char = this.current();
+fun expect(p: *Parser, c: u8) Result[bool, str] {
+    if (p.pos >= p.len || p.src[p.pos] != c) {
+        ret err[bool, str]("unexpected character");
+    }
+    p.pos = p.pos + 1;
+    ret ok[bool, str](true);
+}
 
-        if (ch == '"') {
-            brk;
+fun parse_value(p: *Parser) Result[Value, str] {
+    skip_ws(p);
+    if (p.pos >= p.len) {
+        ret err[Value, str]("unexpected end of input");
+    }
+
+    val c: u8 = p.src[p.pos];
+
+    if (c == 'n') { ret parse_null(p); }
+    if (c == 't' || c == 'f') { ret parse_bool(p); }
+    if (c == '"') { ret parse_string(p); }
+    if (c == '[') { ret parse_array(p); }
+    if (c == '{') { ret parse_object(p); }
+    if (c == '-' || (c >= '0' && c <= '9')) { ret parse_number(p); }
+
+    ret err[Value, str]("unexpected character");
+}
+
+fun parse_null(p: *Parser) Result[Value, str] {
+    if (p.pos + 4 > p.len) {
+        ret err[Value, str]("unexpected end of input in null");
+    }
+    if (p.src[p.pos] != 'n' || p.src[p.pos + 1] != 'u' || p.src[p.pos + 2] != 'l' || p.src[p.pos + 3] != 'l') {
+        ret err[Value, str]("invalid null literal");
+    }
+    p.pos = p.pos + 4;
+    ret ok[Value, str](make_null());
+}
+
+fun parse_bool(p: *Parser) Result[Value, str] {
+    if (p.src[p.pos] == 't') {
+        if (p.pos + 4 > p.len) {
+            ret err[Value, str]("unexpected end of input in true");
         }
-        or (ch == '\\') {
-            this.advance();
-            if (this.pos >= this.input.len) {
-                ret err[String, str]("unexpected end in escape sequence");
+        if (p.src[p.pos + 1] != 'r' || p.src[p.pos + 2] != 'u' || p.src[p.pos + 3] != 'e') {
+            ret err[Value, str]("invalid true literal");
+        }
+        p.pos = p.pos + 4;
+        ret ok[Value, str](make_bool(1));
+    }
+
+    if (p.pos + 5 > p.len) {
+        ret err[Value, str]("unexpected end of input in false");
+    }
+    if (p.src[p.pos + 1] != 'a' || p.src[p.pos + 2] != 'l' || p.src[p.pos + 3] != 's' || p.src[p.pos + 4] != 'e') {
+        ret err[Value, str]("invalid false literal");
+    }
+    p.pos = p.pos + 5;
+    ret ok[Value, str](make_bool(0));
+}
+
+fun parse_number(p: *Parser) Result[Value, str] {
+    var neg: bool = false;
+    if (p.src[p.pos] == '-') {
+        neg = true;
+        p.pos = p.pos + 1;
+        if (p.pos >= p.len || p.src[p.pos] < '0' || p.src[p.pos] > '9') {
+            ret err[Value, str]("invalid number: no digits after minus");
+        }
+    }
+
+    var n: i64 = 0;
+    var has_digit: bool = false;
+    for (p.pos < p.len && p.src[p.pos] >= '0' && p.src[p.pos] <= '9') {
+        n = n * 10 + (p.src[p.pos] - '0')::i64;
+        has_digit = true;
+        p.pos = p.pos + 1;
+    }
+
+    if (!has_digit) {
+        ret err[Value, str]("invalid number: no digits");
+    }
+
+    if (neg) { n = 0 - n; }
+
+    ret ok[Value, str](make_number(n));
+}
+
+fun parse_string(p: *Parser) Result[Value, str] {
+    p.pos = p.pos + 1;
+    val start: usize = p.pos;
+
+    for (p.pos < p.len) {
+        val c: u8 = p.src[p.pos];
+        if (c == '\\') {
+            if (p.pos + 1 >= p.len) {
+                ret err[Value, str]("backslash at end of string");
             }
-            this.advance();
-            len = len + 1;
+            p.pos = p.pos + 2;
+            cnt;
         }
-        or (ch < 32) {
-            ret err[String, str]("invalid control character in str");
+        if (c == '"') {
+            val slen: usize = p.pos - start;
+            val sptr: str = (p.src::usize + start)::str;
+            p.pos = p.pos + 1;
+            ret ok[Value, str](make_string(sptr, slen));
         }
-        or {
-            this.advance();
-            len = len + 1;
-        }
+        p.pos = p.pos + 1;
     }
 
-    var result: String;
-    if (len > 0) {
-        val init_err: Option[str] = result.init(len);
-        if (init_err.is_some()) {
-            ret err[String, str]("allocation failed");
-        }
+    ret err[Value, str]("unterminated string");
+}
+
+fun children_grow(p: *Parser, v: *Value) Result[bool, str] {
+    var new_cap: usize = v.cap * 2;
+    if (v.cap == 0) {
+        new_cap = 4;
     } or {
-        val init_err: Option[str] = result.init(1);
-        if (init_err.is_some()) {
-            ret err[String, str]("allocation failed");
-        }
-        ret ok[String, str](result);
-    }
-
-    # copy and process escapes
-    var write_pos: usize = 0;
-    var read_pos:  usize = start;
-
-    for (read_pos < this.pos) {
-        val ch: char = @(this.input.data + read_pos);
-
-        if (ch == '\\') {
-            read_pos = read_pos + 1;
-            if (read_pos >= this.pos) {
-                brk;
-            }
-
-            val esc: char = @(this.input.data + read_pos);
-            if (esc == 'n') {
-                @(result.data + write_pos) = 10;
-            }
-            or (esc == 't') {
-                @(result.data + write_pos) = 9;
-            }
-            or (esc == 'r') {
-                @(result.data + write_pos) = 13;
-            }
-            or (esc == '\\') {
-                @(result.data + write_pos) = '\\';
-            }
-            or (esc == '"') {
-                @(result.data + write_pos) = '"';
-            }
-            or (esc == '/') {
-                @(result.data + write_pos) = '/';
-            }
-            or (esc == 'b') {
-                @(result.data + write_pos) = 8;
-            }
-            or (esc == 'f') {
-                @(result.data + write_pos) = 12;
-            }
-            or {
-                @(result.data + write_pos) = esc;
-            }
-
-            write_pos = write_pos + 1;
-            read_pos  = read_pos + 1;
-        }
-        or {
-            @(result.data + write_pos) = ch;
-            write_pos = write_pos + 1;
-            read_pos  = read_pos + 1;
+        if (new_cap < v.cap) {
+            ret err[bool, str]("capacity overflow");
         }
     }
 
-    ret ok[String, str](result);
+    val cr: Result[*u8, str] = allo.allocate[u8](p.alloc, new_cap * VALUE_SIZE);
+    if (is_err[*u8, str](cr)) { ret err[bool, str](unwrap_err[*u8, str](cr)); }
+    val new_children: *Value = unwrap_ok[*u8, str](cr)::*Value;
+
+    if (v.count > 0) {
+        raw_copy(new_children::ptr, v.children::ptr, v.count * VALUE_SIZE);
+    }
+
+    v.children = new_children;
+    v.cap = new_cap;
+    ret ok[bool, str](true);
 }
 
-fun (this: *JsonParser) parse_string() Result[JsonValue, str] {
-    if (this.current() != '"') {
-        ret err[JsonValue, str]("expected '\"'");
+fun keys_grow(p: *Parser, v: *Value, new_cap: usize) Result[bool, str] {
+    val kr: Result[*u8, str] = allo.allocate[u8](p.alloc, new_cap * STR_SIZE);
+    if (is_err[*u8, str](kr)) { ret err[bool, str](unwrap_err[*u8, str](kr)); }
+    val new_keys: *str = unwrap_ok[*u8, str](kr)::*str;
+
+    if (v.count > 0) {
+        raw_copy(new_keys::ptr, v.keys::ptr, v.count * STR_SIZE);
     }
 
-    this.advance();
-
-    val str_result: Result[String, str] = this.parse_string_content();
-    if (str_result.is_err()) {
-        ret err[JsonValue, str](str_result.unwrap_err());
-    }
-
-    if (this.current() != '"') {
-        var s: String = str_result.unwrap_ok();
-        var sp: *String = ?s;
-        sp.dnit();
-        ret err[JsonValue, str]("unterminated str");
-    }
-
-    this.advance();
-
-    ret ok[JsonValue, str](json_string(str_result.unwrap_ok()));
+    v.keys = new_keys;
+    ret ok[bool, str](true);
 }
 
-fun (this: *JsonParser) parse_number() Result[JsonValue, str] {
-    val start:       usize = this.pos;
-    var is_negative: bool = false;
+fun parse_array(p: *Parser) Result[Value, str] {
+    p.pos = p.pos + 1;
+    var v: Value = make_array();
 
-    # optional minus
-    if (this.current() == '-') {
-        is_negative = true;
-        this.advance();
+    skip_ws(p);
+    if (p.pos < p.len && p.src[p.pos] == ']') {
+        p.pos = p.pos + 1;
+        ret ok[Value, str](v);
     }
 
-    if (is_digit(this.current()) == 0) {
-        ret err[JsonValue, str]("expected digit");
+    for (p.pos < p.len) {
+        val elem: Result[Value, str] = parse_value(p);
+        if (is_err[Value, str](elem)) { ret elem; }
+
+        if (v.count >= v.cap) {
+            val gr: Result[bool, str] = children_grow(p, ?v);
+            if (is_err[bool, str](gr)) { ret err[Value, str](unwrap_err[bool, str](gr)); }
+        }
+        v.children[v.count] = unwrap_ok[Value, str](elem);
+        v.count = v.count + 1;
+
+        skip_ws(p);
+        if (p.pos >= p.len) {
+            ret err[Value, str]("unterminated array");
+        }
+        if (p.src[p.pos] == ']') {
+            p.pos = p.pos + 1;
+            ret ok[Value, str](v);
+        }
+        if (p.src[p.pos] != ',') {
+            ret err[Value, str]("expected ',' or ']' in array");
+        }
+        p.pos = p.pos + 1;
     }
 
-    # integer part
-    for (this.pos < this.input.len && is_digit(this.current())) {
-        this.advance();
+    ret err[Value, str]("unterminated array");
+}
+
+fun parse_object(p: *Parser) Result[Value, str] {
+    p.pos = p.pos + 1;
+    var v: Value = make_object();
+
+    skip_ws(p);
+    if (p.pos < p.len && p.src[p.pos] == '}') {
+        p.pos = p.pos + 1;
+        ret ok[Value, str](v);
     }
 
-    var is_float: bool = false;
-
-    # optional fractional part
-    if (this.current() == '.') {
-        is_float = true;
-        this.advance();
-
-        if (is_digit(this.current()) == 0) {
-            ret err[JsonValue, str]("expected digit after decimal point");
+    for (p.pos < p.len) {
+        skip_ws(p);
+        if (p.pos >= p.len || p.src[p.pos] != '"') {
+            ret err[Value, str]("expected string key in object");
         }
 
-        for (this.pos < this.input.len && is_digit(this.current())) {
-            this.advance();
+        val key_res: Result[Value, str] = parse_string(p);
+        if (is_err[Value, str](key_res)) { ret key_res; }
+        val key_val: Value = unwrap_ok[Value, str](key_res);
+
+        skip_ws(p);
+        val colon: Result[bool, str] = expect(p, ':');
+        if (is_err[bool, str](colon)) {
+            ret err[Value, str]("expected ':' after object key");
         }
+
+        val val_res: Result[Value, str] = parse_value(p);
+        if (is_err[Value, str](val_res)) { ret val_res; }
+
+        if (v.count >= v.cap) {
+            val gr: Result[bool, str] = children_grow(p, ?v);
+            if (is_err[bool, str](gr)) { ret err[Value, str](unwrap_err[bool, str](gr)); }
+
+            val kr: Result[bool, str] = keys_grow(p, ?v, v.cap);
+            if (is_err[bool, str](kr)) { ret err[Value, str](unwrap_err[bool, str](kr)); }
+        }
+
+        v.keys[v.count] = key_val.str_val;
+        v.children[v.count] = unwrap_ok[Value, str](val_res);
+        v.count = v.count + 1;
+
+        skip_ws(p);
+        if (p.pos >= p.len) {
+            ret err[Value, str]("unterminated object");
+        }
+        if (p.src[p.pos] == '}') {
+            p.pos = p.pos + 1;
+            ret ok[Value, str](v);
+        }
+        if (p.src[p.pos] != ',') {
+            ret err[Value, str]("expected ',' or '}' in object");
+        }
+        p.pos = p.pos + 1;
     }
 
-    # optional exponent
-    val ch: char = this.current();
-    if (ch == 'e' || ch == 'E') {
-        is_float = true;
-        this.advance();
+    ret err[Value, str]("unterminated object");
+}
 
-        val exp_ch: char = this.current();
-        if (exp_ch == '+' || exp_ch == '-') {
-            this.advance();
-        }
-
-        if (is_digit(this.current()) == 0) {
-            ret err[JsonValue, str]("expected digit in exponent");
-        }
-
-        for (this.pos < this.input.len && is_digit(this.current())) {
-            this.advance();
-        }
+fun emit_byte(e: *Emitter, c: u8) {
+    if (e.pos < e.len) {
+        e.buf[e.pos] = c;
     }
+    e.pos = e.pos + 1;
+}
 
-    # simple integer parsing
-    var value: f64 = 0.0;
-    var i:     usize = start;
-
-    if (is_negative) {
+fun emit_bytes(e: *Emitter, s: *u8, slen: usize) {
+    var i: usize = 0;
+    for (i < slen) {
+        emit_byte(e, s[i]);
         i = i + 1;
     }
+}
 
-    # parse integer part
-    for (i < this.pos) {
-        val digit_ch: char = @(this.input.data + i);
-        if (digit_ch == '.' || digit_ch == 'e' || digit_ch == 'E') {
-            brk;
-        }
-
-        val d: i32 = digit_val(digit_ch);
-        if (d < 0 || d > 9) {
-            brk;
-        }
-
-        value = value * 10.0 + (d::f64);
+fun emit_str(e: *Emitter, s: str) {
+    var i: usize = 0;
+    for (s[i] != 0) {
+        emit_byte(e, s[i]);
         i = i + 1;
     }
+}
 
-    # parse fractional part if present
-    if (i < this.pos && @(this.input.data + i) == '.') {
-        i = i + 1;
-        var divisor: f64 = 10.0;
-        for (i < this.pos) {
-            val digit_ch: char = @(this.input.data + i);
-            if (digit_ch == 'e' || digit_ch == 'E') {
-                brk;
-            }
-            val d: i32 = digit_val(digit_ch);
-            if (d < 0 || d > 9) {
-                brk;
-            }
-            value = value + ((d::f64) / divisor);
-            divisor = divisor * 10.0;
+fun emit_i64(e: *Emitter, n: i64) {
+    if (n < 0) {
+        emit_byte(e, '-');
+        emit_u64(e, (0 - n)::u64);
+        ret;
+    }
+    emit_u64(e, n::u64);
+}
+
+fun emit_u64(e: *Emitter, n: u64) {
+    if (n == 0) {
+        emit_byte(e, '0');
+        ret;
+    }
+
+    var buf: [20]u8;
+    var len: usize = 0;
+    var tmp: u64 = n;
+    for (tmp > 0) {
+        buf[len] = (tmp % 10)::u8 + '0';
+        tmp = tmp / 10;
+        len = len + 1;
+    }
+
+    var i: usize = len;
+    for (i > 0) {
+        i = i - 1;
+        emit_byte(e, buf[i]);
+    }
+}
+
+fun emit_value(e: *Emitter, v: *Value) {
+    if (v.kind == NULL) {
+        emit_str(e, "null");
+        ret;
+    }
+
+    if (v.kind == BOOL) {
+        if (v.bool_val != 0) {
+            emit_str(e, "true");
+        } or {
+            emit_str(e, "false");
+        }
+        ret;
+    }
+
+    if (v.kind == NUMBER) {
+        emit_i64(e, v.num_val);
+        ret;
+    }
+
+    if (v.kind == STRING) {
+        emit_byte(e, '"');
+        emit_bytes(e, v.str_val::*u8, v.str_len);
+        emit_byte(e, '"');
+        ret;
+    }
+
+    if (v.kind == ARRAY) {
+        emit_byte(e, '[');
+        var i: usize = 0;
+        for (i < v.count) {
+            if (i > 0) { emit_byte(e, ','); }
+            emit_value(e, ?v.children[i]);
             i = i + 1;
         }
+        emit_byte(e, ']');
+        ret;
     }
 
-    if (is_negative) {
-        value = 0.0 - value;
-    }
-
-    ret ok[JsonValue, str](json_number(value));
-}
-
-fun (this: *JsonParser) parse_array() Result[JsonValue, str] {
-    if (this.current() != '[') {
-        ret err[JsonValue, str]("expected '['");
-    }
-
-    this.advance();
-    this.skip_whitespace();
-
-    val ptr_alloc_res: Option[*List[JsonValue]] = mem.allocate[List[JsonValue]](1);
-    if (ptr_alloc_res.is_none()) {
-        ret err[JsonValue, str]("failed to allocate array list");
-    }
-
-    var list: List[JsonValue];
-    val res_init: Option[str] = list.init(4);
-    if (res_init.is_some()) {
-        ret err[JsonValue, str](res_init.unwrap());
-    }
-
-    # empty array
-    if (this.current() == ']') {
-        this.advance();
-        ret ok[JsonValue, str](json_array(list));
-    }
-
-    for {
-        val elem_result: Result[JsonValue, str] = this.parse_value();
-        if (elem_result.is_err()) {
-            list.dnit();
-            ret err[JsonValue, str](elem_result.unwrap_err());
+    if (v.kind == OBJECT) {
+        emit_byte(e, '{');
+        var i: usize = 0;
+        for (i < v.count) {
+            if (i > 0) { emit_byte(e, ','); }
+            emit_byte(e, '"');
+            emit_str(e, v.keys[i]);
+            emit_byte(e, '"');
+            emit_byte(e, ':');
+            emit_value(e, ?v.children[i]);
+            i = i + 1;
         }
-
-        val push_err: Option[str] = list.push(elem_result.unwrap_ok());
-        if (push_err.is_some()) {
-            list.dnit();
-            ret err[JsonValue, str](push_err.unwrap());
-        }
-
-        this.skip_whitespace();
-
-        if (this.current() == ']') {
-            this.advance();
-            brk;
-        }
-        or (this.current() == ',') {
-            this.advance();
-            this.skip_whitespace();
-        }
-        or {
-            list.dnit();
-            ret err[JsonValue, str]("expected ',' or ']' in array");
-        }
-    }
-
-    ret ok[JsonValue, str](json_array(list));
-}
-
-fun (this: *JsonParser) parse_object() Result[JsonValue, str] {
-    if (this.current() != '{') {
-        ret err[JsonValue, str]("expected '{'");
-    }
-
-    this.advance();
-    this.skip_whitespace();
-
-    var list: List[JsonProperty];
-    val res_init: Option[str] = list.init(4);
-    if (res_init.is_some()) {
-        ret err[JsonValue, str](res_init.unwrap());
-    }
-
-    # empty object case
-    if (this.current() == '}') {
-        this.advance();
-        ret ok[JsonValue, str](json_object(list));
-    }
-
-    # parse properties
-    for {
-        # expect opening quote for key
-        if (this.current() != '"') {
-            list.dnit();
-            ret err[JsonValue, str]("expected str key");
-        }
-
-        this.advance();
-
-        # parse key str content
-        val key_result: Result[String, str] = this.parse_string_content();
-        if (key_result.is_err()) {
-            list.dnit();
-            ret err[JsonValue, str](key_result.unwrap_err());
-        }
-
-        var key: String = key_result.unwrap_ok();
-        var key_ptr: *String = ?key;
-
-        # expect closing quote for key
-        if (this.current() != '"') {
-            key_ptr.dnit();
-            list.dnit();
-            ret err[JsonValue, str]("unterminated key str");
-        }
-
-        this.advance();
-        this.skip_whitespace();
-
-        # expect colon
-        if (this.current() != ':') {
-            key_ptr.dnit();
-            list.dnit();
-            ret err[JsonValue, str]("expected ':' after key");
-        }
-
-        this.advance();
-        this.skip_whitespace();
-
-        # parse value
-        val val_result: Result[JsonValue, str] = this.parse_value();
-        if (val_result.is_err()) {
-            key_ptr.dnit();
-            list.dnit();
-            ret err[JsonValue, str](val_result.unwrap_err());
-        }
-
-        var value: JsonValue = val_result.unwrap_ok();
-
-        # create property and transfer ownership
-        var prop: JsonProperty;
-        prop.key   = key;
-        prop.value = value;
-
-        # push property to list
-        val push_err: Option[str] = list.push(prop);
-        if (push_err.is_some()) {
-            var prop_key_ptr: *String = ?prop.key;
-            var prop_val_ptr: *JsonValue = ?prop.value;
-            prop_key_ptr.dnit();
-            prop_val_ptr.dnit();
-            list.dnit();
-            ret err[JsonValue, str](push_err.unwrap());
-        }
-
-        # property ownership transferred to list
-        this.skip_whitespace();
-
-        # check for end or continuation
-        if (this.current() == '}') {
-            this.advance();
-            brk;
-        }
-        or (this.current() == ',') {
-            this.advance();
-            this.skip_whitespace();
-        }
-        or {
-            list.dnit();
-            ret err[JsonValue, str]("expected ',' or '}' in object");
-        }
-    }
-
-    ret ok[JsonValue, str](json_object(list));
-}
-
-fun (this: *JsonParser) parse_value() Result[JsonValue, str] {
-    this.skip_whitespace();
-
-    val ch: char = this.current();
-
-    if (ch == 'n') {
-        if (this.match_keyword("null")) {
-            ret ok[JsonValue, str](json_null());
-        }
-        ret err[JsonValue, str]("invalid keyword");
-    }
-    or (ch == 't') {
-        if (this.match_keyword("true")) {
-            ret ok[JsonValue, str](json_bool(true));
-        }
-        ret err[JsonValue, str]("invalid keyword");
-    }
-    or (ch == 'f') {
-        if (this.match_keyword("false")) {
-            ret ok[JsonValue, str](json_bool(false));
-        }
-        ret err[JsonValue, str]("invalid keyword");
-    }
-    or (ch == '"') {
-        ret this.parse_string();
-    }
-    or (ch == '[') {
-        ret this.parse_array();
-    }
-    or (ch == '{') {
-        ret this.parse_object();
-    }
-    or (ch == '-' || is_digit(ch)) {
-        ret this.parse_number();
-    }
-    or {
-        ret err[JsonValue, str]("unexpected character");
+        emit_byte(e, '}');
+        ret;
     }
 }
 
-# main parse function
-pub fun parse_json(input: str) Result[JsonValue, str] {
-    if (input.data == nil) {
-        ret err[JsonValue, str]("input is null");
-    }
+use page: std.allocator.page;
 
-    val cloned: Result[String, str] = input.clone();
-    if (cloned.is_err()) {
-        ret err[JsonValue, str]("failed to clone input str");
-    }
-
-    var parser: JsonParser;
-    parser.input = cloned.unwrap_ok();
-    parser.pos   = 0;
-
-    val result: Result[JsonValue, str] = parser.parse_value();
-
-    if (result.is_err()) {
-        ret result;
-    }
-
-    parser.skip_whitespace();
-
-    if (parser.pos < input.len) {
-        var v: JsonValue = result.unwrap_ok();
-        var vp: *JsonValue = ?v;
-        vp.dnit();
-        ret err[JsonValue, str]("unexpected data after json value");
-    }
-
-    ret result;
+test "json: parse null" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "null";
+    val r: Result[Value, str] = parse(src::*u8, 4, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != NULL) { ret 1; }
+    ret 0;
 }
 
-# object lookup helper
-pub fun (this: JsonValue) get_property(key: str) Option[JsonValue] {
-    if (this.tag != JSON_OBJECT || this.data.object_val.data == nil) {
-        ret none[JsonValue]();
-    }
-
-    var i: usize = 0;
-    for (i < this.data.object_val.len) {
-        val prop: *JsonProperty = this.data.object_val.data + i;
-        var k: *String = ?prop.key;
-        if (k.as_str().equals(key)) {
-            ret some[JsonValue](prop.value);
-        }
-        i = i + 1;
-    }
-
-    ret none[JsonValue]();
+test "json: parse true" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "true";
+    val r: Result[Value, str] = parse(src::*u8, 4, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != BOOL) { ret 1; }
+    if (v.bool_val != 1) { ret 1; }
+    ret 0;
 }
 
-# array index helper
-pub fun (this: JsonValue) get_index(index: usize) Option[JsonValue] {
-    if (this.tag != JSON_ARRAY || this.data.array_val.data == nil) {
-        ret none[JsonValue]();
-    }
+test "json: parse false" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "false";
+    val r: Result[Value, str] = parse(src::*u8, 5, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != BOOL) { ret 1; }
+    if (v.bool_val != 0) { ret 1; }
+    ret 0;
+}
 
-    if (index >= this.data.array_val.len) {
-        ret none[JsonValue]();
-    }
+test "json: parse positive number" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "42";
+    val r: Result[Value, str] = parse(src::*u8, 2, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != NUMBER) { ret 1; }
+    if (v.num_val != 42) { ret 1; }
+    ret 0;
+}
 
-    ret some[JsonValue](@(this.data.array_val.data + index));
+test "json: parse negative number" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "-7";
+    val r: Result[Value, str] = parse(src::*u8, 2, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != NUMBER) { ret 1; }
+    if (v.num_val != -7) { ret 1; }
+    ret 0;
+}
+
+test "json: parse zero" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "0";
+    val r: Result[Value, str] = parse(src::*u8, 1, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != NUMBER) { ret 1; }
+    if (v.num_val != 0) { ret 1; }
+    ret 0;
+}
+
+test "json: parse string" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "\"hello\"";
+    val r: Result[Value, str] = parse(src::*u8, 7, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != STRING) { ret 1; }
+    if (v.str_len != 5) { ret 1; }
+    val sp: *u8 = v.str_val::*u8;
+    if (sp[0] != 'h') { ret 1; }
+    if (sp[4] != 'o') { ret 1; }
+    ret 0;
+}
+
+test "json: parse empty array" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "[]";
+    val r: Result[Value, str] = parse(src::*u8, 2, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != ARRAY) { ret 1; }
+    if (v.count != 0) { ret 1; }
+    ret 0;
+}
+
+test "json: parse array with elements" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "[1,2,3]";
+    val r: Result[Value, str] = parse(src::*u8, 7, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != ARRAY) { ret 1; }
+    if (v.count != 3) { ret 1; }
+    if (v.children[0].num_val != 1) { ret 1; }
+    if (v.children[1].num_val != 2) { ret 1; }
+    if (v.children[2].num_val != 3) { ret 1; }
+    ret 0;
+}
+
+test "json: parse empty object" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "{}";
+    val r: Result[Value, str] = parse(src::*u8, 2, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != OBJECT) { ret 1; }
+    if (v.count != 0) { ret 1; }
+    ret 0;
+}
+
+test "json: parse object with entry" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "{\"a\":1}";
+    val r: Result[Value, str] = parse(src::*u8, 7, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != OBJECT) { ret 1; }
+    if (v.count != 1) { ret 1; }
+    if (v.children[0].num_val != 1) { ret 1; }
+    ret 0;
+}
+
+test "json: parse nested object with array" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "{\"x\":[1,2]}";
+    val r: Result[Value, str] = parse(src::*u8, 11, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != OBJECT) { ret 1; }
+    if (v.count != 1) { ret 1; }
+    val arr: *Value = ?v.children[0];
+    if (arr.kind != ARRAY) { ret 1; }
+    if (arr.count != 2) { ret 1; }
+    if (arr.children[0].num_val != 1) { ret 1; }
+    if (arr.children[1].num_val != 2) { ret 1; }
+    ret 0;
+}
+
+test "json: value_find on object" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "{\"a\":1,\"b\":2}";
+    val r: Result[Value, str] = parse(src::*u8, 13, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    val found: *Value = value_find(?v, "b");
+    if (found == nil) { ret 1; }
+    if (found.num_val != 2) { ret 1; }
+    val missing: *Value = value_find(?v, "z");
+    if (missing != nil) { ret 1; }
+    ret 0;
+}
+
+test "json: emit null" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "null";
+    val r: Result[Value, str] = parse(src::*u8, 4, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    var buf: [16]u8;
+    val n: usize = emit(?v, ?buf[0], 16);
+    if (n != 4) { ret 1; }
+    if (buf[0] != 'n') { ret 1; }
+    if (buf[1] != 'u') { ret 1; }
+    if (buf[2] != 'l') { ret 1; }
+    if (buf[3] != 'l') { ret 1; }
+    ret 0;
+}
+
+test "json: emit number" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "123";
+    val r: Result[Value, str] = parse(src::*u8, 3, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    var buf: [16]u8;
+    val n: usize = emit(?v, ?buf[0], 16);
+    if (n != 3) { ret 1; }
+    if (buf[0] != '1') { ret 1; }
+    if (buf[1] != '2') { ret 1; }
+    if (buf[2] != '3') { ret 1; }
+    ret 0;
+}
+
+test "json: emit true" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "true";
+    val r: Result[Value, str] = parse(src::*u8, 4, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    var buf: [16]u8;
+    val n: usize = emit(?v, ?buf[0], 16);
+    if (n != 4) { ret 1; }
+    if (buf[0] != 't') { ret 1; }
+    if (buf[3] != 'e') { ret 1; }
+    ret 0;
+}
+
+test "json: roundtrip array" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "[1,2,3]";
+    val r: Result[Value, str] = parse(src::*u8, 7, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    var buf: [32]u8;
+    val n: usize = emit(?v, ?buf[0], 32);
+    if (n != 7) { ret 1; }
+    if (buf[0] != '[') { ret 1; }
+    if (buf[1] != '1') { ret 1; }
+    if (buf[2] != ',') { ret 1; }
+    if (buf[3] != '2') { ret 1; }
+    if (buf[6] != ']') { ret 1; }
+    ret 0;
+}
+
+test "json: whitespace tolerance" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "  { \"a\" : 1 } ";
+    val r: Result[Value, str] = parse(src::*u8, 14, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    if (v.kind != OBJECT) { ret 1; }
+    if (v.count != 1) { ret 1; }
+    ret 0;
 }

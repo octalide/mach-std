@@ -1,0 +1,103 @@
+# elapsed time representation and conversion.
+#
+# Duration represents elapsed time as nanoseconds (i64).
+
+# Duration: elapsed time in nanoseconds.
+pub def Duration: i64;
+
+pub val NANOSECOND:  Duration = 1;
+pub val MICROSECOND: Duration = 1000;
+pub val MILLISECOND: Duration = 1000000;
+pub val SECOND:      Duration = 1000000000;
+pub val MINUTE:      Duration = 60 * SECOND;
+pub val HOUR:        Duration = 60 * MINUTE;
+
+# duration_nsec: return the duration as nanoseconds.
+# ---
+# d:   duration to convert
+# ret: duration in nanoseconds
+pub fun duration_nsec(d: Duration) i64 {
+    ret d;
+}
+
+# duration_usec: return the duration as microseconds.
+# ---
+# d:   duration to convert
+# ret: duration in microseconds
+pub fun duration_usec(d: Duration) i64 {
+    ret d / MICROSECOND;
+}
+
+# duration_msec: return the duration as milliseconds.
+# ---
+# d:   duration to convert
+# ret: duration in milliseconds
+pub fun duration_msec(d: Duration) i64 {
+    ret d / MILLISECOND;
+}
+
+# duration_sec: return the duration as whole seconds.
+# ---
+# d:   duration to convert
+# ret: duration in seconds
+pub fun duration_sec(d: Duration) i64 {
+    ret d / SECOND;
+}
+
+# duration_min: return the duration as whole minutes.
+# ---
+# d:   duration to convert
+# ret: duration in minutes
+pub fun duration_min(d: Duration) i64 {
+    ret d / MINUTE;
+}
+
+# duration_hour: return the duration as whole hours.
+# ---
+# d:   duration to convert
+# ret: duration in hours
+pub fun duration_hour(d: Duration) i64 {
+    ret d / HOUR;
+}
+
+# duration_abs: return the absolute value of d.
+# ---
+# d:   duration to take absolute value of
+# ret: |d|
+pub fun duration_abs(d: Duration) Duration {
+    # saturate: i64 min has no positive counterpart
+    if (d == -9223372036854775808) { ret 9223372036854775807; }
+    if (d < 0) {
+        ret 0 - d;
+    }
+    ret d;
+}
+
+test "duration: constants" {
+    if (NANOSECOND != 1) { ret 1; }
+    if (MICROSECOND != 1000) { ret 2; }
+    if (MILLISECOND != 1000000) { ret 3; }
+    if (SECOND != 1000000000) { ret 4; }
+    if (MINUTE != 60 * SECOND) { ret 5; }
+    if (HOUR != 60 * MINUTE) { ret 6; }
+    ret 0;
+}
+
+test "duration: conversions" {
+    val d: Duration = 3661001001001;
+    if (duration_hour(d) != 1) { ret 1; }
+    if (duration_min(d) != 61) { ret 2; }
+    if (duration_sec(d) != 3661) { ret 3; }
+    if (duration_msec(d) != 3661001) { ret 4; }
+    if (duration_usec(d) != 3661001001) { ret 5; }
+    if (duration_nsec(d) != 3661001001001) { ret 6; }
+    ret 0;
+}
+
+test "duration: abs" {
+    val pos: Duration = 1000;
+    val neg: Duration = 0 - 1000;
+    if (duration_abs(pos) != 1000) { ret 1; }
+    if (duration_abs(neg) != 1000) { ret 2; }
+    ret 0;
+}

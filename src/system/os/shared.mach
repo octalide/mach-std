@@ -1,0 +1,74 @@
+# std.system.os.shared: abstract types and constants for the OS interface.
+#
+# types here are target-independent. every OS implementation populates them.
+
+use std.types.size.usize;
+use std.types.bool.bool;
+
+# Timespec: seconds and nanoseconds from a clock source.
+# ---
+# sec:  whole seconds
+# nsec: nanoseconds within second [0, 999999999]
+pub rec Timespec {
+    sec:  i64;
+    nsec: i64;
+}
+
+# seek whence
+pub val SEEK_SET: i32 = 0;
+pub val SEEK_CUR: i32 = 1;
+pub val SEEK_END: i32 = 2;
+
+# memory protection flags
+pub val PROT_NONE:  u32 = 0b000;
+pub val PROT_READ:  u32 = 0b001;
+pub val PROT_WRITE: u32 = 0b010;
+pub val PROT_EXEC:  u32 = 0b100;
+
+# memory advisory hints
+pub val ADVISE_NORMAL:     u32 = 0;
+pub val ADVISE_RANDOM:     u32 = 1;
+pub val ADVISE_SEQUENTIAL: u32 = 2;
+pub val ADVISE_WILL_NEED:  u32 = 3;
+pub val ADVISE_DONT_NEED:  u32 = 4;
+
+# standard huge page sizes
+pub val HUGE_2MB: usize = 2097152;
+pub val HUGE_1GB: usize = 1073741824;
+
+# heap region reserve size (256MB)
+pub val HEAP_RESERVE: usize = 268435456;
+
+# platform-agnostic sentinels
+pub val NOT_FOUND: i64 = -1;
+
+# wait status decoding (POSIX encoding, identical across all POSIX targets)
+
+pub fun has_exited(status: i32) bool {
+    ret (status & 0x7f) == 0;
+}
+
+pub fun exit_code(status: i32) i32 {
+    ret (status >> 8) & 0xff;
+}
+
+pub fun was_signaled(status: i32) bool {
+    val sig: i32 = status & 0x7f;
+    ret sig != 0 && sig != 0x7f;
+}
+
+pub fun term_signal(status: i32) i32 {
+    ret status & 0x7f;
+}
+
+pub fun was_stopped(status: i32) bool {
+    ret (status & 0xff) == 0x7f;
+}
+
+pub fun stop_signal(status: i32) i32 {
+    ret (status >> 8) & 0xff;
+}
+
+pub fun was_continued(status: i32) bool {
+    ret status == 0xffff;
+}

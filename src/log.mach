@@ -1,0 +1,130 @@
+# structured logging with configurable level and output.
+#
+# writes leveled log messages to stderr by default, or to a configured
+# writer. each message is prefixed with the level tag in brackets.
+
+use std.types.size.usize;
+use std.types.result.Result;
+use std.types.string.str;
+use std.types.string.str_len;
+use writer: std.io.writer;
+use f:      std.format;
+use os:     std.system.os;
+use atomic: std.sync.atomic;
+
+pub def Level: u8;
+pub val DEBUG: Level = 0;
+pub val INFO:  Level = 1;
+pub val WARN:  Level = 2;
+pub val ERROR: Level = 3;
+pub val OFF:   Level = 4;
+
+var level_val:  i64 = INFO::i64;
+var out_ctx:    ptr = nil;
+var out_fn:     usize = 0;
+var writer_set: i64 = 0;
+
+# set the minimum log level.
+#
+# messages below this level are silently discarded. safe to call from
+# any thread; takes effect immediately for subsequent log calls.
+# ---
+# level: minimum level to emit (DEBUG, INFO, WARN, ERROR, OFF)
+pub fun set_level(level: Level) {
+    atomic.store(?level_val, level::i64);
+}
+
+# set the output writer for log messages.
+#
+# when set, all output goes through this writer instead of stderr.
+# must be called before spawning threads that log.
+# ---
+# w: writer to use for output
+pub fun set_writer(w: *writer.Writer) {
+    out_ctx = w.ctx;
+    out_fn = w.fn_write::usize;
+    atomic.store(?writer_set, 1);
+}
+
+fun write_stderr(buf: *u8, len: usize) {
+    os.write(os.STDERR_FD, buf, len);
+}
+
+fun write_piece(buf: *u8, len: usize) {
+    if (atomic.load(?writer_set) != 0) {
+        val f: fun(ptr, *u8, usize) Result[usize, str] = out_fn::fun(ptr, *u8, usize) Result[usize, str];
+        f(out_ctx, buf, len);
+    }
+    or {
+        write_stderr(buf, len);
+    }
+}
+
+fun log_msg(level: Level, prefix: str, msg: str) {
+    if (level::i64 < atomic.load(?level_val)) { ret; }
+    write_piece("[", 1);
+    write_piece(prefix, str_len(prefix));
+    write_piece("] ", 2);
+    if (msg != nil) {
+        write_piece(msg, str_len(msg));
+    }
+    write_piece("\n", 1);
+}
+
+# log a message at DEBUG level.
+# ---
+# msg: message to log
+pub fun debug(msg: str) {
+    log_msg(DEBUG, "DEBUG", msg);
+}
+
+# log a message at INFO level.
+# ---
+# msg: message to log
+pub fun info(msg: str) {
+    log_msg(INFO, "INFO", msg);
+}
+
+# log a message at WARN level.
+# ---
+# msg: message to log
+pub fun warn(msg: str) {
+    log_msg(WARN, "WARN", msg);
+}
+
+# log a message at ERROR level.
+# ---
+# msg: message to log
+pub fun error(msg: str) {
+    log_msg(ERROR, "ERROR", msg);
+}
+
+test "set_level: OFF suppresses all" {
+    set_level(OFF);
+    debug("should not crash");
+    info("should not crash");
+    warn("should not crash");
+    error("should not crash");
+    set_level(INFO);
+    ret 0;
+}
+
+test "set_level: DEBUG enables all" {
+    set_level(DEBUG);
+    debug("debug msg");
+    info("info msg");
+    warn("warn msg");
+    error("error msg");
+    set_level(INFO);
+    ret 0;
+}
+
+test "log functions: nil message does not crash" {
+    set_level(DEBUG);
+    debug(nil);
+    info(nil);
+    warn(nil);
+    error(nil);
+    set_level(INFO);
+    ret 0;
+}

@@ -1,0 +1,215 @@
+# std.system.os.darwin.x86_64: x86_64-specific darwin OS primitives.
+#
+# provides page_size and pipe which require arch-specific assembly.
+# everything else is in shared.mach.
+
+use shared: std.system.os.darwin.shared;
+
+$if ($mach.target.os != $mach.os.darwin) {
+    $error("std.system.os.darwin.x86_64: requires darwin target");
+}
+
+$if ($mach.target.arch != $mach.arch.x86_64) {
+    $error("std.system.os.darwin.x86_64: requires x86_64 target");
+}
+
+pub fun page_size() usize {
+    ret 4096;
+}
+
+# pipe: create a unidirectional pipe.
+#
+# darwin pipe() syscall returns two fds in eax/edx. the syscall DSL only
+# captures eax, so this uses raw asm with a global to capture both.
+# ---
+# fds: pointer to two i32s; fds[0] = read end, fds[1] = write end
+# ret: 0 on success, or negative errno
+pub fun pipe(fds: *i32) i64 {
+    var result: i64 = 0;
+    asm x86_64 {
+        mov r8, rdi
+        mov eax, 0x200002A
+        syscall
+        jc 1f
+        mov [r8], eax
+        mov [r8+4], edx
+        xor eax, eax
+        jmp 2f
+    1:
+        neg rax
+    2:
+        mov {result}, rax
+    }
+    ret result;
+}
+
+# kernel ABI types
+fwd shared.stat_t;
+fwd shared.timespec;
+fwd shared.dirent64;
+
+# path
+fwd shared.separator;
+
+# constants
+fwd shared.STDIN_FD;
+fwd shared.STDOUT_FD;
+fwd shared.STDERR_FD;
+
+fwd shared.O_RDONLY;
+fwd shared.O_WRONLY;
+fwd shared.O_RDWR;
+fwd shared.O_CREAT;
+fwd shared.O_EXCL;
+fwd shared.O_TRUNC;
+fwd shared.O_APPEND;
+fwd shared.O_DIRECTORY;
+
+fwd shared.AT_FDCWD;
+fwd shared.AT_SYMLINK_NOFOLLOW;
+fwd shared.AT_REMOVEDIR;
+
+fwd shared.S_IFMT;
+fwd shared.S_IFDIR;
+fwd shared.S_IFREG;
+fwd shared.S_IFLNK;
+
+fwd shared.WNOHANG;
+fwd shared.WUNTRACED;
+fwd shared.WCONTINUED;
+
+fwd shared.CLOCK_REALTIME;
+fwd shared.CLOCK_MONOTONIC;
+
+fwd shared.EPERM;
+fwd shared.ENOENT;
+fwd shared.ESRCH;
+fwd shared.EINTR;
+fwd shared.EIO;
+fwd shared.ENXIO;
+fwd shared.E2BIG;
+fwd shared.EBADF;
+fwd shared.ECHILD;
+fwd shared.EAGAIN;
+fwd shared.ENOMEM;
+fwd shared.EACCES;
+fwd shared.EFAULT;
+fwd shared.EBUSY;
+fwd shared.EEXIST;
+fwd shared.ENODEV;
+fwd shared.ENOTDIR;
+fwd shared.EISDIR;
+fwd shared.EINVAL;
+fwd shared.ENFILE;
+fwd shared.EMFILE;
+fwd shared.ETXTBSY;
+fwd shared.ENOSPC;
+fwd shared.EROFS;
+fwd shared.EPIPE;
+fwd shared.ENOTEMPTY;
+fwd shared.ENOTSUP;
+
+fwd shared.EINTR_MAX_RETRIES;
+
+# syscall wrappers
+fwd shared.syscall0;
+fwd shared.syscall1;
+fwd shared.syscall2;
+fwd shared.syscall3;
+fwd shared.syscall4;
+fwd shared.syscall5;
+fwd shared.syscall6;
+
+# process
+fwd shared.terminate;
+fwd shared.abort;
+fwd shared.spawn;
+fwd shared.getpid;
+fwd shared.sleep;
+fwd shared.getcwd;
+fwd shared.getenv;
+fwd shared.fork;
+fwd shared.vfork;
+fwd shared.exec;
+fwd shared.wait;
+fwd shared.wait_pid;
+fwd shared.has_exited;
+fwd shared.exit_code;
+fwd shared.was_signaled;
+fwd shared.term_signal;
+fwd shared.was_stopped;
+fwd shared.stop_signal;
+fwd shared.was_continued;
+
+# memory
+fwd shared.allocate;
+fwd shared.deallocate;
+fwd shared.reallocate;
+fwd shared.heap_region_base;
+fwd shared.heap_region_extend;
+fwd shared.protect;
+fwd shared.lock;
+fwd shared.unlock;
+fwd shared.advise;
+fwd shared.map_file;
+fwd shared.sync_file;
+
+# environment
+fwd shared._envp;
+
+# filesystem
+fwd shared.read;
+fwd shared.write;
+fwd shared.open;
+fwd shared.close;
+fwd shared.stat;
+fwd shared.stat_path;
+fwd shared.unlink;
+fwd shared.rename;
+fwd shared.make_dir;
+fwd shared.read_dir;
+fwd shared.access;
+fwd shared.seek;
+
+# sockets
+fwd shared.AF_INET;
+fwd shared.SOCK_STREAM;
+fwd shared.SOCK_DGRAM;
+fwd shared.SOL_SOCKET;
+fwd shared.SO_REUSEADDR;
+fwd shared.SHUT_RD;
+fwd shared.SHUT_WR;
+fwd shared.SHUT_RDWR;
+fwd shared.SOCKADDR_IN_SIZE;
+fwd shared.sock_addr_init;
+fwd shared.sock_addr_read;
+fwd shared.sock_send;
+fwd shared.sock_recv;
+fwd shared.sock_close;
+fwd shared.sock_create;
+fwd shared.sock_bind;
+fwd shared.sock_listen;
+fwd shared.sock_accept;
+fwd shared.sock_connect;
+fwd shared.sock_sendto;
+fwd shared.sock_recvfrom;
+fwd shared.sock_shutdown;
+fwd shared.sock_setopt;
+
+# dns
+fwd shared.DNS_HOSTS_PATH;
+fwd shared.dns_nameserver;
+
+# random
+fwd shared.random_fill;
+
+# threads
+fwd shared.thread_spawn;
+fwd shared.thread_wait;
+fwd shared.thread_wake;
+
+# time
+fwd shared.clock_gettime;
+
+# errno
+fwd shared.error_message;

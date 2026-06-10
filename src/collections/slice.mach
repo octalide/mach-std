@@ -1,0 +1,106 @@
+# slice over a contiguous sequence of elements
+
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+
+# Slice[T]: pointer + length view over a contiguous sequence of T.
+# ---
+# data: pointer to the first element
+# size: number of elements in the slice
+pub rec Slice[T] {
+    data: *T;
+    size: usize;
+}
+
+# make: create a Slice[T] from a pointer and element count.
+# ---
+# data: pointer to the data
+# size: number of elements
+# ret:  a Slice[T] over the data
+pub fun make[T](data: *T, size: usize) Slice[T] {
+    var s: Slice[T];
+    s.data = data;
+    s.size = size;
+    ret s;
+}
+
+# is_empty: check if the slice has no elements.
+pub fun is_empty[T](s: Slice[T]) bool {
+    ret s.size == 0;
+}
+
+# get: retrieve a reference to the element at the given index.
+# ---
+# s:     slice to access
+# index: element index
+# ret:   reference to the element, or an error if out of bounds
+pub fun get[T](s: Slice[T], index: usize) Result[*T, str] {
+    if (index >= s.size) { ret err[*T, str]("index out of bounds"); }
+    ret ok[*T, str](?s.data[index]);
+}
+
+# set: update the element at the given index.
+# ---
+# s:     slice to modify
+# index: element index
+# value: new value to store
+# ret:   true on success, or an error if out of bounds
+pub fun set[T](s: Slice[T], index: usize, value: T) Result[bool, str] {
+    if (index >= s.size) { ret err[bool, str]("index out of bounds"); }
+    s.data[index] = value;
+    ret ok[bool, str](true);
+}
+
+test "slice: make creates slice from pointer and size" {
+    var arr: [4]i64 = [4]i64{10, 20, 30, 40};
+    val s: Slice[i64] = make[i64](?arr[0], 4);
+    if (s.size != 4) { ret 1; }
+    if (s.data == nil) { ret 1; }
+    ret 0;
+}
+
+test "slice: is_empty returns true for zero size" {
+    var arr: [4]i64 = [4]i64{1, 2, 3, 4};
+    val s: Slice[i64] = make[i64](?arr[0], 0);
+    if (!is_empty[i64](s)) { ret 1; }
+    ret 0;
+}
+
+test "slice: is_empty returns false for non-zero size" {
+    var arr: [4]i64 = [4]i64{1, 2, 3, 4};
+    val s: Slice[i64] = make[i64](?arr[0], 4);
+    if (is_empty[i64](s)) { ret 1; }
+    ret 0;
+}
+
+test "slice: data is accessible via slice" {
+    var arr: [3]i64 = [3]i64{100, 200, 300};
+    val s: Slice[i64] = make[i64](?arr[0], 3);
+    if (s.data[0] != 100) { ret 1; }
+    if (s.data[1] != 200) { ret 1; }
+    if (s.data[2] != 300) { ret 1; }
+    ret 0;
+}
+
+test "slice: data is mutable via slice" {
+    var arr: [3]i64 = [3]i64{1, 2, 3};
+    val s: Slice[i64] = make[i64](?arr[0], 3);
+    s.data[1] = 999;
+    if (arr[1] != 999) { ret 1; }
+    ret 0;
+}
+
+test "slice: slice of u8 bytes" {
+    var buf: [5]u8 = [5]u8{0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
+    val s: Slice[u8] = make[u8](?buf[0], 5);
+    if (s.size != 5) { ret 1; }
+    if (s.data[0] != 0xAA) { ret 1; }
+    if (s.data[4] != 0xEE) { ret 1; }
+    ret 0;
+}

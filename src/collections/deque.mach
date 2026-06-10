@@ -1,0 +1,415 @@
+# double-ended queue (ring buffer).
+
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.result.Result;
+use std.types.result.ok;
+use std.types.result.err;
+use std.types.result.is_ok;
+use std.types.result.is_err;
+use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
+
+use allo: std.allocator;
+use page: std.allocator.page;
+
+pub rec Deque[T] {
+    alloc: *allo.Allocator;
+    data:  *T;
+    head:  usize;
+    len:   usize;
+    cap:   usize;
+}
+
+# create an empty deque.
+# ---
+# alloc: allocator to use for allocations
+# ret:   a new empty Deque[T]
+pub fun init[T](alloc: *allo.Allocator) Deque[T] {
+    var dq: Deque[T];
+    dq.alloc = alloc;
+    dq.data = nil;
+    dq.head = 0;
+    dq.len = 0;
+    dq.cap = 0;
+    ret dq;
+}
+
+# free the backing buffer.
+# ---
+# ret: true if memory was freed successfully
+pub fun dnit[T](dq: *Deque[T]) bool {
+    if (dq == nil) { ret true; }
+    if (dq.cap == 0) {
+        dq.data = nil;
+        dq.len = 0;
+        dq.head = 0;
+        ret true;
+    }
+
+    val res: i64 = allo.deallocate[T](dq.alloc, dq.data, dq.cap);
+    if (res == 0) {
+        dq.data = nil;
+        dq.len = 0;
+        dq.head = 0;
+        dq.cap = 0;
+    }
+
+    ret res == 0;
+}
+
+# check if the deque is empty.
+# ---
+# ret: true if the deque has no elements
+pub fun is_empty[T](dq: Deque[T]) bool {
+    ret dq.len == 0;
+}
+
+# return the number of elements in the deque.
+# ---
+# ret: number of elements
+pub fun length[T](dq: Deque[T]) usize {
+    ret dq.len;
+}
+
+# grow the ring buffer to at least double its current capacity.
+# ---
+# ret: ok with new capacity, or error
+fun grow[T](dq: *Deque[T]) Result[usize, str] {
+    var new_cap: usize;
+    if (dq.cap == 0) {
+        new_cap = 8;
+    } or {
+        new_cap = dq.cap * 2;
+        if (new_cap < dq.cap) {
+            ret err[usize, str]("capacity overflow");
+        }
+    }
+
+    val r: Result[*T, str] = allo.allocate[T](dq.alloc, new_cap);
+    if (is_err[*T, str](r)) {
+        ret err[usize, str](unwrap_err[*T, str](r));
+    }
+
+    val new_data: *T = unwrap_ok[*T, str](r);
+
+    var i: usize = 0;
+    for (i < dq.len) {
+        val src_idx: usize = (dq.head + i) % dq.cap;
+        new_data[i] = dq.data[src_idx];
+        i = i + 1;
+    }
+
+    if (dq.cap > 0) {
+        allo.deallocate[T](dq.alloc, dq.data, dq.cap);
+    }
+
+    dq.data = new_data;
+    dq.head = 0;
+    dq.cap = new_cap;
+
+    ret ok[usize, str](new_cap);
+}
+
+# append a value to the back of the deque.
+# ---
+# value: value to append
+# ret:   the new length, or an error
+pub fun push_back[T](dq: *Deque[T], value: T) Result[usize, str] {
+    if (dq == nil) { ret err[usize, str]("deque is nil"); }
+    if (dq.len == dq.cap) {
+        val r: Result[usize, str] = grow[T](dq);
+        if (is_err[usize, str](r)) {
+            ret err[usize, str](unwrap_err[usize, str](r));
+        }
+    }
+
+    val idx: usize = (dq.head + dq.len) % dq.cap;
+    dq.data[idx] = value;
+    dq.len = dq.len + 1;
+    ret ok[usize, str](dq.len);
+}
+
+# prepend a value to the front of the deque.
+# ---
+# value: value to prepend
+# ret:   the new length, or an error
+pub fun push_front[T](dq: *Deque[T], value: T) Result[usize, str] {
+    if (dq == nil) { ret err[usize, str]("deque is nil"); }
+    if (dq.len == dq.cap) {
+        val r: Result[usize, str] = grow[T](dq);
+        if (is_err[usize, str](r)) {
+            ret err[usize, str](unwrap_err[usize, str](r));
+        }
+    }
+
+    dq.head = (dq.head + dq.cap - 1) % dq.cap;
+    dq.data[dq.head] = value;
+    dq.len = dq.len + 1;
+    ret ok[usize, str](dq.len);
+}
+
+# remove and return the element at the back.
+# ---
+# ret: the value, or an error if empty
+pub fun pop_back[T](dq: *Deque[T]) Result[T, str] {
+    if (dq == nil) { ret err[T, str]("deque is nil"); }
+    if (dq.len == 0) {
+        ret err[T, str]("pop from empty deque");
+    }
+
+    dq.len = dq.len - 1;
+    val idx: usize = (dq.head + dq.len) % dq.cap;
+    ret ok[T, str](dq.data[idx]);
+}
+
+# remove and return the element at the front.
+# ---
+# ret: the value, or an error if empty
+pub fun pop_front[T](dq: *Deque[T]) Result[T, str] {
+    if (dq == nil) { ret err[T, str]("deque is nil"); }
+    if (dq.len == 0) {
+        ret err[T, str]("pop from empty deque");
+    }
+
+    val value: T = dq.data[dq.head];
+    dq.head = (dq.head + 1) % dq.cap;
+    dq.len = dq.len - 1;
+    ret ok[T, str](value);
+}
+
+# get a pointer to the element at the given logical index.
+# ---
+# index: logical index (0 = front)
+# ret:   pointer to element, or an error
+pub fun get[T](dq: *Deque[T], index: usize) Result[*T, str] {
+    if (dq == nil) { ret err[*T, str]("deque is nil"); }
+    if (index >= dq.len) {
+        ret err[*T, str]("index out of bounds");
+    }
+
+    val phys: usize = (dq.head + index) % dq.cap;
+    ret ok[*T, str](?dq.data[phys]);
+}
+
+# reset the deque to empty without freeing memory.
+pub fun clear[T](dq: *Deque[T]) {
+    if (dq == nil) { ret; }
+    dq.len = 0;
+    dq.head = 0;
+}
+
+test "deque: init creates empty deque" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val dq: Deque[i64] = init[i64](?a);
+    if (!is_empty[i64](dq)) { ret 1; }
+    if (length[i64](dq) != 0) { ret 1; }
+    ret 0;
+}
+
+test "deque: push_back and pop_front (FIFO)" {
+    var a: allo.Allocator;
+    page.make(?a);
+    var dq: Deque[i64] = init[i64](?a);
+
+    push_back[i64](?dq, 10);
+    push_back[i64](?dq, 20);
+    push_back[i64](?dq, 30);
+
+    var r: Result[i64, str];
+
+    r = pop_front[i64](?dq);
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 10) { ret 1; }
+
+    r = pop_front[i64](?dq);
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 20) { ret 1; }
+
+    r = pop_front[i64](?dq);
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 30) { ret 1; }
+
+    if (!is_empty[i64](dq)) { ret 1; }
+
+    val ok: bool = dnit[i64](?dq);
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "deque: push_front and pop_back (FIFO reversed)" {
+    var a: allo.Allocator;
+    page.make(?a);
+    var dq: Deque[i64] = init[i64](?a);
+
+    push_front[i64](?dq, 10);
+    push_front[i64](?dq, 20);
+    push_front[i64](?dq, 30);
+
+    var r: Result[i64, str];
+
+    r = pop_back[i64](?dq);
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 10) { ret 1; }
+
+    r = pop_back[i64](?dq);
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 20) { ret 1; }
+
+    r = pop_back[i64](?dq);
+    if (is_err[i64, str](r)) { ret 1; }
+    if (unwrap_ok[i64, str](r) != 30) { ret 1; }
+
+    if (!is_empty[i64](dq)) { ret 1; }
+
+    val ok: bool = dnit[i64](?dq);
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "deque: mixed push and pop" {
+    var a: allo.Allocator;
+    page.make(?a);
+    var dq: Deque[i64] = init[i64](?a);
+
+    push_back[i64](?dq, 1);
+    push_back[i64](?dq, 2);
+    push_front[i64](?dq, 0);
+
+    if (length[i64](dq) != 3) { ret 1; }
+
+    var r: Result[i64, str];
+
+    r = pop_front[i64](?dq);
+    if (unwrap_ok[i64, str](r) != 0) { ret 1; }
+
+    r = pop_back[i64](?dq);
+    if (unwrap_ok[i64, str](r) != 2) { ret 1; }
+
+    r = pop_front[i64](?dq);
+    if (unwrap_ok[i64, str](r) != 1) { ret 1; }
+
+    if (!is_empty[i64](dq)) { ret 1; }
+
+    val ok: bool = dnit[i64](?dq);
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "deque: get by index" {
+    var a: allo.Allocator;
+    page.make(?a);
+    var dq: Deque[i64] = init[i64](?a);
+
+    push_back[i64](?dq, 100);
+    push_back[i64](?dq, 200);
+    push_back[i64](?dq, 300);
+
+    val r0: Result[*i64, str] = get[i64](?dq, 0);
+    if (is_err[*i64, str](r0)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r0) != 100) { ret 1; }
+
+    val r1: Result[*i64, str] = get[i64](?dq, 1);
+    if (is_err[*i64, str](r1)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r1) != 200) { ret 1; }
+
+    val r2: Result[*i64, str] = get[i64](?dq, 2);
+    if (is_err[*i64, str](r2)) { ret 1; }
+    if (@unwrap_ok[*i64, str](r2) != 300) { ret 1; }
+
+    val r_oob: Result[*i64, str] = get[i64](?dq, 3);
+    if (is_ok[*i64, str](r_oob)) { ret 1; }
+
+    val ok: bool = dnit[i64](?dq);
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "deque: pop from empty returns error" {
+    var a: allo.Allocator;
+    page.make(?a);
+    var dq: Deque[i64] = init[i64](?a);
+
+    val r1: Result[i64, str] = pop_front[i64](?dq);
+    if (is_ok[i64, str](r1)) { ret 1; }
+
+    val r2: Result[i64, str] = pop_back[i64](?dq);
+    if (is_ok[i64, str](r2)) { ret 1; }
+
+    val ok: bool = dnit[i64](?dq);
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "deque: wrap-around behavior" {
+    var a: allo.Allocator;
+    page.make(?a);
+    var dq: Deque[i64] = init[i64](?a);
+
+    var i: i64 = 0;
+    for (i < 8) {
+        push_back[i64](?dq, i);
+        i = i + 1;
+    }
+
+    var j: i64 = 0;
+    for (j < 4) {
+        pop_front[i64](?dq);
+        j = j + 1;
+    }
+
+    var k: i64 = 8;
+    for (k < 12) {
+        push_back[i64](?dq, k);
+        k = k + 1;
+    }
+
+    if (length[i64](dq) != 8) { ret 1; }
+
+    var r: Result[i64, str];
+
+    r = pop_front[i64](?dq);
+    if (unwrap_ok[i64, str](r) != 4) { ret 1; }
+
+    r = pop_front[i64](?dq);
+    if (unwrap_ok[i64, str](r) != 5) { ret 1; }
+
+    val ok: bool = dnit[i64](?dq);
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "deque: clear resets length and head" {
+    var a: allo.Allocator;
+    page.make(?a);
+    var dq: Deque[i64] = init[i64](?a);
+
+    push_back[i64](?dq, 1);
+    push_back[i64](?dq, 2);
+    push_back[i64](?dq, 3);
+
+    clear[i64](?dq);
+
+    if (length[i64](dq) != 0) { ret 1; }
+    if (!is_empty[i64](dq)) { ret 1; }
+
+    push_back[i64](?dq, 42);
+    val r: Result[i64, str] = pop_front[i64](?dq);
+    if (unwrap_ok[i64, str](r) != 42) { ret 1; }
+
+    val ok: bool = dnit[i64](?dq);
+    if (!ok) { ret 1; }
+    ret 0;
+}
+
+test "deque: dnit on empty deque succeeds" {
+    var a: allo.Allocator;
+    page.make(?a);
+    var dq: Deque[i64] = init[i64](?a);
+    val ok: bool = dnit[i64](?dq);
+    if (!ok) { ret 1; }
+    ret 0;
+}

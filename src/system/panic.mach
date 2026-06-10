@@ -1,0 +1,52 @@
+# low-level panic: write message to stderr and terminate.
+#
+# self-contained module with no dependency on std.system.os,
+# allowing std.types.result and std.types.option to panic
+# without creating a circular import chain.
+
+use std.types.size.usize;
+
+# panic: write a null-terminated message to stderr and abort.
+# ---
+# msg: pointer to null-terminated error message
+pub fun panic(msg: *u8) {
+    var len: usize = 0;
+    for (msg[len] != 0) { len = len + 1; }
+
+    $if ($mach.target.os == $mach.os.linux) {
+        asm x86_64 {
+            mov eax, 1        # SYS_write
+            mov edi, 2        # fd = stderr
+            mov rsi, {msg}
+            mov rdx, {len}
+            syscall
+        }
+    }
+    $or {
+        $if ($mach.target.arch == $mach.arch.x86_64) {
+            asm x86_64 {
+                mov eax, 0x2000004  # SYS_write (darwin)
+                mov edi, 2          # fd = stderr
+                mov rsi, {msg}
+                mov rdx, {len}
+                syscall
+            }
+        }
+        $or ($mach.target.arch == $mach.arch.aarch64) {
+            asm aarch64 {
+                mov x16, 4    # SYS_write (darwin aarch64)
+                mov x0, 2     # fd = stderr
+                mov x1, {msg}
+                mov x2, {len}
+                svc 0x80
+            }
+        }
+    }
+
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 { hlt }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 { brk 0 }
+    }
+}

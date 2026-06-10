@@ -1,0 +1,286 @@
+use std.types.size.usize;
+
+# low-level memory operations for raw and typed buffers.
+
+# raw_fill: fill a block of raw memory with a byte value.
+# ---
+# p:     pointer to the start of the memory block
+# value: byte value to fill with
+# size:  number of bytes to fill
+pub fun raw_fill(p: ptr, value: u8, size: usize) {
+    if (p == nil || size == 0) {
+        ret;
+    }
+
+    val bytes: *u8 = p::*u8;
+
+    var i: usize = 0;
+    for (i < size) {
+        bytes[i] = value;
+        i        = i + 1;
+    }
+}
+
+# raw_copy: copy a block of raw memory from source to destination.
+# ---
+# dst:  pointer to the destination memory block
+# src:  pointer to the source memory block
+# size: number of bytes to copy
+pub fun raw_copy(dst: ptr, src: ptr, size: usize) {
+    if (dst == nil || src == nil || size == 0) {
+        ret;
+    }
+
+    val dst_bytes: *u8 = dst::*u8;
+    val src_bytes: *u8 = src::*u8;
+
+    var i: usize = 0;
+    for (i < size) {
+        dst_bytes[i] = src_bytes[i];
+        i            = i + 1;
+    }
+}
+
+# copy a block of raw memory, correctly handling overlapping regions.
+#
+# copies backward when dst > src to avoid corruption from overlap.
+# for non-overlapping regions, raw_copy is preferred.
+# ---
+# dst:  pointer to the destination memory block
+# src:  pointer to the source memory block
+# size: number of bytes to copy
+pub fun raw_move(dst: ptr, src: ptr, size: usize) {
+    if (dst == nil || src == nil || size == 0) { ret; }
+    val d: *u8 = dst::*u8;
+    val s: *u8 = src::*u8;
+    if (dst::usize > src::usize) {
+        var i: usize = size;
+        for (i > 0) {
+            i = i - 1;
+            d[i] = s[i];
+        }
+    } or {
+        var i: usize = 0;
+        for (i < size) {
+            d[i] = s[i];
+            i = i + 1;
+        }
+    }
+}
+
+# raw_zero: zero out a block of raw memory.
+# ---
+# p:    pointer to the start of the memory block
+# size: number of bytes to zero out
+pub fun raw_zero(p: ptr, size: usize) {
+    raw_fill(p, 0, size);
+}
+
+# fill: fill a block of memory with a value for type T.
+# ---
+# p:     pointer to the start of the memory block
+# value: value to fill with
+# count: number of elements to fill
+pub fun fill[T](p: *T, value: T, count: usize) {
+    if (p == nil || count == 0) {
+        ret;
+    }
+
+    var i: usize = 0;
+    for (i < count) {
+        p[i] = value;
+        i    = i + 1;
+    }
+}
+
+# copy: copy a block of memory from a source to a destination.
+# ---
+# dst:   pointer to the destination memory block
+# src:   pointer to the source memory block
+# count: number of elements to copy
+pub fun copy[T](dst: *T, src: *T, count: usize) {
+    if (dst == nil || src == nil || count == 0) {
+        ret;
+    }
+
+    var i: usize = 0;
+    for (i < count) {
+        dst[i] = src[i];
+        i      = i + 1;
+    }
+}
+
+# copy a typed block of memory, correctly handling overlapping regions.
+#
+# delegates to raw_move for the actual byte-level overlapping copy.
+# for non-overlapping regions, copy[T] is preferred.
+# ---
+# dst:   pointer to the destination memory block
+# src:   pointer to the source memory block
+# count: number of elements to copy
+pub fun move[T](dst: *T, src: *T, count: usize) {
+    if (dst == nil || src == nil || count == 0) {
+        ret;
+    }
+    if (count > ~(0::usize) / $size_of(T)) { ret; }
+
+    raw_move(dst::ptr, src::ptr, $size_of(T) * count);
+}
+
+# zero: zero out a block of memory for a number of elements of type T.
+# ---
+# p:     pointer to the start of the memory block
+# count: number of elements to zero out
+pub fun zero[T](p: *T, count: usize) {
+    if (p == nil || count == 0) { ret; }
+    if (count > ~(0::usize) / $size_of(T)) { ret; }
+    raw_zero(p::ptr, $size_of(T) * count);
+}
+
+test "memory: raw_fill with non-zero value" {
+    var buf: [8]u8;
+    raw_fill(?buf[0], 0xAB, 8);
+    if (buf[0] != 0xAB) { ret 1; }
+    if (buf[7] != 0xAB) { ret 1; }
+    ret 0;
+}
+
+test "memory: raw_fill with zero value" {
+    var buf: [4]u8 = [4]u8{1, 2, 3, 4};
+    raw_fill(?buf[0], 0, 4);
+    if (buf[0] != 0) { ret 1; }
+    if (buf[1] != 0) { ret 1; }
+    if (buf[2] != 0) { ret 1; }
+    if (buf[3] != 0) { ret 1; }
+    ret 0;
+}
+
+test "memory: raw_fill with size zero is noop" {
+    var buf: [2]u8 = [2]u8{0xAA, 0xBB};
+    raw_fill(?buf[0], 0xFF, 0);
+    if (buf[0] != 0xAA) { ret 1; }
+    if (buf[1] != 0xBB) { ret 1; }
+    ret 0;
+}
+
+test "memory: raw_fill with nil pointer is noop" {
+    raw_fill(nil, 0xFF, 100);
+    ret 0;
+}
+
+test "memory: raw_copy copies bytes" {
+    var src: [4]u8 = [4]u8{1, 2, 3, 4};
+    var dst: [4]u8 = [4]u8{0, 0, 0, 0};
+    raw_copy(?dst[0], ?src[0], 4);
+    if (dst[0] != 1) { ret 1; }
+    if (dst[1] != 2) { ret 1; }
+    if (dst[2] != 3) { ret 1; }
+    if (dst[3] != 4) { ret 1; }
+    ret 0;
+}
+
+test "memory: raw_copy partial copy" {
+    var src: [4]u8 = [4]u8{10, 20, 30, 40};
+    var dst: [4]u8 = [4]u8{0, 0, 0, 0};
+    raw_copy(?dst[0], ?src[0], 2);
+    if (dst[0] != 10) { ret 1; }
+    if (dst[1] != 20) { ret 1; }
+    if (dst[2] != 0) { ret 1; }
+    if (dst[3] != 0) { ret 1; }
+    ret 0;
+}
+
+test "memory: raw_copy with size zero is noop" {
+    var src: [2]u8 = [2]u8{1, 2};
+    var dst: [2]u8 = [2]u8{9, 9};
+    raw_copy(?dst[0], ?src[0], 0);
+    if (dst[0] != 9) { ret 1; }
+    if (dst[1] != 9) { ret 1; }
+    ret 0;
+}
+
+test "memory: raw_copy with nil dst is noop" {
+    var src: [2]u8 = [2]u8{1, 2};
+    raw_copy(nil, ?src[0], 2);
+    ret 0;
+}
+
+test "memory: raw_copy with nil src is noop" {
+    var dst: [2]u8 = [2]u8{9, 9};
+    raw_copy(?dst[0], nil, 2);
+    if (dst[0] != 9) { ret 1; }
+    if (dst[1] != 9) { ret 1; }
+    ret 0;
+}
+
+test "memory: raw_zero zeroes memory" {
+    var buf: [4]u8 = [4]u8{1, 2, 3, 4};
+    raw_zero(?buf[0], 4);
+    if (buf[0] != 0) { ret 1; }
+    if (buf[1] != 0) { ret 1; }
+    if (buf[2] != 0) { ret 1; }
+    if (buf[3] != 0) { ret 1; }
+    ret 0;
+}
+
+test "memory: fill typed array" {
+    var arr: [4]i64;
+    fill[i64](?arr[0], 42, 4);
+    if (arr[0] != 42) { ret 1; }
+    if (arr[1] != 42) { ret 1; }
+    if (arr[2] != 42) { ret 1; }
+    if (arr[3] != 42) { ret 1; }
+    ret 0;
+}
+
+test "memory: fill with count zero is noop" {
+    var arr: [2]i64 = [2]i64{1, 2};
+    fill[i64](?arr[0], 99, 0);
+    if (arr[0] != 1) { ret 1; }
+    if (arr[1] != 2) { ret 1; }
+    ret 0;
+}
+
+test "memory: fill with nil pointer is noop" {
+    val p: *i64 = nil;
+    fill[i64](p, 99, 10);
+    ret 0;
+}
+
+test "memory: copy typed array" {
+    var src: [3]i64 = [3]i64{100, 200, 300};
+    var dst: [3]i64 = [3]i64{0, 0, 0};
+    copy[i64](?dst[0], ?src[0], 3);
+    if (dst[0] != 100) { ret 1; }
+    if (dst[1] != 200) { ret 1; }
+    if (dst[2] != 300) { ret 1; }
+    ret 0;
+}
+
+test "memory: copy partial typed array" {
+    var src: [4]i64 = [4]i64{1, 2, 3, 4};
+    var dst: [4]i64 = [4]i64{0, 0, 0, 0};
+    copy[i64](?dst[0], ?src[0], 2);
+    if (dst[0] != 1) { ret 1; }
+    if (dst[1] != 2) { ret 1; }
+    if (dst[2] != 0) { ret 1; }
+    if (dst[3] != 0) { ret 1; }
+    ret 0;
+}
+
+test "memory: zero typed array" {
+    var arr: [3]i64 = [3]i64{10, 20, 30};
+    zero[i64](?arr[0], 3);
+    if (arr[0] != 0) { ret 1; }
+    if (arr[1] != 0) { ret 1; }
+    if (arr[2] != 0) { ret 1; }
+    ret 0;
+}
+
+test "memory: zero with count zero is noop" {
+    var arr: [2]i64 = [2]i64{5, 6};
+    zero[i64](?arr[0], 0);
+    if (arr[0] != 5) { ret 1; }
+    if (arr[1] != 6) { ret 1; }
+    ret 0;
+}
