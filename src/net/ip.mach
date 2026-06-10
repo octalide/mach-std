@@ -244,7 +244,7 @@ test "ip: ipv4_format" {
     val ip: IPv4 = ipv4(127, 0, 0, 1);
     var buf: [16]u8;
     val n: usize = ipv4_format(ip, ?buf[0], 16);
-    if (n != 7) { ret 1; }
+    if (n != 9) { ret 1; }
     if (!str_starts_with(?buf[0], "127.0.0.1")) { ret 1; }
     ret 0;
 }
