@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.4.2] - 2026-06-10
+
+Patch release: SysV stack-alignment fix in the program entrypoint.
+
+### Fixed
+
+- `_start` (linux and darwin x86_64) entered every callee with an 8-byte
+  misaligned stack, violating the SysV call invariant — invisible to pure-Mach
+  programs but a SIGSEGV for any C callee using aligned SSE accesses (#200).
+
 ## [0.4.1] - 2026-06-10
 
 First tagged release carrying the 0.3.0 and 0.4.0 work (neither was tagged);
