@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- The x86_64 `_start` entrypoints (linux and darwin) mis-aligned the stack by 8
+  bytes at every CALL: after `and rsp, -16` an extra `sub rsp, 8` left RSP at
+  `rsp % 16 == 8` so callees were entered with `rsp % 16 == 0` instead of the
+  SysV-required 8. Harmless to pure-Mach programs but it SIGSEGV'd at the C
+  boundary whenever an external function used an aligned SSE access against a
+  16-aligned stack slot. Dropped the `sub rsp, 8`; `and rsp, -16` alone holds
+  the call-boundary invariant ([#200](https://github.com/octalide/mach-std/issues/200)).
+
 ## [0.4.1] - 2026-06-10
 
 First tagged release carrying the 0.3.0 and 0.4.0 work (neither was tagged);
