@@ -15,7 +15,9 @@
 #      16-aligned at the CALL site, so the callee is entered with RSP%16==8)
 #   3. calls _rt_init to store envp into the OS layer
 #   4. calls user-supplied `main(argc, argv)`
-#   5. exits via sys_exit with the return code from main
+#   5. exits via sys_exit_group with the return code from main, terminating
+#      all threads in the process (sys_exit would leave non-main threads
+#      alive, hanging the process after main returns)
 #
 # user code must define:
 #   $main.symbol = "main";
@@ -59,7 +61,7 @@ pub fun _start() {
         call main
 
         mov rdi, rax      # exit code from main -> rdi (1st syscall arg)
-        mov rax, 60       # SYS_exit
+        mov rax, 231      # SYS_exit_group
         syscall
     }
 }
