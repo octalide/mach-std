@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-06-11
+
+Patch release: process exit now terminates all threads on linux.
+
+### Fixed
+
+- `_start` (linux x86_64) and the linux OS-layer process-exit paths
+  (`terminate`, backing `process.exec.exit`/`abort`/panic, and the spawn
+  child's exec-failure exit) used `SYS_exit`, which ends only the calling
+  thread — any program with a live non-main thread hung after `main`
+  returned. All process exits now use `SYS_exit_group`; thread exits keep
+  `SYS_exit`. darwin (`exit` ends the whole task) and windows
+  (`ExitProcess`) were already correct (#205).
+
 ## [0.4.2] - 2026-06-10
 
 Patch release: SysV stack-alignment fix in the program entrypoint.
