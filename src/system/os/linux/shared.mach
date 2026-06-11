@@ -37,6 +37,7 @@ $if ($mach.target.arch == $mach.arch.x86_64) {
     val SYS_VFORK:         usize = 58;
     val SYS_EXECVE:        usize = 59;
     val SYS_EXIT:          usize = 60;
+    val SYS_EXIT_GROUP:    usize = 231;
     val SYS_WAIT4:         usize = 61;
     val SYS_PIPE2:         usize = 293;
     val SYS_GETCWD:        usize = 79;
@@ -790,10 +791,13 @@ pub var _envp: usize = 0;
 # process
 
 # terminate: exit the process with the given code.
+#
+# uses exit_group so all threads in the process are terminated; plain
+# exit would only end the calling thread, leaving the process alive.
 # ---
 # code: exit code
 pub fun terminate(code: i64) {
-    syscall1(SYS_EXIT, code::usize);
+    syscall1(SYS_EXIT_GROUP, code::usize);
     asm x86_64 { hlt }
 }
 
@@ -888,7 +892,7 @@ pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
             }
         }
         exec(pathname, argv, envp);
-        syscall1(SYS_EXIT, 127);
+        syscall1(SYS_EXIT_GROUP, 127);
     }
     ret pid;
 }
