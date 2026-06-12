@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `std.process.exec.capture(pathname, argv, envp, buf, cap) Result[Capture, str]`
+  — run a child and collect its stdout into `buf`, draining the pipe to EOF so a
+  child outproducing the buffer never blocks; reports the full output length so
+  truncation (`len > cap`) is detectable, mirroring the `env.get` contract.
+  Backed by a new `std.system.os.spawn_captured` fd-redirection primitive
+  (fork + dup2 + exec, sharing `spawn`'s inherited-fd close path) on linux and
+  darwin; windows returns `ENOTSUP` until #221 (#188, capture half).
+
 ## [0.6.0] - 2026-06-12
 
 Bug-clearing release: all three known-failing tests are fixed for real (thread
