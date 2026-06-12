@@ -221,17 +221,23 @@ pub val EINTR_MAX_RETRIES: usize = 8;
 # error the carry flag is set and the positive errno is returned; these
 # wrappers negate it so callers see a negative errno, matching the i64
 # contract used throughout this module.
+#
+# the inline-asm encoder only branches to symbols, so rather than branch
+# on the carry flag inside the asm block, each wrapper materializes it
+# into `fail` (`setc` on x86_64, `cset` on aarch64) and negates the raw
+# result in mach code when fail is set.
 
 pub fun syscall0(n: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -239,26 +245,27 @@ pub fun syscall0(n: usize) i64 {
         asm aarch64 {
             mov x16, {n}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall1(n: usize, a0: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
             mov rdi, {a0}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -267,17 +274,18 @@ pub fun syscall1(n: usize, a0: usize) i64 {
             mov x16, {n}
             mov x0, {a0}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
@@ -285,9 +293,9 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
             mov rdi, {a0}
             mov rsi, {a1}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -297,17 +305,18 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
             mov x0, {a0}
             mov x1, {a1}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
@@ -316,9 +325,9 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
             mov rsi, {a1}
             mov rdx, {a2}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -329,17 +338,18 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
             mov x1, {a1}
             mov x2, {a2}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
@@ -349,9 +359,9 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
             mov rdx, {a2}
             mov r10, {a3}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -363,17 +373,18 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
             mov x2, {a2}
             mov x3, {a3}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
@@ -384,9 +395,9 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov r10, {a3}
             mov r8, {a4}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -399,17 +410,18 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov x3, {a3}
             mov x4, {a4}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
@@ -421,9 +433,9 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov r8, {a4}
             mov r9, {a5}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -437,12 +449,12 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov x4, {a4}
             mov x5, {a5}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
