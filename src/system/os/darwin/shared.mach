@@ -673,7 +673,7 @@ pub fun make_dir(dirfd: i32, path: *u8, mode: i32) i64 {
 # darwin uses getdirentries64 instead of getdents64.
 pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
     var basep: i64 = 0;
-    ret syscall4(SYS_GETDIRENTRIES64, fd::isize::usize, dirp::usize, count, ?basep::usize);
+    ret syscall4(SYS_GETDIRENTRIES64, fd::isize::usize, dirp::usize, count, (?basep)::usize);
 }
 
 pub fun access(dirfd: i32, path: *u8, mode: i32, flags: i32) i64 {
@@ -775,7 +775,7 @@ pub fun sleep(nsec: i64) {
     var tv: timeval;
     tv.tv_sec = sec;
     tv.tv_usec = usec::i32;
-    syscall5(SYS_SELECT, 0, 0, 0, 0, ?tv::usize);
+    syscall5(SYS_SELECT, 0, 0, 0, 0, (?tv)::usize);
 }
 
 # getcwd: get the current working directory.
