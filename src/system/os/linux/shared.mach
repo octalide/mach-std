@@ -940,11 +940,15 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
 }
 
 # getenv: look up an environment variable by name.
+#
+# when the value fits (ret < cap) it is copied and null-terminated.
+# always returns the full value length, so ret >= cap signals truncation
+# (buffer contents unspecified) and ret + 1 is the capacity to retry with.
 # ---
 # name: null-terminated variable name
 # buf:  destination buffer for the value
 # cap:  buffer capacity in bytes
-# ret:  length of value on success, or NOT_FOUND
+# ret:  full length of the value, or NOT_FOUND
 pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     if (_envp == 0) { ret os_shared.NOT_FOUND; }
     val envp: **u8 = _envp::**u8;
@@ -953,17 +957,16 @@ pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     for (envp[i]::usize != 0) {
         val entry: *u8 = envp[i];
         if (str_starts_with(entry, name) && entry[name_len] == '='::u8) {
-            if (cap == 0) { ret 0; }
             val val_start: usize = name_len + 1;
+            var len: usize = 0;
+            for (entry[val_start + len] != 0) { len = len + 1; }
             var j: usize = 0;
-            for (entry[val_start + j] != 0 && j < cap - 1) {
+            for (j < len && j + 1 < cap) {
                 buf[j] = entry[val_start + j];
                 j = j + 1;
             }
-            if (j < cap) {
-                buf[j] = 0;
-            }
-            ret j::i64;
+            if (j < cap) { buf[j] = 0; }
+            ret len::i64;
         }
         i = i + 1;
     }

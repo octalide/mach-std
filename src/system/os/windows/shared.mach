@@ -1211,11 +1211,15 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
 }
 
 # getenv: look up an environment variable by name.
+#
+# when the value fits (ret < cap) it is copied and null-terminated.
+# always returns the full value length, so ret >= cap signals truncation
+# (buffer contents unspecified) and ret + 1 is the capacity to retry with.
 # ---
 # name: null-terminated variable name
 # buf:  destination buffer for the value
 # cap:  buffer capacity in bytes
-# ret:  length of value on success, or NOT_FOUND
+# ret:  full length of the value, NOT_FOUND, or EIO
 pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     val len: u32 = GetEnvironmentVariableA(name, buf, cap::u32);
     if (len == 0) {
@@ -1224,6 +1228,11 @@ pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
             ret os_shared.NOT_FOUND;
         }
         ret EIO;
+    }
+    # on truncation the api reports the required size including the
+    # null terminator; normalize to the value length
+    if (len::usize >= cap) {
+        ret len::i64 - 1;
     }
     ret len::i64;
 }
