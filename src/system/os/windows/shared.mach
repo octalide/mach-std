@@ -1,8 +1,11 @@
 # std.system.os.windows.shared: code shared across all windows ISA implementations.
 #
 # windows has no stable syscall interface. all OS interaction goes through
-# kernel32.dll and ntdll.dll via ext fun declarations. a HANDLE-to-fd
-# mapping table bridges the POSIX-style fd interface used by os.mach.
+# kernel32.dll and ntdll.dll via ext fun declarations, plus ws2_32.dll for
+# sockets and advapi32.dll for RtlGenRandom; the latter two are pinned with
+# `$<sym>.library` so the PE import directory attributes them to the right DLL
+# rather than the first dependency. a HANDLE-to-fd mapping table bridges the
+# POSIX-style fd interface used by os.mach.
 
 use std.types.size.usize;
 use std.types.size.isize;
@@ -211,35 +214,52 @@ ext fun CreateThread(p0: ptr, p1: usize, p2: usize, p3: ptr, p4: u32, p5: *u32) 
 ext fun WaitOnAddress(p0: ptr, p1: ptr, p2: usize, p3: u32) i32;
 ext fun WakeByAddressSingle(p0: ptr);
 
-# Winsock2 API imports (ws2_32.dll)
+# Winsock2 API imports (ws2_32.dll). each is pinned to ws2_32.dll with
+# `$<sym>.library`; without it an `ext` import binds to the first dependency
+# (kernel32.dll) and aborts at call time on a real loader.
 
+$WSAStartup.library = "ws2_32.dll";
 ext fun WSAStartup(p0: u16, p1: *u8) i32;
+$WSAGetLastError.library = "ws2_32.dll";
 ext fun WSAGetLastError() i32;
-$ws2_socket.symbol = "socket";
+$ws2_socket.library = "ws2_32.dll";
+$ws2_socket.symbol  = "socket";
 ext fun ws2_socket(p0: i32, p1: i32, p2: i32) usize;
-$ws2_bind.symbol = "bind";
+$ws2_bind.library = "ws2_32.dll";
+$ws2_bind.symbol  = "bind";
 ext fun ws2_bind(p0: usize, p1: *u8, p2: i32) i32;
-$ws2_listen.symbol = "listen";
+$ws2_listen.library = "ws2_32.dll";
+$ws2_listen.symbol  = "listen";
 ext fun ws2_listen(p0: usize, p1: i32) i32;
-$ws2_accept.symbol = "accept";
+$ws2_accept.library = "ws2_32.dll";
+$ws2_accept.symbol  = "accept";
 ext fun ws2_accept(p0: usize, p1: *u8, p2: *i32) usize;
-$ws2_connect.symbol = "connect";
+$ws2_connect.library = "ws2_32.dll";
+$ws2_connect.symbol  = "connect";
 ext fun ws2_connect(p0: usize, p1: *u8, p2: i32) i32;
-$ws2_sendto.symbol = "sendto";
+$ws2_sendto.library = "ws2_32.dll";
+$ws2_sendto.symbol  = "sendto";
 ext fun ws2_sendto(p0: usize, p1: *u8, p2: i32, p3: i32, p4: *u8, p5: i32) i32;
-$ws2_recvfrom.symbol = "recvfrom";
+$ws2_recvfrom.library = "ws2_32.dll";
+$ws2_recvfrom.symbol  = "recvfrom";
 ext fun ws2_recvfrom(p0: usize, p1: *u8, p2: i32, p3: i32, p4: *u8, p5: *i32) i32;
-$ws2_shutdown.symbol = "shutdown";
+$ws2_shutdown.library = "ws2_32.dll";
+$ws2_shutdown.symbol  = "shutdown";
 ext fun ws2_shutdown(p0: usize, p1: i32) i32;
-$ws2_setsockopt.symbol = "setsockopt";
+$ws2_setsockopt.library = "ws2_32.dll";
+$ws2_setsockopt.symbol  = "setsockopt";
 ext fun ws2_setsockopt(p0: usize, p1: i32, p2: i32, p3: *u8, p4: i32) i32;
-$ws2_send.symbol = "send";
+$ws2_send.library = "ws2_32.dll";
+$ws2_send.symbol  = "send";
 ext fun ws2_send(p0: usize, p1: *u8, p2: i32, p3: i32) i32;
-$ws2_recv.symbol = "recv";
+$ws2_recv.library = "ws2_32.dll";
+$ws2_recv.symbol  = "recv";
 ext fun ws2_recv(p0: usize, p1: *u8, p2: i32, p3: i32) i32;
+$closesocket.library = "ws2_32.dll";
 ext fun closesocket(p0: usize) i32;
 
 # advapi32.dll
+$SystemFunction036.library = "advapi32.dll";
 ext fun SystemFunction036(p0: *u8, p1: u32) i32;
 
 ext fun GetCurrentProcessId() u32;
@@ -254,8 +274,7 @@ ext fun SetHandleInformation(p0: isize, p1: u32, p2: u32) i32;
 ext fun InitializeProcThreadAttributeList(p0: ptr, p1: u32, p2: u32, p3: *usize) i32;
 ext fun UpdateProcThreadAttribute(p0: ptr, p1: u32, p2: usize, p3: ptr, p4: usize, p5: ptr, p6: ptr) i32;
 ext fun DeleteProcThreadAttributeList(p0: ptr);
-$SleepW.symbol = "Sleep";
-ext fun SleepW(p0: u32);
+ext fun Sleep(p0: u32);
 ext fun GetCurrentDirectoryA(p0: u32, p1: *u8) u32;
 ext fun GetEnvironmentVariableA(p0: *u8, p1: *u8, p2: u32) u32;
 ext fun GetEnvironmentStringsA() *u8;
@@ -1584,7 +1603,7 @@ pub fun pipe(fds: *i32) i64 {
 pub fun sleep(nsec: i64) {
     if (nsec <= 0) { ret; }
     val ms: u32 = (nsec / 1000000)::u32;
-    SleepW(ms);
+    Sleep(ms);
 }
 
 # getcwd: get the current working directory.
