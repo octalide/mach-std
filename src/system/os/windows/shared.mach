@@ -2,10 +2,11 @@
 #
 # windows has no stable syscall interface. all OS interaction goes through
 # kernel32.dll and ntdll.dll via ext fun declarations, plus ws2_32.dll for
-# sockets and advapi32.dll for RtlGenRandom; the latter two are pinned with
-# `$<sym>.library` so the PE import directory attributes them to the right DLL
-# rather than the first dependency. a HANDLE-to-fd mapping table bridges the
-# POSIX-style fd interface used by os.mach.
+# sockets, advapi32.dll for RtlGenRandom, and api-ms-win-core-synch-l1-2-0.dll
+# for the wait-on-address family; these are pinned with `$<sym>.library` so the
+# PE import directory attributes them to the right DLL rather than the first
+# dependency. a HANDLE-to-fd mapping table bridges the POSIX-style fd interface
+# used by os.mach.
 
 use std.types.size.usize;
 use std.types.size.isize;
@@ -211,7 +212,15 @@ ext fun QueryPerformanceCounter(p0: *i64) i32;
 ext fun QueryPerformanceFrequency(p0: *i64) i32;
 
 ext fun CreateThread(p0: ptr, p1: usize, p2: usize, p3: ptr, p4: u32, p5: *u32) isize;
+
+# WaitOnAddress / WakeByAddressSingle live in the synch apiset DLL, not kernel32.
+# real windows' kernel32 does not export them (only wine's does), so without
+# `$<sym>.library` the import binds to kernel32 and the native loader rejects the
+# exe with STATUS_ENTRYPOINT_NOT_FOUND. pin them to the canonical apiset DLL. see
+# issue #253.
+$WaitOnAddress.library = "api-ms-win-core-synch-l1-2-0.dll";
 ext fun WaitOnAddress(p0: ptr, p1: ptr, p2: usize, p3: u32) i32;
+$WakeByAddressSingle.library = "api-ms-win-core-synch-l1-2-0.dll";
 ext fun WakeByAddressSingle(p0: ptr);
 
 # Winsock2 API imports (ws2_32.dll). each is pinned to ws2_32.dll with

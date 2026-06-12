@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-06-12
+
+Native-windows loader compliance: the wait-on-address family is pinned to its
+real apiset DLL (mach exes previously failed to load on real windows), and the
+path module understands drive-letter and UNC absolute roots. Unblocks the
+compiler's native windows CI lane.
+
+### Added
+
+- `std.types.path` now recognizes windows absolute roots: drive-letter
+  roots (`C:\`, `C:/`) and UNC roots (`\\server\share`) are absolute, and
+  `is_root`/`filename`/`extension`/`stem`/`parent` never split inside them
+  (`parent("C:\foo")` → `C:\`, `parent("\\server\share\foo")` →
+  `\\server\share`, each root being its own parent). A bare drive reference
+  `C:` is drive-relative — a root unit but not absolute, matching Win32.
+  POSIX behavior is unchanged (#248).
+
+### Fixed
+
+- Windows `WaitOnAddress`/`WakeByAddressSingle` are now pinned to
+  `api-ms-win-core-synch-l1-2-0.dll` (added to `[os.windows] libs`). Real
+  windows' kernel32 does not export the wait-on-address family — only wine's
+  does — so the unpinned imports bound to kernel32 and the native loader
+  rejected every mach exe with `STATUS_ENTRYPOINT_NOT_FOUND` before main
+  (#253).
+
 ## [0.7.0] - 2026-06-12
 
 Windows-stabilization release: native process spawning (CreateProcess backend
