@@ -18,8 +18,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   argv, envp, stdin_fd, stdout_fd, stderr_fd)` stdio-redirection primitive
   (fork + per-stream dup2 + exec, -1 inheriting the parent's stream; child
   exits 126 on redirect failure, 127 on exec failure) on linux and darwin,
-  onto which `spawn` now collapses; windows returns `ENOTSUP` until #221
-  (#188, capture half).
+  onto which `spawn` now collapses (#188, capture half).
+- Native windows exec backend: `spawn`/`spawn_redirected`/`run`/`capture`
+  over `CreateProcessA` + `WaitForSingleObject` + `GetExitCodeProcess`, with
+  argv joined per the windows command-line quoting rules (a joined line over
+  the 32 KiB limit fails with `E2BIG` instead of truncating), `envp` mapped
+  to a CreateProcess environment block (nil inherits), and stdio redirection
+  via `STARTF_USESTDHANDLES` with inheritance scoped to exactly the child's
+  std handles through `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` (inherit flags are
+  restored after the spawn, so concurrent spawns cannot leak pipe ends into
+  unrelated children; a spawn with no redirection inherits the parent's
+  streams natively). The read path treats a broken anonymous pipe as EOF so
+  `capture` drains cleanly. `environ()` is now populated from
+  `GetEnvironmentStrings` (hidden `=X:` drive-cwd entries excluded) rather
+  than always nil (#221, #188 windows half). `os.WNOHANG` is now forwarded
+  portably alongside `wait`/`wait_pid`.
 
 ### Fixed
 
