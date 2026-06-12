@@ -118,6 +118,10 @@ val WAIT_TIMEOUT:  u32 = 258;
 val WAIT_FAILED:   u32 = 0xFFFFFFFF;
 val INFINITE:      u32 = 0xFFFFFFFF;
 
+# CreateProcess / STARTUPINFO
+val STARTF_USESTDHANDLES: u32 = 0x00000100;
+val HANDLE_FLAG_INHERIT:  u32 = 0x00000001;
+
 # FILETIME epoch offset (100-ns intervals from 1601-01-01 to 1970-01-01)
 val FILETIME_UNIX_EPOCH: i64 = 116444736000000000;
 
@@ -238,10 +242,13 @@ ext fun WaitForSingleObject(p0: isize, p1: u32) u32;
 ext fun WaitForMultipleObjects(p0: u32, p1: ptr, p2: i32, p3: u32) u32;
 ext fun GetExitCodeProcess(p0: isize, p1: *u32) i32;
 ext fun CreatePipe(p0: *isize, p1: *isize, p2: ptr, p3: u32) i32;
+ext fun SetHandleInformation(p0: isize, p1: u32, p2: u32) i32;
 $SleepW.symbol = "Sleep";
 ext fun SleepW(p0: u32);
 ext fun GetCurrentDirectoryA(p0: u32, p1: *u8) u32;
 ext fun GetEnvironmentVariableA(p0: *u8, p1: *u8, p2: u32) u32;
+ext fun GetEnvironmentStringsA() *u8;
+ext fun FreeEnvironmentStringsA(p0: *u8) i32;
 
 # Win32 structures
 
@@ -602,6 +609,10 @@ fun build_cmdline(argv: **u8, buf: *u8, cap: usize) {
             }
             j = j + 1;
         }
+        # an empty argument must still emit "" so it survives the round-trip
+        if (arg[0] == 0) {
+            needs_quote = 1;
+        }
         if (needs_quote != 0 && off < cap - 1) {
             buf[off] = 34;
             off = off + 1;
@@ -837,6 +848,11 @@ pub fun read(fd: i32, buf: *u8, count: usize) i64 {
     var bytes_read: u32 = 0;
     val ok: i32 = ReadFile(h, buf, count::u32, ?bytes_read, nil);
     if (ok == 0) {
+        # an anonymous pipe with all write ends closed reports a broken
+        # pipe on read; that is end-of-file under posix read semantics
+        if (GetLastError() == ERROR_BROKEN_PIPE) {
+            ret 0;
+        }
         ret last_error();
     }
     ret bytes_read::i64;
@@ -1112,19 +1128,104 @@ pub fun abort() {
     ExitProcess(255);
 }
 
+# resolve the child handle for a redirected stream: a real fd maps through
+# the handle table; -1 inherits the parent's stream via GetStdHandle.
+fun resolve_child_handle(fd: i32, std_id: u32) isize {
+    if (fd == -1) {
+        ret GetStdHandle(std_id);
+    }
+    ret get_handle(fd);
+}
+
+# build a CreateProcess environment block from a null-terminated envp array.
+#
+# the block is a sequence of null-terminated "NAME=VALUE" strings followed
+# by a final null. ownership transfers to the caller, which frees it with
+# deallocate(block, size) after CreateProcess copies it into the child.
+# ---
+# envp:     null-terminated environment array
+# out_size: receives the block size in bytes (for deallocate)
+# ret:      pointer to the block, or nil on allocation failure
+fun build_env_block(envp: **u8, out_size: *usize) ptr {
+    var total: usize = 0;
+    var i: usize = 0;
+    for (envp[i]::usize != 0) {
+        var j: usize = 0;
+        for (envp[i][j] != 0) {
+            j = j + 1;
+        }
+        total = total + j + 1;
+        i = i + 1;
+    }
+    # +2 terminates the block and keeps an empty environment a valid "\0\0"
+    val size: usize = total + 2;
+    val block: ptr = allocate(size);
+    if (block == nil) {
+        ret nil;
+    }
+    var dst: usize = block::usize;
+    i = 0;
+    for (envp[i]::usize != 0) {
+        var j: usize = 0;
+        for (envp[i][j] != 0) {
+            @(dst::*u8) = envp[i][j];
+            dst = dst + 1;
+            j = j + 1;
+        }
+        @(dst::*u8) = 0;
+        dst = dst + 1;
+        i = i + 1;
+    }
+    @(dst::*u8) = 0;
+    @((dst + 1)::*u8) = 0;
+    @out_size = size;
+    ret block;
+}
+
 # spawn: create a child process running the given program.
 #
-# uses CreateProcess to launch the child. the process handle is tracked
-# in the process table for wait/wait_pid. envp is ignored; the child
-# inherits the parent's environment.
+# collapses onto spawn_redirected with all three streams inherited.
 # ---
 # pathname: path to executable
 # argv:     null-terminated argument array
-# envp:     null-terminated environment array (ignored on windows)
+# envp:     null-terminated environment array, or nil to inherit
 # ret:      child PID on success, or negative errno
 pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
+    ret spawn_redirected(pathname, argv, envp, -1, -1, -1);
+}
+
+# spawn_redirected: spawn a child with its standard streams bound to
+# caller-supplied descriptors (-1 inherits the parent's stream).
+#
+# CreateProcess receives a STARTUPINFO with STARTF_USESTDHANDLES and all
+# three of hStdInput/hStdOutput/hStdError resolved to handles (GetStdHandle
+# for inherited streams). each child stream is marked inheritable and
+# bInheritHandles is set so the child receives them; the parent's other
+# handles stay non-inheritable. the process handle is tracked in the
+# process table for wait/wait_pid. envp maps to the environment block;
+# nil inherits the parent's environment.
+# ---
+# pathname:  path to executable
+# argv:      null-terminated argument array
+# envp:      null-terminated environment array, or nil to inherit
+# stdin_fd:  descriptor to install as the child's stdin, or -1 to inherit
+# stdout_fd: descriptor to install as the child's stdout, or -1 to inherit
+# stderr_fd: descriptor to install as the child's stderr, or -1 to inherit
+# ret:       child PID on success, or negative errno
+pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32) i64 {
     var cmdline: [32768]u8;
     build_cmdline(argv, ?cmdline[0], 32768);
+
+    val hin:  isize = resolve_child_handle(stdin_fd, STD_INPUT_HANDLE);
+    val hout: isize = resolve_child_handle(stdout_fd, STD_OUTPUT_HANDLE);
+    val herr: isize = resolve_child_handle(stderr_fd, STD_ERROR_HANDLE);
+    if (hin == INVALID_HANDLE_VALUE || hout == INVALID_HANDLE_VALUE || herr == INVALID_HANDLE_VALUE) {
+        ret EBADF;
+    }
+
+    SetHandleInformation(hin, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+    SetHandleInformation(hout, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+    SetHandleInformation(herr, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 
     var si: [104]u8;
     var k: usize = 0;
@@ -1132,17 +1233,33 @@ pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
         si[k] = 0;
         k = k + 1;
     }
-    si[0] = 104;
+    val base: usize = (?si[0])::usize;
+    @(base::*u32) = 104;
+    @((base + 60)::*u32) = STARTF_USESTDHANDLES;
+    @((base + 80)::*isize) = hin;
+    @((base + 88)::*isize) = hout;
+    @((base + 96)::*isize) = herr;
+
+    var env_size: usize = 0;
+    var env_block: ptr = nil;
+    if (envp != nil) {
+        env_block = build_env_block(envp, ?env_size);
+        if (env_block == nil) {
+            ret ENOMEM;
+        }
+    }
 
     var pi: PROCESS_INFORMATION;
-
     val ok: i32 = CreateProcessA(
         pathname, ?cmdline[0],
         nil, nil,
         1, 0,
-        nil, nil,
+        env_block, nil,
         ?si[0], (?pi)::*u8
     );
+    if (env_block != nil) {
+        deallocate(env_block, env_size);
+    }
     if (ok == 0) {
         ret last_error();
     }
@@ -1153,24 +1270,6 @@ pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
         ret EAGAIN;
     }
     ret pi.dwProcessId::i64;
-}
-
-# spawn_redirected: spawn a child with its standard streams bound to
-# caller-supplied descriptors (-1 inherits the parent's stream).
-#
-# unimplemented on windows, which needs STARTUPINFO handle inheritance
-# (STARTF_USESTDHANDLES with all three of hStdInput/hStdOutput/hStdError)
-# rather than the posix fork/dup2/exec path; tracked by issue #221.
-# ---
-# pathname:  path to executable
-# argv:      null-terminated argument array
-# envp:      null-terminated environment array
-# stdin_fd:  descriptor to install as the child's stdin, or -1 to inherit
-# stdout_fd: descriptor to install as the child's stdout, or -1 to inherit
-# stderr_fd: descriptor to install as the child's stderr, or -1 to inherit
-# ret:       ENOTSUP until windows support lands
-pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32) i64 {
-    ret ENOTSUP;
 }
 
 # getpid: return the current process ID.
@@ -1265,10 +1364,53 @@ pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     ret len::i64;
 }
 
-# environ: windows does not capture a unix-style envp array; always nil.
-# use getenv for individual lookups.
+# captured environment vector, built once from the win32 environment block.
+var _environ_vec:  **u8 = nil;
+var _environ_init: u8 = 0;
+
+# environ: the process environment as a unix-style "NAME=VALUE" vector.
+#
+# parses the win32 environment block (GetEnvironmentStrings) into a
+# null-terminated array of pointers on first call and caches it for the
+# process lifetime; the block backs the entries, so it is retained rather
+# than freed. returns nil if the block is unavailable or allocation fails.
 pub fun environ() **u8 {
-    ret nil;
+    if (_environ_init != 0) {
+        ret _environ_vec;
+    }
+    _environ_init = 1;
+    val block: *u8 = GetEnvironmentStringsA();
+    if (block::usize == 0) {
+        ret nil;
+    }
+    var count: usize = 0;
+    var p: usize = block::usize;
+    for (@(p::*u8) != 0) {
+        count = count + 1;
+        for (@(p::*u8) != 0) {
+            p = p + 1;
+        }
+        p = p + 1;
+    }
+    val arr: ptr = allocate((count + 1) * 8);
+    if (arr == nil) {
+        FreeEnvironmentStringsA(block);
+        ret nil;
+    }
+    var vec: **u8 = arr::**u8;
+    var i: usize = 0;
+    p = block::usize;
+    for (i < count) {
+        vec[i] = p::*u8;
+        for (@(p::*u8) != 0) {
+            p = p + 1;
+        }
+        p = p + 1;
+        i = i + 1;
+    }
+    vec[count] = nil;
+    _environ_vec = vec;
+    ret vec;
 }
 
 # wait: wait for a child process to change state.
