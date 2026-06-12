@@ -167,6 +167,9 @@ fwd shared.thread_spawn;
 fwd shared.thread_wait;
 fwd shared.thread_wake;
 
+# runtime environment
+fwd shared.running_under_wine;
+
 # time
 fwd shared.clock_gettime;
 

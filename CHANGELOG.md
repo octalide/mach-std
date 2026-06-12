@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `GetEnvironmentStrings` (hidden `=X:` drive-cwd entries excluded) rather
   than always nil (#221, #188 windows half). `os.WNOHANG` is now forwarded
   portably alongside `wait`/`wait_pid`.
+- `std.system.os.windows.running_under_wine() bool` — detect the wine
+  compatibility layer by probing ntdll for the wine-only `wine_get_version`
+  export. The two `std.sync.thread` spawn/join tests use it to skip under
+  wine, whose kernel32 lacks the `WaitOnAddress`/`WakeByAddressSingle`
+  exports that real windows 8+ provides; the thread sync code is unchanged
+  and correct on real windows (#244).
 
 ### Fixed
 
