@@ -506,22 +506,27 @@ fun free_fd(fd: i32) {
 
 # child process tracking table.
 #
-# fixed-size, like the fd table above: a static array indexed by slot with
-# no dynamic growth (the wait-any path mirrors it on the stack). 64
-# concurrently un-waited children is a generous ceiling for std's
-# spawn/wait model; an exhausted table fails spawn with EAGAIN, mirroring
-# POSIX fork() under RLIMIT_NPROC rather than silently dropping a child.
+# fixed-size, like the fd table above. the bound is pinned by
+# WaitForMultipleObjects' MAXIMUM_WAIT_OBJECTS (64): the wait-any path
+# passes every live handle in a single call, so MAX_PROCS must never
+# exceed it. an exhausted table fails spawn with EAGAIN, mirroring POSIX
+# fork() under RLIMIT_NPROC rather than silently dropping a child.
 val MAX_PROCS: usize = 64;
-var _proc_handles: [64]isize;
-var _proc_pids: [64]u32;
+var _proc_handles: [MAX_PROCS]isize;
+var _proc_pids: [MAX_PROCS]u32;
 var _procs_init: u8 = 0;
 var _proc_lock: i64 = 0;
 
 # a slot claimed by reserve_proc but not yet bound to a child: reserved
 # ahead of CreateProcess, committed once the child exists. distinct from
-# INVALID_HANDLE_VALUE (free) so a concurrent reserve skips it and the
-# wait/count scans ignore it until it holds a real handle.
+# INVALID_HANDLE_VALUE (free) so a concurrent reserve skips it and every
+# lookup/scan ignores it until it holds a real handle.
 val PROC_RESERVED: isize = -2;
+
+# whether a slot holds a real child handle (neither free nor reserved).
+fun proc_slot_live(h: isize) bool {
+    ret h != INVALID_HANDLE_VALUE && h != PROC_RESERVED;
+}
 
 fun proc_spin_lock() {
     var expected: i64 = 0;
@@ -555,9 +560,9 @@ fun reserve_proc() i32 {
     init_procs();
     var i: usize = 0;
     for (i < MAX_PROCS) {
+        # free slots already hold pid 0 (init_procs/free_proc invariant)
         if (_proc_handles[i] == INVALID_HANDLE_VALUE) {
             _proc_handles[i] = PROC_RESERVED;
-            _proc_pids[i] = 0;
             proc_spin_unlock();
             ret i::i32;
         }
@@ -568,18 +573,23 @@ fun reserve_proc() i32 {
 }
 
 # bind a reserved slot to a spawned child's pid and process handle.
+# the pid is published before the handle so a torn observation can never
+# pair a live handle with a stale pid.
 fun commit_proc(slot: i32, pid: u32, handle: isize) {
     proc_spin_lock();
-    _proc_handles[slot::usize] = handle;
     _proc_pids[slot::usize] = pid;
+    _proc_handles[slot::usize] = handle;
     proc_spin_unlock();
 }
 
-# return a reserved slot to the free pool when the spawn fails.
+# return a reserved slot to the free pool when the spawn fails. only a
+# PROC_RESERVED slot is cleared: calling this on a committed slot would
+# leak a live handle, so anything else is left untouched.
 fun release_proc(slot: i32) {
     proc_spin_lock();
-    _proc_handles[slot::usize] = INVALID_HANDLE_VALUE;
-    _proc_pids[slot::usize] = 0;
+    if (_proc_handles[slot::usize] == PROC_RESERVED) {
+        _proc_handles[slot::usize] = INVALID_HANDLE_VALUE;
+    }
     proc_spin_unlock();
 }
 
@@ -588,7 +598,7 @@ fun get_proc_handle(pid: u32) isize {
     init_procs();
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_pids[i] == pid && _proc_handles[i] != INVALID_HANDLE_VALUE) {
+        if (_proc_pids[i] == pid && proc_slot_live(_proc_handles[i])) {
             val h: isize = _proc_handles[i];
             proc_spin_unlock();
             ret h;
@@ -600,10 +610,15 @@ fun get_proc_handle(pid: u32) isize {
 }
 
 fun free_proc(pid: u32) {
+    # pid 0 is never a child; rejecting it keeps a bogus lookup from
+    # matching a reserved slot's zero pid
+    if (pid == 0) {
+        ret;
+    }
     proc_spin_lock();
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_pids[i] == pid && _proc_handles[i] != INVALID_HANDLE_VALUE) {
+        if (_proc_pids[i] == pid && proc_slot_live(_proc_handles[i])) {
             _proc_handles[i] = INVALID_HANDLE_VALUE;
             _proc_pids[i] = 0;
             proc_spin_unlock();
@@ -620,7 +635,7 @@ fun count_procs() usize {
     var n: usize = 0;
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_handles[i] != INVALID_HANDLE_VALUE && _proc_handles[i] != PROC_RESERVED) {
+        if (proc_slot_live(_proc_handles[i])) {
             n = n + 1;
         }
         i = i + 1;
@@ -1301,6 +1316,10 @@ fun restore_inherit(list: *isize, prev: *u32, n: usize) {
 # prior state on every path. a parent stream that does not exist (NULL or
 # invalid from GetStdHandle on a detached parent) passes through in hStd*
 # but is excluded from the inherit list.
+#
+# slot is a reserved process-table entry owned by the caller: success
+# commits it via register_child; on any failure return the caller must
+# release_proc it.
 fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32, slot: i32) i64 {
     var fds: [3]i32;
     fds[0] = stdin_fd;
@@ -1424,6 +1443,10 @@ fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32
 #
 # bInheritHandles is set with no attribute list, so the spawn lock keeps
 # this create out of a concurrent redirected spawn's mark→restore window.
+#
+# slot is a reserved process-table entry owned by the caller: success
+# commits it via register_child; on any failure return the caller must
+# release_proc it.
 fun create_inherit(pathname: *u8, cmdline: *u8, env_block: ptr, slot: i32) i64 {
     var si: STARTUPINFOA;
     zero_bytes((?si)::*u8, STARTUPINFOA_SIZE);
@@ -1687,16 +1710,14 @@ pub fun environ() **u8 {
 # uses the process handle table to look up children by pid.
 # pid == -1 waits for any child. WNOHANG uses a zero timeout.
 #
-# a WAIT_FAILED from the underlying wait returns the error but deliberately
-# leaves the child in the table (handle open, slot held): the handle is
-# typically still valid, so freeing it would orphan a live child and make
-# its eventual exit unobservable (ECHILD), strictly worse than the caller
-# retrying the wait. this mirrors POSIX waitpid, where a transient wait
-# error (EINTR) leaves the child reapable. a persistently failing wait
-# therefore retains its slot — the lesser evil versus an unwaitable child.
+# WAIT_FAILED is treated as a dead handle — on windows it is in practice
+# ERROR_INVALID_HANDLE, a permanent condition no retry can clear — so the
+# affected child is purged (best-effort CloseHandle + slot freed) rather
+# than left pinning the table forever. a single-pid wait purges and
+# returns the error; the wait-any path probes each snapshot handle
+# individually, purges the unwaitable ones, and retries the multi-wait
+# once so one poisoned handle cannot block reaping of healthy children.
 pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
-    init_procs();
-
     if (pid > 0) {
         val h: isize = get_proc_handle(pid::u32);
         if (h == INVALID_HANDLE_VALUE) {
@@ -1712,9 +1733,12 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
         if (result == WAIT_TIMEOUT) {
             ret 0;
         }
-        # leave the slot/handle intact so the child stays waitable on retry
         if (result == WAIT_FAILED) {
-            ret last_error();
+            # dead handle: purge the slot so it cannot pin the table
+            val e: i64 = last_error();
+            CloseHandle(h);
+            free_proc(pid::u32);
+            ret e;
         }
 
         var ec: u32 = 0;
@@ -1728,52 +1752,78 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
     }
 
     if (pid == -1) {
-        var wait_handles: [64]isize;
-        var wait_pids: [64]u32;
-        var n: usize = 0;
-        var i: usize = 0;
-
-        # skip reserved slots: a child mid-spawn has no handle to wait on yet
-        for (i < MAX_PROCS) {
-            if (_proc_handles[i] != INVALID_HANDLE_VALUE && _proc_handles[i] != PROC_RESERVED) {
-                wait_handles[n] = _proc_handles[i];
-                wait_pids[n] = _proc_pids[i];
-                n = n + 1;
-            }
-            i = i + 1;
-        }
-
-        if (n == 0) {
-            ret ECHILD;
-        }
-
         var timeout: u32 = INFINITE;
         if ((options & WNOHANG) != 0) {
             timeout = 0;
         }
 
-        val result: u32 = WaitForMultipleObjects(n::u32, (?wait_handles[0])::ptr, 0, timeout);
-        if (result == WAIT_TIMEOUT) {
-            ret 0;
-        }
-        # leave every slot/handle intact so the children stay waitable on retry
-        if (result == WAIT_FAILED) {
-            ret last_error();
-        }
-        if (result >= n::u32) {
-            ret EIO;
-        }
+        # at most one retry, after purging unwaitable handles
+        var attempt: usize = 0;
+        for (attempt < 2) {
+            var wait_handles: [MAX_PROCS]isize;
+            var wait_pids: [MAX_PROCS]u32;
+            var n: usize = 0;
+            var i: usize = 0;
 
-        val idx: usize = result::usize;
-        var ec: u32 = 0;
-        GetExitCodeProcess(wait_handles[idx], ?ec);
-        if (wstatus != nil) {
-            @wstatus = (ec::i32 << 8);
+            # snapshot live slots under the table lock, skipping reserved
+            # ones (a child mid-spawn has no handle to wait on yet); the
+            # lock is dropped before the blocking wait below
+            proc_spin_lock();
+            init_procs();
+            for (i < MAX_PROCS) {
+                if (proc_slot_live(_proc_handles[i])) {
+                    wait_handles[n] = _proc_handles[i];
+                    wait_pids[n] = _proc_pids[i];
+                    n = n + 1;
+                }
+                i = i + 1;
+            }
+            proc_spin_unlock();
+
+            if (n == 0) {
+                ret ECHILD;
+            }
+
+            val result: u32 = WaitForMultipleObjects(n::u32, (?wait_handles[0])::ptr, 0, timeout);
+            if (result == WAIT_TIMEOUT) {
+                ret 0;
+            }
+            if (result == WAIT_FAILED) {
+                val e: i64 = last_error();
+                # one dead handle poisons the whole multi-wait: probe each
+                # snapshot handle and purge the unwaitable ones so healthy
+                # children stay reapable
+                var purged: usize = 0;
+                i = 0;
+                for (i < n) {
+                    if (WaitForSingleObject(wait_handles[i], 0) == WAIT_FAILED) {
+                        CloseHandle(wait_handles[i]);
+                        free_proc(wait_pids[i]);
+                        purged = purged + 1;
+                    }
+                    i = i + 1;
+                }
+                if (purged == 0 || attempt == 1) {
+                    ret e;
+                }
+                attempt = attempt + 1;
+            } or {
+                if (result >= n::u32) {
+                    ret EIO;
+                }
+                val idx: usize = result::usize;
+                var ec: u32 = 0;
+                GetExitCodeProcess(wait_handles[idx], ?ec);
+                if (wstatus != nil) {
+                    @wstatus = (ec::i32 << 8);
+                }
+                val child_pid: u32 = wait_pids[idx];
+                CloseHandle(wait_handles[idx]);
+                free_proc(child_pid);
+                ret child_pid::i64;
+            }
         }
-        val child_pid: u32 = wait_pids[idx];
-        CloseHandle(wait_handles[idx]);
-        free_proc(child_pid);
-        ret child_pid::i64;
+        ret EIO;
     }
 
     ret EINVAL;
