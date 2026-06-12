@@ -6,17 +6,16 @@ This repository contains the cannonical standard library for the Mach programmin
 
 To use the standard library in your Mach project, you can include it as a dependency in your project's configuration file:
 
-```mach
-[dep.std]
-type="remote"
-path="https://github.com/octalide/mach-std"
-version="branch/dev"
+```toml
+[deps.mach-std]
+git = "https://github.com/octalide/mach-std"
+ref = "branch/main"
 ```
 
 You can also use the Mach dependency manager to add it to your project:
 
 ```bash
-mach dep add https://github.com/octalide/mach-std --version branch/dev
+mach dep add mach-std --git https://github.com/octalide/mach-std --ref branch/main
 ```
 
 ## Documentation

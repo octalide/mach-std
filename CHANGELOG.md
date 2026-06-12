@@ -5,23 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.5.0] - 2026-06-12
+
+Manifest migrated to the v1.4.0 format and windows link requirements declared
+once via the os overlay, plus the memory/string primitives added since 0.4.2.
 
 ### Added
 
 - `std.memory.raw_equal(a, b: ptr, n: usize) bool` — allocation-free byte-wise memory
   comparison with documented nil contract (n==0 vacuously true; equal pointers trivially
-  true; one-sided nil with n>0 is false).
-- `std.memory.equal[T](a, b: *T, n: usize) bool` — typed wrapper over `raw_equal`.
+  true; one-sided nil with n>0 is false) (#204).
+- `std.memory.equal[T](a, b: *T, n: usize) bool` — typed wrapper over `raw_equal` (#204).
 - `std.types.string.view_index_char(v: StrView, c: char) Result[usize, str]` — first
-  occurrence of a character within a view.
+  occurrence of a character within a view (#204).
 - `std.types.string.view_contains_char(v: StrView, c: char) bool` — membership test
-  delegating to `view_index_char`.
+  delegating to `view_index_char` (#204).
+- `[os.windows] libs = ["kernel32.dll"]` os overlay — std's windows runtime link
+  requirement, declared once and cascaded to every windows consumer build via the
+  v1.4.0 manifest os-component overlay.
 
 ### Changed
 
+- `mach.toml` converted to the v1.4.0 manifest schema: `dir_src`/`dir_out`/`dir_dep`
+  become `src`/`dep` plus explicit `out`/`obj`/`ir`/`asm`/`tests` path templates;
+  `[targets.linux]` becomes `[target.linux]`; the library `mode = "library"` /
+  `entrypoint = "lib.mach"` pair becomes `[lib.std] entry = "lib.mach" kind = "static"`.
+  v1.4.0 reads only this format.
 - `data/toml`: internal `str_eq_n` removed; call site migrated to `memory.raw_equal`
-  (behavioral match: both are byte-wise n-byte comparisons over `str = *char = *u8`).
+  (behavioral match: both are byte-wise n-byte comparisons over `str = *char = *u8`) (#204).
 
 ## [0.4.3] - 2026-06-11
 
