@@ -105,6 +105,7 @@ val ERROR_DIRECTORY:        u32 = 267;
 val ERROR_TOO_MANY_OPEN_FILES: u32 = 4;
 val ERROR_BROKEN_PIPE:      u32 = 109;
 val ERROR_BUSY:             u32 = 170;
+val ERROR_ENVVAR_NOT_FOUND: u32 = 203;
 
 # lseek whence
 val SEEK_SET: i32 = 0;
@@ -1223,19 +1224,17 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
 # ret:  full length of the value, NOT_FOUND, or EIO
 pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     # reset last-error so a 0 return distinguishes an empty value
-    # (last-error untouched) from a missing variable or a failure.
-    SetLastError(0);
+    # from a missing variable or a failure
+    SetLastError(ERROR_SUCCESS);
     val len: u32 = GetEnvironmentVariableA(name, buf, cap::u32);
     if (len == 0) {
         val err: u32 = GetLastError();
-        if (err == 0) {
-            # variable exists with an empty value: length 0
-            if (cap > 0) {
-                buf[0] = 0;
-            }
+        if (err == ERROR_SUCCESS) {
+            # variable exists with an empty value; the api already
+            # null-terminated the buffer
             ret 0;
         }
-        if (err == 203) {
+        if (err == ERROR_ENVVAR_NOT_FOUND) {
             ret os_shared.NOT_FOUND;
         }
         ret EIO;
