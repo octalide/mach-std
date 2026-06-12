@@ -1222,6 +1222,24 @@ fun build_env_block(envp: **u8, out_size: *usize) ptr {
     ret block;
 }
 
+# spawn lock: serializes the inheritance-sensitive span of process
+# creation. a redirected spawn temporarily marks its pipe handles
+# inheritable; any CreateProcess with bInheritHandles executing inside
+# that mark→create→restore window would inherit them, holding the pipe
+# open in an unrelated child.
+var _spawn_lock: i64 = 0;
+
+fun spawn_spin_lock() {
+    var expected: i64 = 0;
+    for (!atomic.cas(?_spawn_lock, ?expected, 1)) {
+        expected = 0;
+    }
+}
+
+fun spawn_spin_unlock() {
+    atomic.store(?_spawn_lock, 0);
+}
+
 # register a freshly created child in the process table for wait/wait_pid.
 fun register_child(pi: PROCESS_INFORMATION) i64 {
     CloseHandle(pi.hThread);
@@ -1298,17 +1316,21 @@ fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32
         i = i + 1;
     }
 
-    # mark each listed handle inheritable, remembering its prior flags
+    # mark each listed handle inheritable, remembering its prior flags;
+    # the spawn lock covers the whole mark→create→restore window
+    spawn_spin_lock();
     i = 0;
     for (i < n) {
         if (GetHandleInformation(list[i], ?prev[i]) == 0) {
             val e: i64 = last_error();
             restore_inherit(?list[0], ?prev[0], i);
+            spawn_spin_unlock();
             ret e;
         }
         if (SetHandleInformation(list[i], HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) == 0) {
             val e: i64 = last_error();
             restore_inherit(?list[0], ?prev[0], i);
+            spawn_spin_unlock();
             ret e;
         }
         i = i + 1;
@@ -1319,17 +1341,20 @@ fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32
     InitializeProcThreadAttributeList(nil, 1, 0, ?attr_size);
     if (attr_size == 0 || attr_size > 128) {
         restore_inherit(?list[0], ?prev[0], n);
+        spawn_spin_unlock();
         ret ENOMEM;
     }
     if (InitializeProcThreadAttributeList((?attr_buf[0])::ptr, 1, 0, ?attr_size) == 0) {
         val e: i64 = last_error();
         restore_inherit(?list[0], ?prev[0], n);
+        spawn_spin_unlock();
         ret e;
     }
     if (UpdateProcThreadAttribute((?attr_buf[0])::ptr, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, (?list[0])::ptr, n * 8, nil, nil) == 0) {
         val e: i64 = last_error();
         DeleteProcThreadAttributeList((?attr_buf[0])::ptr);
         restore_inherit(?list[0], ?prev[0], n);
+        spawn_spin_unlock();
         ret e;
     }
 
@@ -1353,6 +1378,7 @@ fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32
     val spawn_err: i64 = last_error();
     DeleteProcThreadAttributeList((?attr_buf[0])::ptr);
     restore_inherit(?list[0], ?prev[0], n);
+    spawn_spin_unlock();
     if (ok == 0) {
         ret spawn_err;
     }
@@ -1362,12 +1388,16 @@ fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32
 # create a child that inherits all three parent standard streams natively
 # (no STARTF_USESTDHANDLES), preserving working defaults even when the
 # parent is detached and GetStdHandle would report no stream.
+#
+# bInheritHandles is set with no attribute list, so the spawn lock keeps
+# this create out of a concurrent redirected spawn's mark→restore window.
 fun create_inherit(pathname: *u8, cmdline: *u8, env_block: ptr) i64 {
     var si: STARTUPINFOA;
     zero_bytes((?si)::*u8, STARTUPINFOA_SIZE);
     si.cb = STARTUPINFOA_SIZE::u32;
 
     var pi: PROCESS_INFORMATION;
+    spawn_spin_lock();
     val ok: i32 = CreateProcessA(
         pathname, cmdline,
         nil, nil,
@@ -1375,6 +1405,7 @@ fun create_inherit(pathname: *u8, cmdline: *u8, env_block: ptr) i64 {
         env_block, nil,
         (?si)::*u8, (?pi)::*u8
     );
+    spawn_spin_unlock();
     if (ok == 0) {
         ret last_error();
     }
