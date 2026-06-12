@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `std.memory.raw_equal(a, b: ptr, n: usize) bool` — allocation-free byte-wise memory
+  comparison with documented nil contract (n==0 vacuously true; equal pointers trivially
+  true; one-sided nil with n>0 is false).
+- `std.memory.equal[T](a, b: *T, n: usize) bool` — typed wrapper over `raw_equal`.
+- `std.types.string.view_index_char(v: StrView, c: char) Result[usize, str]` — first
+  occurrence of a character within a view.
+- `std.types.string.view_contains_char(v: StrView, c: char) bool` — membership test
+  delegating to `view_index_char`.
+
+### Changed
+
+- `data/toml`: internal `str_eq_n` removed; call site migrated to `memory.raw_equal`
+  (behavioral match: both are byte-wise n-byte comparisons over `str = *char = *u8`).
+
 ## [0.4.3] - 2026-06-11
 
 Patch release: process exit now terminates all threads on linux.

@@ -565,3 +565,62 @@ pub fun view_eq_str(v: StrView, s: str) bool {
     }
     ret s[v.len] == 0;
 }
+
+# view_index_char: find the first occurrence of a character within the view.
+# ---
+# v:   the view to search
+# c:   character to find
+# ret: index of the first occurrence, or an error message if not found
+pub fun view_index_char(v: StrView, c: char) Result[usize, str] {
+    var i: usize = 0;
+    for (i < v.len) {
+        if (v.data[i] == c) { ret ok[usize, str](i); }
+        i = i + 1;
+    }
+    ret err[usize, str]("character not found");
+}
+
+# view_contains_char: check if the view contains a character.
+# ---
+# v:   the view to search
+# c:   character to find
+# ret: true if c appears within v
+pub fun view_contains_char(v: StrView, c: char) bool {
+    val r: Result[usize, str] = view_index_char(v, c);
+    ret is_ok[usize, str](r);
+}
+
+test "string: view_index_char found" {
+    val s: str = "hello";
+    val v: StrView = view(s, 5);
+    var r: Result[usize, str] = view_index_char(v, 'l');
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 2) { ret 1; }
+    r = view_index_char(v, 'h');
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 0) { ret 1; }
+    ret 0;
+}
+
+test "string: view_index_char not found" {
+    val s: str = "hello";
+    val v: StrView = view(s, 5);
+    val r: Result[usize, str] = view_index_char(v, 'x');
+    if (is_ok[usize, str](r)) { ret 1; }
+    ret 0;
+}
+
+test "string: view_index_char empty view" {
+    val v: StrView = view(nil, 0);
+    val r: Result[usize, str] = view_index_char(v, 'a');
+    if (is_ok[usize, str](r)) { ret 1; }
+    ret 0;
+}
+
+test "string: view_contains_char found and not found" {
+    val s: str = "hello";
+    val v: StrView = view(s, 5);
+    if (!view_contains_char(v, 'e')) { ret 1; }
+    if (view_contains_char(v, 'x')) { ret 1; }
+    ret 0;
+}
