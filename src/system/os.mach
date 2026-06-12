@@ -143,6 +143,7 @@ fwd impl.sleep;
 fwd impl.getcwd;
 fwd impl.getenv;
 fwd impl.environ;
+fwd impl.WNOHANG;
 fwd impl.wait;
 fwd impl.wait_pid;
 fwd impl.has_exited;
