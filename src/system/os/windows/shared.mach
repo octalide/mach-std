@@ -504,13 +504,24 @@ fun free_fd(fd: i32) {
     fd_spin_unlock();
 }
 
-# child process tracking table
-
+# child process tracking table.
+#
+# fixed-size, like the fd table above: a static array indexed by slot with
+# no dynamic growth (the wait-any path mirrors it on the stack). 64
+# concurrently un-waited children is a generous ceiling for std's
+# spawn/wait model; an exhausted table fails spawn with EAGAIN, mirroring
+# POSIX fork() under RLIMIT_NPROC rather than silently dropping a child.
 val MAX_PROCS: usize = 64;
 var _proc_handles: [64]isize;
 var _proc_pids: [64]u32;
 var _procs_init: u8 = 0;
 var _proc_lock: i64 = 0;
+
+# a slot claimed by reserve_proc but not yet bound to a child: reserved
+# ahead of CreateProcess, committed once the child exists. distinct from
+# INVALID_HANDLE_VALUE (free) so a concurrent reserve skips it and the
+# wait/count scans ignore it until it holds a real handle.
+val PROC_RESERVED: isize = -2;
 
 fun proc_spin_lock() {
     var expected: i64 = 0;
@@ -534,21 +545,42 @@ fun init_procs() {
     _procs_init = 1;
 }
 
-fun alloc_proc(pid: u32, handle: isize) bool {
+# reserve a free slot ahead of CreateProcess so an exhausted table fails
+# the spawn before a child is ever launched, never leaving a live child
+# unwaitable. the slot holds PROC_RESERVED until commit_proc binds it.
+# ---
+# ret: slot index, or -1 when the table is full
+fun reserve_proc() i32 {
     proc_spin_lock();
     init_procs();
     var i: usize = 0;
     for (i < MAX_PROCS) {
         if (_proc_handles[i] == INVALID_HANDLE_VALUE) {
-            _proc_handles[i] = handle;
-            _proc_pids[i] = pid;
+            _proc_handles[i] = PROC_RESERVED;
+            _proc_pids[i] = 0;
             proc_spin_unlock();
-            ret true;
+            ret i::i32;
         }
         i = i + 1;
     }
     proc_spin_unlock();
-    ret false;
+    ret -1;
+}
+
+# bind a reserved slot to a spawned child's pid and process handle.
+fun commit_proc(slot: i32, pid: u32, handle: isize) {
+    proc_spin_lock();
+    _proc_handles[slot::usize] = handle;
+    _proc_pids[slot::usize] = pid;
+    proc_spin_unlock();
+}
+
+# return a reserved slot to the free pool when the spawn fails.
+fun release_proc(slot: i32) {
+    proc_spin_lock();
+    _proc_handles[slot::usize] = INVALID_HANDLE_VALUE;
+    _proc_pids[slot::usize] = 0;
+    proc_spin_unlock();
 }
 
 fun get_proc_handle(pid: u32) isize {
@@ -588,7 +620,7 @@ fun count_procs() usize {
     var n: usize = 0;
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_handles[i] != INVALID_HANDLE_VALUE) {
+        if (_proc_handles[i] != INVALID_HANDLE_VALUE && _proc_handles[i] != PROC_RESERVED) {
             n = n + 1;
         }
         i = i + 1;
@@ -1240,13 +1272,14 @@ fun spawn_spin_unlock() {
     atomic.store(?_spawn_lock, 0);
 }
 
-# register a freshly created child in the process table for wait/wait_pid.
-fun register_child(pi: PROCESS_INFORMATION) i64 {
+# bind a freshly created child to its pre-reserved table slot for
+# wait/wait_pid. the slot was reserved before CreateProcess, so this
+# cannot fail or close the live handle.
+# ---
+# ret: the child pid
+fun register_child(pi: PROCESS_INFORMATION, slot: i32) i64 {
     CloseHandle(pi.hThread);
-    if (!alloc_proc(pi.dwProcessId, pi.hProcess)) {
-        CloseHandle(pi.hProcess);
-        ret EAGAIN;
-    }
+    commit_proc(slot, pi.dwProcessId, pi.hProcess);
     ret pi.dwProcessId::i64;
 }
 
@@ -1268,7 +1301,7 @@ fun restore_inherit(list: *isize, prev: *u32, n: usize) {
 # prior state on every path. a parent stream that does not exist (NULL or
 # invalid from GetStdHandle on a detached parent) passes through in hStd*
 # but is excluded from the inherit list.
-fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32) i64 {
+fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32, slot: i32) i64 {
     var fds: [3]i32;
     fds[0] = stdin_fd;
     fds[1] = stdout_fd;
@@ -1382,7 +1415,7 @@ fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32
     if (ok == 0) {
         ret spawn_err;
     }
-    ret register_child(pi);
+    ret register_child(pi, slot);
 }
 
 # create a child that inherits all three parent standard streams natively
@@ -1391,7 +1424,7 @@ fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32
 #
 # bInheritHandles is set with no attribute list, so the spawn lock keeps
 # this create out of a concurrent redirected spawn's mark→restore window.
-fun create_inherit(pathname: *u8, cmdline: *u8, env_block: ptr) i64 {
+fun create_inherit(pathname: *u8, cmdline: *u8, env_block: ptr, slot: i32) i64 {
     var si: STARTUPINFOA;
     zero_bytes((?si)::*u8, STARTUPINFOA_SIZE);
     si.cb = STARTUPINFOA_SIZE::u32;
@@ -1409,7 +1442,7 @@ fun create_inherit(pathname: *u8, cmdline: *u8, env_block: ptr) i64 {
     if (ok == 0) {
         ret last_error();
     }
-    ret register_child(pi);
+    ret register_child(pi, slot);
 }
 
 # spawn: create a child process running the given program.
@@ -1457,14 +1490,30 @@ pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, s
         }
     }
 
+    # claim a process-table slot before CreateProcess: a full table fails
+    # here, so a child is never launched only to be left unwaitable. the
+    # create paths commit the slot on success; any failure releases it.
+    # reserve takes the proc lock and the create paths take the spawn lock
+    # disjointly, so the two never nest and cannot invert.
+    val slot: i32 = reserve_proc();
+    if (slot < 0) {
+        if (env_block != nil) {
+            deallocate(env_block, env_size);
+        }
+        ret EAGAIN;
+    }
+
     var r: i64 = 0;
     if (stdin_fd == -1 && stdout_fd == -1 && stderr_fd == -1) {
-        r = create_inherit(pathname, ?cmdline[0], env_block);
+        r = create_inherit(pathname, ?cmdline[0], env_block, slot);
     } or {
-        r = create_redirected(pathname, ?cmdline[0], env_block, stdin_fd, stdout_fd, stderr_fd);
+        r = create_redirected(pathname, ?cmdline[0], env_block, stdin_fd, stdout_fd, stderr_fd, slot);
     }
     if (env_block != nil) {
         deallocate(env_block, env_size);
+    }
+    if (r < 0) {
+        release_proc(slot);
     }
     ret r;
 }
@@ -1637,6 +1686,14 @@ pub fun environ() **u8 {
 #
 # uses the process handle table to look up children by pid.
 # pid == -1 waits for any child. WNOHANG uses a zero timeout.
+#
+# a WAIT_FAILED from the underlying wait returns the error but deliberately
+# leaves the child in the table (handle open, slot held): the handle is
+# typically still valid, so freeing it would orphan a live child and make
+# its eventual exit unobservable (ECHILD), strictly worse than the caller
+# retrying the wait. this mirrors POSIX waitpid, where a transient wait
+# error (EINTR) leaves the child reapable. a persistently failing wait
+# therefore retains its slot — the lesser evil versus an unwaitable child.
 pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
     init_procs();
 
@@ -1655,6 +1712,7 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
         if (result == WAIT_TIMEOUT) {
             ret 0;
         }
+        # leave the slot/handle intact so the child stays waitable on retry
         if (result == WAIT_FAILED) {
             ret last_error();
         }
@@ -1675,8 +1733,9 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
         var n: usize = 0;
         var i: usize = 0;
 
+        # skip reserved slots: a child mid-spawn has no handle to wait on yet
         for (i < MAX_PROCS) {
-            if (_proc_handles[i] != INVALID_HANDLE_VALUE) {
+            if (_proc_handles[i] != INVALID_HANDLE_VALUE && _proc_handles[i] != PROC_RESERVED) {
                 wait_handles[n] = _proc_handles[i];
                 wait_pids[n] = _proc_pids[i];
                 n = n + 1;
@@ -1697,6 +1756,7 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
         if (result == WAIT_TIMEOUT) {
             ret 0;
         }
+        # leave every slot/handle intact so the children stay waitable on retry
         if (result == WAIT_FAILED) {
             ret last_error();
         }

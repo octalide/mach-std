@@ -43,6 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - darwin `vfork()` reads the same XNU child-indicator register as `fork()` and
   returns 0 in the child instead of the child PID, fixing the identical
   child-indicator bug in the previously plain `syscall0` wrapper (#234).
+- windows `spawn`/`spawn_redirected` now reserve a process-table slot before
+  `CreateProcessA`, so an exhausted table fails with `EAGAIN` without launching
+  a child that could never be waited on; a `WAIT_FAILED` in `wait`/`wait_pid`
+  deliberately retains the child's slot and handle so it stays waitable on
+  retry rather than being orphaned (#238).
 
 ## [0.6.0] - 2026-06-12
 
