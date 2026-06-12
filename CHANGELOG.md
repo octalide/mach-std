@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `C:` is drive-relative — a root unit but not absolute, matching Win32.
   POSIX behavior is unchanged (#248).
 
+### Fixed
+
+- Windows `WaitOnAddress`/`WakeByAddressSingle` are now pinned to
+  `api-ms-win-core-synch-l1-2-0.dll` (added to `[os.windows] libs`). Real
+  windows' kernel32 does not export the wait-on-address family — only wine's
+  does — so the unpinned imports bound to kernel32 and the native loader
+  rejected every mach exe with `STATUS_ENTRYPOINT_NOT_FOUND` before main
+  (#253).
+
 ## [0.7.0] - 2026-06-12
 
 Windows-stabilization release: native process spawning (CreateProcess backend
