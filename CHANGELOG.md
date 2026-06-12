@@ -42,6 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Windows DLL import attribution: the winsock bindings (`WSAStartup`,
+  `WSAGetLastError`, `socket`/`bind`/`listen`/`accept`/`connect`/`sendto`/
+  `recvfrom`/`shutdown`/`setsockopt`/`send`/`recv`, `closesocket`) now import
+  from `ws2_32.dll` and `SystemFunction036` (RtlGenRandom) from `advapi32.dll`
+  via the compiler's per-symbol `$<sym>.library` attribution, instead of every
+  import collapsing onto `kernel32.dll` and aborting at call time. `ws2_32.dll`
+  and `advapi32.dll` are added to the windows link libraries, and the `SleepW`
+  binding is renamed to its real export `Sleep` (#235, #241).
 - `std.net.dns.resolve` now resolves `localhost` and any `.localhost`
   subdomain to `127.0.0.1` per RFC 6761, without consulting the hosts file or
   a nameserver, so loopback resolution is portable on platforms (e.g. windows)

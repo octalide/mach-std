@@ -17,7 +17,7 @@ os  = "linux"
 abi = "sysv64"
 
 [os.windows]
-libs = ["kernel32.dll"]
+libs = ["kernel32.dll", "ws2_32.dll", "advapi32.dll"]
 
 [lib.std]
 entry = "lib.mach"
