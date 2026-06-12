@@ -87,6 +87,10 @@ pub fun is_done(t: *Thread) bool {
 
 use atomic_mod: std.sync.atomic;
 
+$if ($mach.target.os == $mach.os.windows) {
+    use win: std.system.os.windows;
+}
+
 var test_flag: i64 = 0;
 
 fun test_worker() {
@@ -104,6 +108,12 @@ test "thread: Thread record initializes" {
 }
 
 test "thread: spawn and join" {
+    $if ($mach.target.os == $mach.os.windows) {
+        # wine 11.10's kernel32 lacks WaitOnAddress/WakeByAddressSingle (a genuine
+        # gap; real windows 8+ exports them), so join's wait path aborts. skip
+        # under wine — the sync code is correct on real windows. see issue #244.
+        if (win.running_under_wine()) { ret 0; }
+    }
     atomic_mod.store(?test_flag, 0);
     var t: Thread;
     spawn(test_worker, ?t);
@@ -114,6 +124,11 @@ test "thread: spawn and join" {
 }
 
 test "thread: is_done after join" {
+    $if ($mach.target.os == $mach.os.windows) {
+        # see "thread: spawn and join" above — wine 11.10 lacks the kernel32
+        # wait-on-address exports, so skip under wine. issue #244.
+        if (win.running_under_wine()) { ret 0; }
+    }
     atomic_mod.store(?test_flag, 0);
     var t: Thread;
     spawn(test_worker, ?t);

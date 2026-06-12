@@ -168,6 +168,9 @@ fwd impl.thread_spawn;
 fwd impl.thread_wait;
 fwd impl.thread_wake;
 
+# runtime environment
+fwd impl.running_under_wine;
+
 # time
 fwd impl.clock_gettime;
 

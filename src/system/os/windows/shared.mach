@@ -170,6 +170,8 @@ ext fun GetLastError() u32;
 ext fun SetLastError(p0: u32);
 ext fun GetStdHandle(p0: u32) isize;
 ext fun CloseHandle(p0: isize) i32;
+ext fun GetModuleHandleA(p0: *u8) isize;
+ext fun GetProcAddress(p0: isize, p1: *u8) ptr;
 
 ext fun VirtualAlloc(p0: ptr, p1: usize, p2: u32, p3: u32) ptr;
 ext fun VirtualFree(p0: ptr, p1: usize, p2: u32) i32;
@@ -1923,6 +1925,24 @@ pub fun thread_wait(addr: *i64, expected: i64) i64 {
 pub fun thread_wake(addr: *i64) i64 {
     WakeByAddressSingle(addr::ptr);
     ret 0;
+}
+
+# runtime environment
+
+# running_under_wine: detect whether the process is running under the wine
+# windows compatibility layer rather than on genuine windows.
+#
+# probes ntdll for the wine-only `wine_get_version` export, the canonical
+# wine marker; it is absent on real windows. ntdll is always mapped into a
+# win32 process, so GetModuleHandleA resolves it without a load.
+# ---
+# ret: true under wine, false on genuine windows
+pub fun running_under_wine() bool {
+    val ntdll: isize = GetModuleHandleA("ntdll.dll");
+    if (ntdll == 0) {
+        ret false;
+    }
+    ret GetProcAddress(ntdll, "wine_get_version") != nil;
 }
 
 # sockets
