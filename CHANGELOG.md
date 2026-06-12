@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `std.net.dns.resolve` now resolves `localhost` and any `.localhost`
+  subdomain to `127.0.0.1` per RFC 6761, without consulting the hosts file or
+  a nameserver, so loopback resolution is portable on platforms (e.g. windows)
+  whose hosts file ships localhost commented out; `lookup_hosts` stays a pure
+  hosts-file reader (#242).
 - darwin `fork()` now reads the XNU child-indicator register (rdx on
   x86_64, x1 on aarch64) and returns 0 in the child instead of the child
   PID, so `spawn`/`spawn_redirected` take the exec path in the child rather
