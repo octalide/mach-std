@@ -39,6 +39,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wine, whose kernel32 lacks the `WaitOnAddress`/`WakeByAddressSingle`
   exports that real windows 8+ provides; the thread sync code is unchanged
   and correct on real windows (#244).
+- `std.types.path` now recognizes windows absolute roots: drive-letter
+  roots (`C:\`, `C:/`) and UNC roots (`\\server\share`) are absolute, and
+  `is_root`/`filename`/`extension`/`stem`/`parent` never split inside them
+  (`parent("C:\\foo")` → `C:\`, `parent("\\server\share\foo")` →
+  `\\server\share`, each root being its own parent). A bare drive reference
+  `C:` is drive-relative — a root unit but not absolute, matching Win32.
+  POSIX behavior is unchanged (#248).
 
 ### Fixed
 
