@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   onto which `spawn` now collapses; windows returns `ENOTSUP` until #221
   (#188, capture half).
 
+### Fixed
+
+- darwin `fork()` now reads the XNU child-indicator register (rdx on
+  x86_64, x1 on aarch64) and returns 0 in the child instead of the child
+  PID, so `spawn`/`spawn_redirected` take the exec path in the child rather
+  than duplicating the parent program (#232).
+
 ## [0.6.0] - 2026-06-12
 
 Bug-clearing release: all three known-failing tests are fixed for real (thread
