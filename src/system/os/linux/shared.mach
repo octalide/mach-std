@@ -958,8 +958,7 @@ pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
         val entry: *u8 = envp[i];
         if (str_starts_with(entry, name) && entry[name_len] == '='::u8) {
             val val_start: usize = name_len + 1;
-            var len: usize = 0;
-            for (entry[val_start + len] != 0) { len = len + 1; }
+            val len: usize = str_len(?entry[val_start]);
             var j: usize = 0;
             for (j < len && j + 1 < cap) {
                 buf[j] = entry[val_start + j];
