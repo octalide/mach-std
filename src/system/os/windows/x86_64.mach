@@ -114,6 +114,7 @@ fwd shared.seek;
 fwd shared.terminate;
 fwd shared.abort;
 fwd shared.spawn;
+fwd shared.spawn_captured;
 fwd shared.getpid;
 fwd shared.pipe;
 fwd shared.sleep;
