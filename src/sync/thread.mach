@@ -109,9 +109,12 @@ test "thread: Thread record initializes" {
 
 test "thread: spawn and join" {
     $if ($mach.target.os == $mach.os.windows) {
-        # wine 11.10's kernel32 lacks WaitOnAddress/WakeByAddressSingle (a genuine
-        # gap; real windows 8+ exports them), so join's wait path aborts. skip
-        # under wine — the sync code is correct on real windows. see issue #244.
+        # WaitOnAddress/WakeByAddressSingle are correctly pinned to the synch
+        # apiset (#253), and wine resolves it (apiset -> kernelbase/ntdll) — but
+        # mach v1.5.0 omits the import call-thunk for the last PE import
+        # descriptor (mach#1388, the same codegen gap behind the #241 RtlGenRandom
+        # failures), so the wait path dispatches through a null pointer and
+        # faults. skip under wine until mach#1388 lands.
         if (win.running_under_wine()) { ret 0; }
     }
     atomic_mod.store(?test_flag, 0);
@@ -125,8 +128,8 @@ test "thread: spawn and join" {
 
 test "thread: is_done after join" {
     $if ($mach.target.os == $mach.os.windows) {
-        # see "thread: spawn and join" above — wine 11.10 lacks the kernel32
-        # wait-on-address exports, so skip under wine. issue #244.
+        # see "thread: spawn and join" above — the synch-apiset wait path faults
+        # under wine on mach#1388's missing last-descriptor thunk. skip under wine.
         if (win.running_under_wine()) { ret 0; }
     }
     atomic_mod.store(?test_flag, 0);
