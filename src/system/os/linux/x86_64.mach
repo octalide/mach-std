@@ -220,6 +220,7 @@ fwd shared.sync_file;
 
 # environment
 fwd shared._envp;
+fwd shared.environ;
 
 # filesystem
 fwd shared.read;
