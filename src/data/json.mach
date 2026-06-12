@@ -15,7 +15,6 @@ use std.types.result.is_err;
 use std.types.result.unwrap_ok;
 use std.types.result.unwrap_err;
 use std.types.string.str;
-use std.types.string.str_equals;
 use std.memory.raw_copy;
 use allo: std.allocator;
 
@@ -29,6 +28,7 @@ pub val OBJECT: Kind = 5;
 
 val VALUE_SIZE: usize = $size_of(Value);
 val STR_SIZE:   usize = $size_of(str);
+val USIZE_SIZE: usize = $size_of(usize);
 
 # a parsed JSON value.
 # ---
@@ -38,7 +38,9 @@ val STR_SIZE:   usize = $size_of(str);
 # str_val:  pointer into original input when kind == STRING
 # str_len:  byte length of string (not null-terminated)
 # children: heap-allocated array of child Values (ARRAY or OBJECT)
-# keys:     heap-allocated array of key strings (OBJECT only, parallel with children)
+# keys:     heap-allocated array of key strings (OBJECT only, parallel with children;
+#           pointers into the original input, not null-terminated)
+# keys_len: heap-allocated array of key byte lengths (parallel with keys)
 # count:    number of children/keys
 # cap:      allocated capacity of children/keys arrays
 pub rec Value {
@@ -49,6 +51,7 @@ pub rec Value {
     str_len:  usize;
     children: *Value;
     keys:     *str;
+    keys_len: *usize;
     count:    usize;
     cap:      usize;
 }
@@ -166,12 +169,35 @@ pub fun value_get(v: *Value, index: usize) *Value {
 }
 
 # value_key: get an object key by index.
+#
+# the key points into the original input and is NOT null-terminated;
+# its byte length comes from value_key_len.
 # ---
 # index: zero-based index
-# ret:   key string (null-terminated), or nil if out of bounds
+# ret:   key string, or nil if out of bounds
 pub fun value_key(v: *Value, index: usize) str {
     if (v.kind != OBJECT || index >= v.count) { ret nil; }
     ret v.keys[index];
+}
+
+# value_key_len: get the byte length of an object key by index.
+# ---
+# index: zero-based index
+# ret:   key length in bytes, or 0 if out of bounds
+pub fun value_key_len(v: *Value, index: usize) usize {
+    if (v.kind != OBJECT || index >= v.count) { ret 0; }
+    ret v.keys_len[index];
+}
+
+# key_equals: length-bounded comparison of a stored key slice against a
+# null-terminated needle.
+fun key_equals(k: str, klen: usize, key: str) bool {
+    var i: usize = 0;
+    for (i < klen) {
+        if (key[i] == 0 || k[i] != key[i]) { ret false; }
+        i = i + 1;
+    }
+    ret key[klen] == 0;
 }
 
 # value_find: find an object value by key name (linear search).
@@ -179,10 +205,10 @@ pub fun value_key(v: *Value, index: usize) str {
 # key: null-terminated key to search for
 # ret: pointer to the Value, or nil if not found
 pub fun value_find(v: *Value, key: str) *Value {
-    if (v.kind != OBJECT) { ret nil; }
+    if (v.kind != OBJECT || key == nil) { ret nil; }
     var i: usize = 0;
     for (i < v.count) {
-        if (str_equals(v.keys[i], key)) {
+        if (key_equals(v.keys[i], v.keys_len[i], key)) {
             ret ?v.children[i];
         }
         i = i + 1;
@@ -214,6 +240,7 @@ fun make_null() Value {
     v.str_len = 0;
     v.children = nil;
     v.keys = nil;
+    v.keys_len = nil;
     v.count = 0;
     v.cap = 0;
     ret v;
@@ -415,11 +442,17 @@ fun keys_grow(p: *Parser, v: *Value, new_cap: usize) Result[bool, str] {
     if (is_err[*u8, str](kr)) { ret err[bool, str](unwrap_err[*u8, str](kr)); }
     val new_keys: *str = unwrap_ok[*u8, str](kr)::*str;
 
+    val lr: Result[*u8, str] = allo.allocate[u8](p.alloc, new_cap * USIZE_SIZE);
+    if (is_err[*u8, str](lr)) { ret err[bool, str](unwrap_err[*u8, str](lr)); }
+    val new_lens: *usize = unwrap_ok[*u8, str](lr)::*usize;
+
     if (v.count > 0) {
         raw_copy(new_keys::ptr, v.keys::ptr, v.count * STR_SIZE);
+        raw_copy(new_lens::ptr, v.keys_len::ptr, v.count * USIZE_SIZE);
     }
 
     v.keys = new_keys;
+    v.keys_len = new_lens;
     ret ok[bool, str](true);
 }
 
@@ -499,6 +532,7 @@ fun parse_object(p: *Parser) Result[Value, str] {
         }
 
         v.keys[v.count] = key_val.str_val;
+        v.keys_len[v.count] = key_val.str_len;
         v.children[v.count] = unwrap_ok[Value, str](val_res);
         v.count = v.count + 1;
 
@@ -618,7 +652,7 @@ fun emit_value(e: *Emitter, v: *Value) {
         for (i < v.count) {
             if (i > 0) { emit_byte(e, ','); }
             emit_byte(e, '"');
-            emit_str(e, v.keys[i]);
+            emit_bytes(e, v.keys[i]::*u8, v.keys_len[i]);
             emit_byte(e, '"');
             emit_byte(e, ':');
             emit_value(e, ?v.children[i]);
@@ -864,6 +898,24 @@ test "json: roundtrip array" {
     if (buf[2] != ',') { ret 1; }
     if (buf[3] != '2') { ret 1; }
     if (buf[6] != ']') { ret 1; }
+    ret 0;
+}
+
+test "json: roundtrip object keys" {
+    var a: allo.Allocator;
+    page.make(?a);
+    val src: str = "{\"a\":1,\"b\":2}";
+    val r: Result[Value, str] = parse(src::*u8, 13, ?a);
+    if (is_err[Value, str](r)) { ret 1; }
+    val v: Value = unwrap_ok[Value, str](r);
+    var buf: [32]u8;
+    val n: usize = emit(?v, ?buf[0], 32);
+    if (n != 13) { ret 1; }
+    var i: usize = 0;
+    for (i < 13) {
+        if (buf[i] != src[i]::u8) { ret 1; }
+        i = i + 1;
+    }
     ret 0;
 }
 
