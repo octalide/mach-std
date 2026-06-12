@@ -11,11 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `std.process.exec.capture(pathname, argv, envp, buf, cap) Result[Capture, str]`
   — run a child and collect its stdout into `buf`, draining the pipe to EOF so a
-  child outproducing the buffer never blocks; reports the full output length so
-  truncation (`len > cap`) is detectable, mirroring the `env.get` contract.
-  Backed by a new `std.system.os.spawn_captured` fd-redirection primitive
-  (fork + dup2 + exec, sharing `spawn`'s inherited-fd close path) on linux and
-  darwin; windows returns `ENOTSUP` until #221 (#188, capture half).
+  child outproducing the buffer never blocks; always reports the full output
+  length, so `len > cap` signals truncation (raw bytes, no terminator slot — a
+  `len == cap` capture is complete, unlike `env.get` whose boundary is
+  `ret >= cap`). Backed by a new `std.system.os.spawn_redirected(pathname,
+  argv, envp, stdin_fd, stdout_fd, stderr_fd)` stdio-redirection primitive
+  (fork + per-stream dup2 + exec, -1 inheriting the parent's stream; child
+  exits 126 on redirect failure, 127 on exec failure) on linux and darwin,
+  onto which `spawn` now collapses; windows returns `ENOTSUP` until #221
+  (#188, capture half).
 
 ## [0.6.0] - 2026-06-12
 
