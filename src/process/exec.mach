@@ -58,9 +58,11 @@ pub fun run(pathname: str, argv: **u8, envp: **u8) Result[ExitStatus, str] {
 # spawns the child with its stdout connected to a pipe, drains the pipe
 # to end-of-file (so a child producing more than buf holds never blocks),
 # waits for exit, and reports the full output length. at most cap bytes
-# are stored in buf; a returned len greater than cap signals truncation
-# and the capacity to retry with. buf holds raw bytes and is not
-# null-terminated.
+# are stored in buf; len <= cap means the whole output was stored, while
+# len > cap means exactly cap bytes were stored and len is the capacity
+# to retry with. buf holds raw bytes and is not null-terminated (unlike
+# env.get, no byte is reserved for a terminator, so a len == cap capture
+# is complete).
 # ---
 # pathname: path to executable
 # argv:     null-terminated argument array
@@ -72,7 +74,7 @@ pub fun capture(pathname: str, argv: **u8, envp: **u8, buf: *u8, cap: usize) Res
     var fds: [2]i32;
     if (os.pipe(?fds[0]) < 0) { ret err[Capture, str]("pipe failed"); }
 
-    val pid: i64 = os.spawn_captured(pathname, argv, envp, fds[1]);
+    val pid: i64 = os.spawn_redirected(pathname, argv, envp, -1, fds[1], -1);
     if (pid < 0) {
         os.close(fds[0]);
         os.close(fds[1]);

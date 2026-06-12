@@ -136,7 +136,7 @@ fwd impl.seek;
 fwd impl.terminate;
 fwd impl.abort;
 fwd impl.spawn;
-fwd impl.spawn_captured;
+fwd impl.spawn_redirected;
 fwd impl.getpid;
 fwd impl.pipe;
 fwd impl.sleep;
