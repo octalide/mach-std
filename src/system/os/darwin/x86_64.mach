@@ -36,7 +36,7 @@ pub fun pipe(fds: *i32) i64 {
     asm x86_64 {
         mov eax, 0x200002A
         syscall
-        xor rcx, rcx
+        mov rcx, 0
         setc cl
         mov {fail}, rcx
         mov {fd0}, rax

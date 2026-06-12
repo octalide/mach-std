@@ -36,7 +36,7 @@ pub fun pipe(fds: *i32) i64 {
     asm aarch64 {
         mov x16, 42
         svc 0x80
-        csetm x9, cs             # x9 = -1 when carry set (error), else 0
+        cset x9, cs              # x9 = 1 when carry set (error), else 0
         str x9, {fail}
         str x0, {fd0}
         str x1, {fd1}
