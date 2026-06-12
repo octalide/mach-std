@@ -364,7 +364,7 @@ fun find_by_seg(t: *Table, seg: str, seg_len: usize) *Value {
     val vals: *Value = t.values::*Value;
     var i: usize = 0;
     for (i < t.len) {
-        if (str_len(keys[i]) == seg_len && str_eq_n(keys[i], seg, seg_len)) {
+        if (str_len(keys[i]) == seg_len && mem.raw_equal(keys[i]::ptr, seg::ptr, seg_len)) {
             ret ?vals[i];
         }
         i = i + 1;
@@ -372,15 +372,6 @@ fun find_by_seg(t: *Table, seg: str, seg_len: usize) *Value {
     ret nil;
 }
 
-# str_eq_n: compare two strings up to n bytes.
-fun str_eq_n(a: str, b: str, n: usize) bool {
-    var i: usize = 0;
-    for (i < n) {
-        if (a[i] != b[i]) { ret false; }
-        i = i + 1;
-    }
-    ret true;
-}
 
 # get_str: look up a string value by dotted path.
 # ---
