@@ -174,86 +174,174 @@ pub fun exit(code: i64) {
     os.terminate(code);
 }
 
-fun make_argv1(prog: str) [2]usize {
-    var buf: [2]usize;
-    buf[0] = prog::usize;
-    buf[1] = 0;
-    ret buf;
+# the exec contract is platform-neutral, but the test programs are not:
+# posix targets drive /bin utilities, windows drives cmd.exe builtins
+# (whose echo emits a trailing CRLF, so captured lengths differ).
+$if ($mach.target.os == $mach.os.windows) {
+    val CMD: str = "C:\\Windows\\System32\\cmd.exe";
+
+    fun make_cmd(a1: str, a2: str) [4]usize {
+        var buf: [4]usize;
+        buf[0] = ("cmd")::usize;
+        buf[1] = a1::usize;
+        buf[2] = a2::usize;
+        buf[3] = 0;
+        ret buf;
+    }
+
+    test "exec: run cmd /c exit 0" {
+        var argv: [4]usize = make_cmd("/c", "exit 0");
+        val r: Result[ExitStatus, str] = run(CMD, (?argv[0])::**u8, nil);
+        if (is_err[ExitStatus, str](r)) { ret 1; }
+        val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
+        if (!exited(s)) { ret 1; }
+        if (code(s) != 0) { ret 1; }
+        ret 0;
+    }
+
+    test "exec: run cmd /c exit 7" {
+        var argv: [4]usize = make_cmd("/c", "exit 7");
+        val r: Result[ExitStatus, str] = run(CMD, (?argv[0])::**u8, nil);
+        if (is_err[ExitStatus, str](r)) { ret 1; }
+        val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
+        if (!exited(s)) { ret 1; }
+        if (code(s) != 7) { ret 1; }
+        ret 0;
+    }
+
+    test "exec: spawn and wait matches run" {
+        var argv: [4]usize = make_cmd("/c", "exit 0");
+        val sr: Result[Child, str] = spawn(CMD, (?argv[0])::**u8, nil);
+        if (is_err[Child, str](sr)) { ret 1; }
+        val child: Child = unwrap_ok[Child, str](sr);
+        val wr: Result[ExitStatus, str] = wait(child);
+        if (is_err[ExitStatus, str](wr)) { ret 1; }
+        val s: ExitStatus = unwrap_ok[ExitStatus, str](wr);
+        if (!exited(s)) { ret 1; }
+        if (code(s) != 0) { ret 1; }
+        ret 0;
+    }
+
+    var cap_buf: [64]u8;
+
+    test "exec: capture cmd echo stdout" {
+        var argv: [4]usize = make_cmd("/c", "echo hello");
+        val r: Result[Capture, str] = capture(CMD, (?argv[0])::**u8, nil, ?cap_buf[0], 64);
+        if (is_err[Capture, str](r)) { ret 1; }
+        val c: Capture = unwrap_ok[Capture, str](r);
+        if (!exited(c.status)) { ret 1; }
+        if (code(c.status) != 0) { ret 1; }
+        # cmd echo appends CRLF: "hello\r\n"
+        if (c.len != 7) { ret 1; }
+        if (cap_buf[0] != 'h') { ret 1; }
+        if (cap_buf[1] != 'e') { ret 1; }
+        if (cap_buf[2] != 'l') { ret 1; }
+        if (cap_buf[3] != 'l') { ret 1; }
+        if (cap_buf[4] != 'o') { ret 1; }
+        if (cap_buf[5] != '\r') { ret 1; }
+        if (cap_buf[6] != '\n') { ret 1; }
+        ret 0;
+    }
+
+    var cap_small: [2]u8;
+
+    # a buffer too small must still report the full output length so callers
+    # can detect truncation (len > cap) and size a retry buffer; the pipe is
+    # drained past the buffer so the child never blocks.
+    test "exec: capture reports full length on truncation" {
+        var argv: [4]usize = make_cmd("/c", "echo hello");
+        val r: Result[Capture, str] = capture(CMD, (?argv[0])::**u8, nil, ?cap_small[0], 2);
+        if (is_err[Capture, str](r)) { ret 1; }
+        val c: Capture = unwrap_ok[Capture, str](r);
+        if (code(c.status) != 0) { ret 1; }
+        if (c.len != 7) { ret 1; }
+        if (cap_small[0] != 'h') { ret 1; }
+        if (cap_small[1] != 'e') { ret 1; }
+        ret 0;
+    }
 }
+$or {
+    fun make_argv1(prog: str) [2]usize {
+        var buf: [2]usize;
+        buf[0] = prog::usize;
+        buf[1] = 0;
+        ret buf;
+    }
 
-fun make_argv2(prog: str, a1: str) [3]usize {
-    var buf: [3]usize;
-    buf[0] = prog::usize;
-    buf[1] = a1::usize;
-    buf[2] = 0;
-    ret buf;
-}
+    fun make_argv2(prog: str, a1: str) [3]usize {
+        var buf: [3]usize;
+        buf[0] = prog::usize;
+        buf[1] = a1::usize;
+        buf[2] = 0;
+        ret buf;
+    }
 
-test "exec: run /bin/true exits 0" {
-    var argv: [2]usize = make_argv1("/bin/true");
-    val r: Result[ExitStatus, str] = run("/bin/true", (?argv[0])::**u8, nil);
-    if (is_err[ExitStatus, str](r)) { ret 1; }
-    val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
-    if (!exited(s)) { ret 1; }
-    if (code(s) != 0) { ret 1; }
-    ret 0;
-}
+    test "exec: run /bin/true exits 0" {
+        var argv: [2]usize = make_argv1("/bin/true");
+        val r: Result[ExitStatus, str] = run("/bin/true", (?argv[0])::**u8, nil);
+        if (is_err[ExitStatus, str](r)) { ret 1; }
+        val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
+        if (!exited(s)) { ret 1; }
+        if (code(s) != 0) { ret 1; }
+        ret 0;
+    }
 
-test "exec: run /bin/false exits 1" {
-    var argv: [2]usize = make_argv1("/bin/false");
-    val r: Result[ExitStatus, str] = run("/bin/false", (?argv[0])::**u8, nil);
-    if (is_err[ExitStatus, str](r)) { ret 1; }
-    val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
-    if (!exited(s)) { ret 1; }
-    if (code(s) != 1) { ret 1; }
-    ret 0;
-}
+    test "exec: run /bin/false exits 1" {
+        var argv: [2]usize = make_argv1("/bin/false");
+        val r: Result[ExitStatus, str] = run("/bin/false", (?argv[0])::**u8, nil);
+        if (is_err[ExitStatus, str](r)) { ret 1; }
+        val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
+        if (!exited(s)) { ret 1; }
+        if (code(s) != 1) { ret 1; }
+        ret 0;
+    }
 
-test "exec: spawn and wait matches run" {
-    var argv: [2]usize = make_argv1("/bin/true");
-    val sr: Result[Child, str] = spawn("/bin/true", (?argv[0])::**u8, nil);
-    if (is_err[Child, str](sr)) { ret 1; }
-    val child: Child = unwrap_ok[Child, str](sr);
-    val wr: Result[ExitStatus, str] = wait(child);
-    if (is_err[ExitStatus, str](wr)) { ret 1; }
-    val s: ExitStatus = unwrap_ok[ExitStatus, str](wr);
-    if (!exited(s)) { ret 1; }
-    if (code(s) != 0) { ret 1; }
-    ret 0;
-}
+    test "exec: spawn and wait matches run" {
+        var argv: [2]usize = make_argv1("/bin/true");
+        val sr: Result[Child, str] = spawn("/bin/true", (?argv[0])::**u8, nil);
+        if (is_err[Child, str](sr)) { ret 1; }
+        val child: Child = unwrap_ok[Child, str](sr);
+        val wr: Result[ExitStatus, str] = wait(child);
+        if (is_err[ExitStatus, str](wr)) { ret 1; }
+        val s: ExitStatus = unwrap_ok[ExitStatus, str](wr);
+        if (!exited(s)) { ret 1; }
+        if (code(s) != 0) { ret 1; }
+        ret 0;
+    }
 
-var cap_buf: [64]u8;
+    var cap_buf: [64]u8;
 
-test "exec: capture /bin/echo stdout" {
-    var argv: [3]usize = make_argv2("/bin/echo", "hello");
-    val r: Result[Capture, str] = capture("/bin/echo", (?argv[0])::**u8, nil, ?cap_buf[0], 64);
-    if (is_err[Capture, str](r)) { ret 1; }
-    val c: Capture = unwrap_ok[Capture, str](r);
-    if (!exited(c.status)) { ret 1; }
-    if (code(c.status) != 0) { ret 1; }
-    if (c.len != 6) { ret 1; }
-    if (cap_buf[0] != 'h') { ret 1; }
-    if (cap_buf[1] != 'e') { ret 1; }
-    if (cap_buf[2] != 'l') { ret 1; }
-    if (cap_buf[3] != 'l') { ret 1; }
-    if (cap_buf[4] != 'o') { ret 1; }
-    if (cap_buf[5] != '\n') { ret 1; }
-    ret 0;
-}
+    test "exec: capture /bin/echo stdout" {
+        var argv: [3]usize = make_argv2("/bin/echo", "hello");
+        val r: Result[Capture, str] = capture("/bin/echo", (?argv[0])::**u8, nil, ?cap_buf[0], 64);
+        if (is_err[Capture, str](r)) { ret 1; }
+        val c: Capture = unwrap_ok[Capture, str](r);
+        if (!exited(c.status)) { ret 1; }
+        if (code(c.status) != 0) { ret 1; }
+        if (c.len != 6) { ret 1; }
+        if (cap_buf[0] != 'h') { ret 1; }
+        if (cap_buf[1] != 'e') { ret 1; }
+        if (cap_buf[2] != 'l') { ret 1; }
+        if (cap_buf[3] != 'l') { ret 1; }
+        if (cap_buf[4] != 'o') { ret 1; }
+        if (cap_buf[5] != '\n') { ret 1; }
+        ret 0;
+    }
 
-var cap_small: [2]u8;
+    var cap_small: [2]u8;
 
-# a buffer too small must still report the full output length so callers
-# can detect truncation (len > cap) and size a retry buffer; the pipe is
-# drained past the buffer so the child never blocks.
-test "exec: capture reports full length on truncation" {
-    var argv: [3]usize = make_argv2("/bin/echo", "hello");
-    val r: Result[Capture, str] = capture("/bin/echo", (?argv[0])::**u8, nil, ?cap_small[0], 2);
-    if (is_err[Capture, str](r)) { ret 1; }
-    val c: Capture = unwrap_ok[Capture, str](r);
-    if (code(c.status) != 0) { ret 1; }
-    if (c.len != 6) { ret 1; }
-    if (cap_small[0] != 'h') { ret 1; }
-    if (cap_small[1] != 'e') { ret 1; }
-    ret 0;
+    # a buffer too small must still report the full output length so callers
+    # can detect truncation (len > cap) and size a retry buffer; the pipe is
+    # drained past the buffer so the child never blocks.
+    test "exec: capture reports full length on truncation" {
+        var argv: [3]usize = make_argv2("/bin/echo", "hello");
+        val r: Result[Capture, str] = capture("/bin/echo", (?argv[0])::**u8, nil, ?cap_small[0], 2);
+        if (is_err[Capture, str](r)) { ret 1; }
+        val c: Capture = unwrap_ok[Capture, str](r);
+        if (code(c.status) != 0) { ret 1; }
+        if (c.len != 6) { ret 1; }
+        if (cap_small[0] != 'h') { ret 1; }
+        if (cap_small[1] != 'e') { ret 1; }
+        ret 0;
+    }
 }
