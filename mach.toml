@@ -1,18 +1,24 @@
 [project]
-id = "std"
-name = "Mach Standard Library"
-version = "0.4.3"
-dir_src = "src"
-dir_out = "out"
-dir_dep = "dep"
-target = "native"
+id      = "std"
+name    = "Mach Standard Library"
+version = "0.5.0"
+src     = "src"
+dep     = "dep"
+target  = "native"
+out     = "out/{target}/{profile}/bin/{name}{ext}"
+obj     = "out/{target}/{profile}/obj"
+ir      = "out/{target}/{profile}/ir"
+asm     = "out/{target}/{profile}/asm"
+tests   = "out/{target}/{profile}/test/{name}"
 
-[targets.linux]
-os = "linux"
+[target.linux]
 isa = "x86_64"
+os  = "linux"
 abi = "sysv64"
-mode = "library"
-entrypoint = "lib.mach"
-artifacts = "linux"
-dir_tests = "tests"
-binary = "linux/bin/libmachstd.a"
+
+[os.windows]
+libs = ["kernel32.dll"]
+
+[lib.std]
+entry = "lib.mach"
+kind  = "static"
