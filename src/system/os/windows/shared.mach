@@ -1228,6 +1228,12 @@ pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     ret len::i64;
 }
 
+# environ: windows does not capture a unix-style envp array; always nil.
+# use getenv for individual lookups.
+pub fun environ() **u8 {
+    ret nil;
+}
+
 # wait: wait for a child process to change state.
 #
 # uses the process handle table to look up children by pid.

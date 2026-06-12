@@ -132,6 +132,7 @@ fwd impl.pipe;
 fwd impl.sleep;
 fwd impl.getcwd;
 fwd impl.getenv;
+fwd impl.environ;
 fwd impl.fork;
 fwd impl.vfork;
 fwd impl.exec;
