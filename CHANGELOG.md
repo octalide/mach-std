@@ -27,6 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   x86_64, x1 on aarch64) and returns 0 in the child instead of the child
   PID, so `spawn`/`spawn_redirected` take the exec path in the child rather
   than duplicating the parent program (#232).
+- darwin `vfork()` reads the same XNU child-indicator register as `fork()` and
+  returns 0 in the child instead of the child PID, fixing the identical
+  child-indicator bug in the previously plain `syscall0` wrapper (#234).
 
 ## [0.6.0] - 2026-06-12
 
