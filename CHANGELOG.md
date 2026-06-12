@@ -7,11 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `std.process.exec.capture(pathname, argv, envp, buf, cap) Result[Capture, str]`
+  — run a child and collect its stdout into `buf`, draining the pipe to EOF so a
+  child outproducing the buffer never blocks; always reports the full output
+  length, so `len > cap` signals truncation (raw bytes, no terminator slot — a
+  `len == cap` capture is complete, unlike `env.get` whose boundary is
+  `ret >= cap`). Backed by a new `std.system.os.spawn_redirected(pathname,
+  argv, envp, stdin_fd, stdout_fd, stderr_fd)` stdio-redirection primitive
+  (fork + per-stream dup2 + exec, -1 inheriting the parent's stream; child
+  exits 126 on redirect failure, 127 on exec failure) on linux and darwin,
+  onto which `spawn` now collapses; windows returns `ENOTSUP` until #221
+  (#188, capture half).
+
 ### Fixed
 
 - darwin `fork()` now reads the XNU child-indicator register (rdx on
   x86_64, x1 on aarch64) and returns 0 in the child instead of the child
-  PID, so `spawn`/`spawn_captured` take the exec path in the child rather
+  PID, so `spawn`/`spawn_redirected` take the exec path in the child rather
   than duplicating the parent program (#232).
 
 ## [0.6.0] - 2026-06-12

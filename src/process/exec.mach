@@ -1,6 +1,7 @@
 # process spawning and management.
 
 use std.types.bool.bool;
+use std.types.bool.true;
 use std.types.size.usize;
 use std.types.result.Result;
 use std.types.result.ok;
@@ -25,6 +26,16 @@ pub rec Child {
     pid: i64;
 }
 
+# Capture: result of running a child process and collecting its stdout.
+# ---
+# status: exit status of the child process
+# len:    total bytes the child wrote to stdout; a len greater than the
+#         destination capacity signals the captured output was truncated
+pub rec Capture {
+    status: ExitStatus;
+    len:    usize;
+}
+
 # run: spawn a process and wait for it to exit.
 # ---
 # pathname: path to executable
@@ -40,6 +51,65 @@ pub fun run(pathname: str, argv: **u8, envp: **u8) Result[ExitStatus, str] {
     if (r < 0) { ret err[ExitStatus, str]("wait failed"); }
 
     ret ok[ExitStatus, str](ExitStatus{raw: wstatus});
+}
+
+# capture: run a process and collect its standard output into a buffer.
+#
+# spawns the child with its stdout connected to a pipe, drains the pipe
+# to end-of-file (so a child producing more than buf holds never blocks),
+# waits for exit, and reports the full output length. at most cap bytes
+# are stored in buf; len <= cap means the whole output was stored, while
+# len > cap means exactly cap bytes were stored and len is the capacity
+# to retry with. buf holds raw bytes and is not null-terminated (unlike
+# env.get, no byte is reserved for a terminator, so a len == cap capture
+# is complete).
+# ---
+# pathname: path to executable
+# argv:     null-terminated argument array
+# envp:     null-terminated environment array
+# buf:      destination buffer for captured stdout
+# cap:      buffer capacity in bytes
+# ret:      capture result (exit status and full output length), or an error
+pub fun capture(pathname: str, argv: **u8, envp: **u8, buf: *u8, cap: usize) Result[Capture, str] {
+    var fds: [2]i32;
+    if (os.pipe(?fds[0]) < 0) { ret err[Capture, str]("pipe failed"); }
+
+    val pid: i64 = os.spawn_redirected(pathname, argv, envp, -1, fds[1], -1);
+    if (pid < 0) {
+        os.close(fds[0]);
+        os.close(fds[1]);
+        ret err[Capture, str]("spawn failed");
+    }
+
+    # the parent never writes; closing its write end lets read see EOF
+    # once the child's stdout closes
+    os.close(fds[1]);
+
+    var wstatus: i32 = 0;
+    var total: usize = 0;
+    var scratch: [4096]u8;
+    for (true) {
+        var dst: *u8 = ?scratch[0];
+        var want: usize = 4096;
+        if (total < cap) {
+            dst = (buf::usize + total)::*u8;
+            want = cap - total;
+        }
+        val n: i64 = os.read(fds[0], dst, want);
+        if (n < 0) {
+            os.close(fds[0]);
+            os.wait_pid(pid, ?wstatus, 0);
+            ret err[Capture, str]("read failed");
+        }
+        if (n == 0) { brk; }
+        total = total + n::usize;
+    }
+    os.close(fds[0]);
+
+    val r: i64 = os.wait_pid(pid, ?wstatus, 0);
+    if (r < 0) { ret err[Capture, str]("wait failed"); }
+
+    ret ok[Capture, str](Capture{status: ExitStatus{raw: wstatus}, len: total});
 }
 
 # spawn: start a process without waiting.
@@ -111,6 +181,14 @@ fun make_argv1(prog: str) [2]usize {
     ret buf;
 }
 
+fun make_argv2(prog: str, a1: str) [3]usize {
+    var buf: [3]usize;
+    buf[0] = prog::usize;
+    buf[1] = a1::usize;
+    buf[2] = 0;
+    ret buf;
+}
+
 test "exec: run /bin/true exits 0" {
     var argv: [2]usize = make_argv1("/bin/true");
     val r: Result[ExitStatus, str] = run("/bin/true", (?argv[0])::**u8, nil);
@@ -141,5 +219,41 @@ test "exec: spawn and wait matches run" {
     val s: ExitStatus = unwrap_ok[ExitStatus, str](wr);
     if (!exited(s)) { ret 1; }
     if (code(s) != 0) { ret 1; }
+    ret 0;
+}
+
+var cap_buf: [64]u8;
+
+test "exec: capture /bin/echo stdout" {
+    var argv: [3]usize = make_argv2("/bin/echo", "hello");
+    val r: Result[Capture, str] = capture("/bin/echo", (?argv[0])::**u8, nil, ?cap_buf[0], 64);
+    if (is_err[Capture, str](r)) { ret 1; }
+    val c: Capture = unwrap_ok[Capture, str](r);
+    if (!exited(c.status)) { ret 1; }
+    if (code(c.status) != 0) { ret 1; }
+    if (c.len != 6) { ret 1; }
+    if (cap_buf[0] != 'h') { ret 1; }
+    if (cap_buf[1] != 'e') { ret 1; }
+    if (cap_buf[2] != 'l') { ret 1; }
+    if (cap_buf[3] != 'l') { ret 1; }
+    if (cap_buf[4] != 'o') { ret 1; }
+    if (cap_buf[5] != '\n') { ret 1; }
+    ret 0;
+}
+
+var cap_small: [2]u8;
+
+# a buffer too small must still report the full output length so callers
+# can detect truncation (len > cap) and size a retry buffer; the pipe is
+# drained past the buffer so the child never blocks.
+test "exec: capture reports full length on truncation" {
+    var argv: [3]usize = make_argv2("/bin/echo", "hello");
+    val r: Result[Capture, str] = capture("/bin/echo", (?argv[0])::**u8, nil, ?cap_small[0], 2);
+    if (is_err[Capture, str](r)) { ret 1; }
+    val c: Capture = unwrap_ok[Capture, str](r);
+    if (code(c.status) != 0) { ret 1; }
+    if (c.len != 6) { ret 1; }
+    if (cap_small[0] != 'h') { ret 1; }
+    if (cap_small[1] != 'e') { ret 1; }
     ret 0;
 }

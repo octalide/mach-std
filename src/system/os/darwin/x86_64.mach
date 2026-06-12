@@ -129,6 +129,7 @@ fwd shared.syscall6;
 fwd shared.terminate;
 fwd shared.abort;
 fwd shared.spawn;
+fwd shared.spawn_redirected;
 fwd shared.getpid;
 fwd shared.sleep;
 fwd shared.getcwd;

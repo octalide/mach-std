@@ -64,6 +64,7 @@ val SYS_LISTEN:           usize = 106;
 val SYS_SETSOCKOPT:       usize = 105;
 val SYS_GETRLIMIT:        usize = 194;
 val RLIMIT_NOFILE:        usize = 8;
+val SYS_DUP2:             usize = 90;
 
 val SIGABRT: i32 = 6;
 
@@ -772,6 +773,30 @@ fwd os_shared.was_stopped;
 fwd os_shared.stop_signal;
 fwd os_shared.was_continued;
 
+# close_inherited_fds: close every file descriptor >= 3 in the caller.
+#
+# used by the child between fork and exec to avoid leaking parent FDs
+# (pipes, sockets, etc.); darwin has no close_range, so it walks up to
+# the open-file limit. limits beyond i32 range (e.g. RLIM_INFINITY)
+# fall back to OPEN_MAX (10240) instead of wrapping negative.
+fun close_inherited_fds() {
+    var rl: [2]u64;
+    var max_fd: i32 = 1024;
+    if (syscall2(SYS_GETRLIMIT, RLIMIT_NOFILE, (?rl[0])::usize) == 0 && rl[0] > 0) {
+        if (rl[0] <= 2147483647) {
+            max_fd = rl[0]::i32;
+        }
+        or {
+            max_fd = 10240;
+        }
+    }
+    var fd: i32 = 3;
+    for (fd < max_fd) {
+        syscall1(SYS_CLOSE, fd::isize::usize);
+        fd = fd + 1;
+    }
+}
+
 # spawn: create a child process running the given program.
 #
 # closes inherited file descriptors >= 3 in the child before exec to
@@ -782,21 +807,42 @@ fwd os_shared.was_continued;
 # envp:     null-terminated environment array
 # ret:      child PID on success, or negative errno
 pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
+    ret spawn_redirected(pathname, argv, envp, -1, -1, -1);
+}
+
+# spawn_redirected: spawn a child with its standard streams bound to
+# caller-supplied descriptors.
+#
+# forks, duplicates each non-negative descriptor onto the matching
+# standard stream (-1 inherits the parent's stream), closes inherited
+# descriptors >= 3 (including both ends of a capture pipe), and execs.
+# the parent keeps ownership of the passed descriptors; pairing one with
+# a pipe end lets the parent stream the child's stdio. the child exits
+# 126 when a redirect fails and 127 when exec fails.
+# ---
+# pathname:  path to executable
+# argv:      null-terminated argument array
+# envp:      null-terminated environment array
+# stdin_fd:  descriptor to install as the child's stdin, or -1 to inherit
+# stdout_fd: descriptor to install as the child's stdout, or -1 to inherit
+# stderr_fd: descriptor to install as the child's stderr, or -1 to inherit
+# ret:       child PID on success, or negative errno
+pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32) i64 {
     val pid: i64 = fork();
     if (pid < 0) {
         ret pid;
     }
     if (pid == 0) {
-        var rl: [2]u64;
-        var max_fd: i32 = 1024;
-        if (syscall2(SYS_GETRLIMIT, RLIMIT_NOFILE, (?rl[0])::usize) == 0 && rl[0] > 0) {
-            max_fd = rl[0]::i32;
+        if (stdin_fd != -1 && syscall2(SYS_DUP2, stdin_fd::isize::usize, STDIN_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT, 126);
         }
-        var fd: i32 = 3;
-        for (fd < max_fd) {
-            syscall1(SYS_CLOSE, fd::isize::usize);
-            fd = fd + 1;
+        if (stdout_fd != -1 && syscall2(SYS_DUP2, stdout_fd::isize::usize, STDOUT_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT, 126);
         }
+        if (stderr_fd != -1 && syscall2(SYS_DUP2, stderr_fd::isize::usize, STDERR_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT, 126);
+        }
+        close_inherited_fds();
         exec(pathname, argv, envp);
         syscall1(SYS_EXIT, 127);
     }
