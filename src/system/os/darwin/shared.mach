@@ -64,6 +64,7 @@ val SYS_LISTEN:           usize = 106;
 val SYS_SETSOCKOPT:       usize = 105;
 val SYS_GETRLIMIT:        usize = 194;
 val RLIMIT_NOFILE:        usize = 8;
+val SYS_DUP2:             usize = 90;
 
 val SIGABRT: i32 = 6;
 
@@ -221,17 +222,23 @@ pub val EINTR_MAX_RETRIES: usize = 8;
 # error the carry flag is set and the positive errno is returned; these
 # wrappers negate it so callers see a negative errno, matching the i64
 # contract used throughout this module.
+#
+# the inline-asm encoder only branches to symbols, so rather than branch
+# on the carry flag inside the asm block, each wrapper materializes it
+# into `fail` (`setc` on x86_64, `cset` on aarch64) and negates the raw
+# result in mach code when fail is set.
 
 pub fun syscall0(n: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -239,26 +246,27 @@ pub fun syscall0(n: usize) i64 {
         asm aarch64 {
             mov x16, {n}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall1(n: usize, a0: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
             mov rdi, {a0}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -267,17 +275,18 @@ pub fun syscall1(n: usize, a0: usize) i64 {
             mov x16, {n}
             mov x0, {a0}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
@@ -285,9 +294,9 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
             mov rdi, {a0}
             mov rsi, {a1}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -297,17 +306,18 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
             mov x0, {a0}
             mov x1, {a1}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
@@ -316,9 +326,9 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
             mov rsi, {a1}
             mov rdx, {a2}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -329,17 +339,18 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
             mov x1, {a1}
             mov x2, {a2}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
@@ -349,9 +360,9 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
             mov rdx, {a2}
             mov r10, {a3}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -363,17 +374,18 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
             mov x2, {a2}
             mov x3, {a3}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
@@ -384,9 +396,9 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov r10, {a3}
             mov r8, {a4}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -399,17 +411,18 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov x3, {a3}
             mov x4, {a4}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
 pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
-    var out: i64;
+    var out: i64 = 0;
+    var fail: i64 = 0;
     $if ($mach.target.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
@@ -421,9 +434,9 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov r8, {a4}
             mov r9, {a5}
             syscall
-            jnc 1f
-            neg rax
-        1:
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
             mov {out}, rax
         }
     }
@@ -437,12 +450,12 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov x4, {a4}
             mov x5, {a5}
             svc 0x80
-            b.cc 1f
-            neg x0, x0
-        1:
-            mov {out}, x0
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
         }
     }
+    if (fail != 0) { ret -out; }
     ret out;
 }
 
@@ -673,7 +686,7 @@ pub fun make_dir(dirfd: i32, path: *u8, mode: i32) i64 {
 # darwin uses getdirentries64 instead of getdents64.
 pub fun read_dir(fd: i32, dirp: *dirent64, count: usize) i64 {
     var basep: i64 = 0;
-    ret syscall4(SYS_GETDIRENTRIES64, fd::isize::usize, dirp::usize, count, ?basep::usize);
+    ret syscall4(SYS_GETDIRENTRIES64, fd::isize::usize, dirp::usize, count, (?basep)::usize);
 }
 
 pub fun access(dirfd: i32, path: *u8, mode: i32, flags: i32) i64 {
@@ -686,12 +699,93 @@ pub fun seek(fd: i32, offset: i64, whence: i32) i64 {
 
 # process
 
+# fork: create a child process by duplicating the caller.
+#
+# the XNU fork trap returns the child PID in the primary register
+# (rax/x0) for BOTH processes and flags the child via the second return
+# register (rdx == 1 on x86_64, x1 == 1 on aarch64). a plain syscall0
+# would leave the child seeing pid != 0, so this wrapper reads the child
+# indicator and returns 0 in the child, mirroring libc's fork stub. the
+# carry flag is materialized into `fail` (`setc`/`cset`) and the branch
+# happens in mach code, matching the syscall wrappers and pipe.
+# ---
+# ret: child PID in the parent, 0 in the child, or negative errno
 pub fun fork() i64 {
-    ret syscall0(SYS_FORK);
+    var n: usize = SYS_FORK;
+    var out: i64 = 0;
+    var fail: i64 = 0;
+    var child: i64 = 0;
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, 0x2000000
+            or rax, {n}
+            syscall
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
+            mov {out}, rax
+            mov {child}, rdx
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            mov x16, {n}
+            svc 0x80
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
+            str x1, {child}
+        }
+    }
+    if (fail != 0) { ret -out; }
+    if (child != 0) { ret 0; }
+    ret out;
 }
 
+# vfork: create a child process sharing the parent's address space,
+# suspending the parent until the child execs or exits.
+#
+# the XNU vfork trap uses the same two-register return convention as
+# fork: the child PID lands in the primary register (rax/x0) for BOTH
+# processes and the child is flagged via the second return register
+# (rdx == 1 on x86_64, x1 == 1 on aarch64). a plain syscall0 would leave
+# the child seeing pid != 0, so this wrapper reads the child indicator
+# and returns 0 in the child, mirroring fork. the carry flag is
+# materialized into `fail` (`setc`/`cset`) and the branch happens in
+# mach code. the parent-suspension semantics are kernel-side; the
+# wrapper shape matches fork.
+# ---
+# ret: child PID in the parent, 0 in the child, or negative errno
 pub fun vfork() i64 {
-    ret syscall0(SYS_VFORK);
+    var n: usize = SYS_VFORK;
+    var out: i64 = 0;
+    var fail: i64 = 0;
+    var child: i64 = 0;
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, 0x2000000
+            or rax, {n}
+            syscall
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
+            mov {out}, rax
+            mov {child}, rdx
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            mov x16, {n}
+            svc 0x80
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
+            str x1, {child}
+        }
+    }
+    if (fail != 0) { ret -out; }
+    if (child != 0) { ret 0; }
+    ret out;
 }
 
 pub fun exec(pathname: *u8, argv: **u8, envp: **u8) i64 {
@@ -721,6 +815,30 @@ fwd os_shared.was_stopped;
 fwd os_shared.stop_signal;
 fwd os_shared.was_continued;
 
+# close_inherited_fds: close every file descriptor >= 3 in the caller.
+#
+# used by the child between fork and exec to avoid leaking parent FDs
+# (pipes, sockets, etc.); darwin has no close_range, so it walks up to
+# the open-file limit. limits beyond i32 range (e.g. RLIM_INFINITY)
+# fall back to OPEN_MAX (10240) instead of wrapping negative.
+fun close_inherited_fds() {
+    var rl: [2]u64;
+    var max_fd: i32 = 1024;
+    if (syscall2(SYS_GETRLIMIT, RLIMIT_NOFILE, (?rl[0])::usize) == 0 && rl[0] > 0) {
+        if (rl[0] <= 2147483647) {
+            max_fd = rl[0]::i32;
+        }
+        or {
+            max_fd = 10240;
+        }
+    }
+    var fd: i32 = 3;
+    for (fd < max_fd) {
+        syscall1(SYS_CLOSE, fd::isize::usize);
+        fd = fd + 1;
+    }
+}
+
 # spawn: create a child process running the given program.
 #
 # closes inherited file descriptors >= 3 in the child before exec to
@@ -731,21 +849,42 @@ fwd os_shared.was_continued;
 # envp:     null-terminated environment array
 # ret:      child PID on success, or negative errno
 pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
+    ret spawn_redirected(pathname, argv, envp, -1, -1, -1);
+}
+
+# spawn_redirected: spawn a child with its standard streams bound to
+# caller-supplied descriptors.
+#
+# forks, duplicates each non-negative descriptor onto the matching
+# standard stream (-1 inherits the parent's stream), closes inherited
+# descriptors >= 3 (including both ends of a capture pipe), and execs.
+# the parent keeps ownership of the passed descriptors; pairing one with
+# a pipe end lets the parent stream the child's stdio. the child exits
+# 126 when a redirect fails and 127 when exec fails.
+# ---
+# pathname:  path to executable
+# argv:      null-terminated argument array
+# envp:      null-terminated environment array
+# stdin_fd:  descriptor to install as the child's stdin, or -1 to inherit
+# stdout_fd: descriptor to install as the child's stdout, or -1 to inherit
+# stderr_fd: descriptor to install as the child's stderr, or -1 to inherit
+# ret:       child PID on success, or negative errno
+pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32) i64 {
     val pid: i64 = fork();
     if (pid < 0) {
         ret pid;
     }
     if (pid == 0) {
-        var rl: [2]u64;
-        var max_fd: i32 = 1024;
-        if (syscall2(SYS_GETRLIMIT, RLIMIT_NOFILE, (?rl[0])::usize) == 0 && rl[0] > 0) {
-            max_fd = rl[0]::i32;
+        if (stdin_fd != -1 && syscall2(SYS_DUP2, stdin_fd::isize::usize, STDIN_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT, 126);
         }
-        var fd: i32 = 3;
-        for (fd < max_fd) {
-            syscall1(SYS_CLOSE, fd::isize::usize);
-            fd = fd + 1;
+        if (stdout_fd != -1 && syscall2(SYS_DUP2, stdout_fd::isize::usize, STDOUT_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT, 126);
         }
+        if (stderr_fd != -1 && syscall2(SYS_DUP2, stderr_fd::isize::usize, STDERR_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT, 126);
+        }
+        close_inherited_fds();
         exec(pathname, argv, envp);
         syscall1(SYS_EXIT, 127);
     }
@@ -775,7 +914,7 @@ pub fun sleep(nsec: i64) {
     var tv: timeval;
     tv.tv_sec = sec;
     tv.tv_usec = usec::i32;
-    syscall5(SYS_SELECT, 0, 0, 0, 0, ?tv::usize);
+    syscall5(SYS_SELECT, 0, 0, 0, 0, (?tv)::usize);
 }
 
 # getcwd: get the current working directory.
@@ -788,11 +927,15 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
 }
 
 # getenv: look up an environment variable by name.
+#
+# when the value fits (ret < cap) it is copied and null-terminated.
+# always returns the full value length, so ret >= cap signals truncation
+# (buffer contents unspecified) and ret + 1 is the capacity to retry with.
 # ---
 # name: null-terminated variable name
 # buf:  destination buffer for the value
 # cap:  buffer capacity in bytes
-# ret:  length of value on success, or NOT_FOUND
+# ret:  full length of the value, or NOT_FOUND
 pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     if (_envp == 0) { ret os_shared.NOT_FOUND; }
     val envp: **u8 = _envp::**u8;
@@ -801,17 +944,15 @@ pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     for (envp[i]::usize != 0) {
         val entry: *u8 = envp[i];
         if (str_starts_with(entry, name) && entry[name_len] == '='::u8) {
-            if (cap == 0) { ret 0; }
             val val_start: usize = name_len + 1;
+            val len: usize = str_len(?entry[val_start]);
             var j: usize = 0;
-            for (entry[val_start + j] != 0 && j < cap - 1) {
+            for (j < len && j + 1 < cap) {
                 buf[j] = entry[val_start + j];
                 j = j + 1;
             }
-            if (j < cap) {
-                buf[j] = 0;
-            }
-            ret j::i64;
+            if (j < cap) { buf[j] = 0; }
+            ret len::i64;
         }
         i = i + 1;
     }

@@ -5,6 +5,84 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-12
+
+Windows-stabilization release: native process spawning (CreateProcess backend
+with stdio redirection and capture), correct per-DLL import attribution
+(ws2_32/advapi32), dual-separator path parsing, RFC 6761 localhost resolution,
+and darwin fork/vfork child-indicator fixes. Requires mach v1.5.0 (per-symbol
+DLL attribution).
+
+### Added
+
+- `std.process.exec.capture(pathname, argv, envp, buf, cap) Result[Capture, str]`
+  — run a child and collect its stdout into `buf`, draining the pipe to EOF so a
+  child outproducing the buffer never blocks; always reports the full output
+  length, so `len > cap` signals truncation (raw bytes, no terminator slot — a
+  `len == cap` capture is complete, unlike `env.get` whose boundary is
+  `ret >= cap`). Backed by a new `std.system.os.spawn_redirected(pathname,
+  argv, envp, stdin_fd, stdout_fd, stderr_fd)` stdio-redirection primitive
+  (fork + per-stream dup2 + exec, -1 inheriting the parent's stream; child
+  exits 126 on redirect failure, 127 on exec failure) on linux and darwin,
+  onto which `spawn` now collapses (#188, capture half).
+- Native windows exec backend: `spawn`/`spawn_redirected`/`run`/`capture`
+  over `CreateProcessA` + `WaitForSingleObject` + `GetExitCodeProcess`, with
+  argv joined per the windows command-line quoting rules (a joined line over
+  the 32 KiB limit fails with `E2BIG` instead of truncating), `envp` mapped
+  to a CreateProcess environment block (nil inherits), and stdio redirection
+  via `STARTF_USESTDHANDLES` with inheritance scoped to exactly the child's
+  std handles through `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` (inherit flags are
+  restored after the spawn, so concurrent spawns cannot leak pipe ends into
+  unrelated children; a spawn with no redirection inherits the parent's
+  streams natively). The read path treats a broken anonymous pipe as EOF so
+  `capture` drains cleanly. `environ()` is now populated from
+  `GetEnvironmentStrings` (hidden `=X:` drive-cwd entries excluded) rather
+  than always nil (#221, #188 windows half). `os.WNOHANG` is now forwarded
+  portably alongside `wait`/`wait_pid`.
+- `std.system.os.windows.running_under_wine() bool` — detect the wine
+  compatibility layer by probing ntdll for the wine-only `wine_get_version`
+  export. The two `std.sync.thread` spawn/join tests use it to skip under
+  wine, whose kernel32 lacks the `WaitOnAddress`/`WakeByAddressSingle`
+  exports that real windows 8+ provides; the thread sync code is unchanged
+  and correct on real windows (#244).
+
+### Fixed
+
+- Windows DLL import attribution: the winsock bindings (`WSAStartup`,
+  `WSAGetLastError`, `socket`/`bind`/`listen`/`accept`/`connect`/`sendto`/
+  `recvfrom`/`shutdown`/`setsockopt`/`send`/`recv`, `closesocket`) now import
+  from `ws2_32.dll` and `SystemFunction036` (RtlGenRandom) from `advapi32.dll`
+  via the compiler's per-symbol `$<sym>.library` attribution, instead of every
+  import collapsing onto `kernel32.dll` and aborting at call time. `ws2_32.dll`
+  and `advapi32.dll` are added to the windows link libraries, and the `SleepW`
+  binding is renamed to its real export `Sleep` (#235, #241).
+- `std.net.dns.resolve` now resolves `localhost` and any `.localhost`
+  subdomain to `127.0.0.1` per RFC 6761, without consulting the hosts file or
+  a nameserver, so loopback resolution is portable on platforms (e.g. windows)
+  whose hosts file ships localhost commented out; `lookup_hosts` stays a pure
+  hosts-file reader (#242).
+- darwin `fork()` now reads the XNU child-indicator register (rdx on
+  x86_64, x1 on aarch64) and returns 0 in the child instead of the child
+  PID, so `spawn`/`spawn_redirected` take the exec path in the child rather
+  than duplicating the parent program (#232).
+- darwin `vfork()` reads the same XNU child-indicator register as `fork()` and
+  returns 0 in the child instead of the child PID, fixing the identical
+  child-indicator bug in the previously plain `syscall0` wrapper (#234).
+- windows `spawn`/`spawn_redirected` now reserve a process-table slot before
+  `CreateProcessA`, so an exhausted table fails with `EAGAIN` without launching
+  a child that could never be waited on; a `WAIT_FAILED` in `wait`/`wait_pid`
+  now purges the dead handle (best-effort close + slot freed) instead of
+  leaking the slot — the wait-any path probes each snapshot handle, purges the
+  unwaitable ones, and retries the multi-wait once so one poisoned handle
+  cannot block reaping of healthy children (#238).
+- `std.types.path` parsing (`is_abs`/`is_root`/`filename`/`extension`/`stem`/
+  `parent` and `join`'s separator-already-present check) now accepts both `/`
+  and `\` as component separators on windows, matching the Win32 file APIs,
+  while construction still emits the platform separator and `parent` preserves
+  the input's leading separator for root results; posix is unchanged (`\`
+  stays a legal filename byte). Fixes 7 `/`-form path tests under windows
+  (#243).
+
 ## [0.6.0] - 2026-06-12
 
 Bug-clearing release: all three known-failing tests are fixed for real (thread

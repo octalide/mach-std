@@ -115,6 +115,7 @@ fwd impl.seek;
 fwd impl.terminate;
 fwd impl.abort;
 fwd impl.spawn;
+fwd impl.spawn_redirected;
 fwd impl.getpid;
 fwd impl.pipe;
 fwd impl.sleep;
@@ -166,6 +167,9 @@ fwd impl.random_fill;
 fwd impl.thread_spawn;
 fwd impl.thread_wait;
 fwd impl.thread_wake;
+
+# runtime environment
+fwd impl.running_under_wine;
 
 # time
 fwd impl.clock_gettime;

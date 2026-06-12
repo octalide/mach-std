@@ -66,6 +66,7 @@ $if ($mach.target.arch == $mach.arch.x86_64) {
     val SYS_GETRANDOM:     usize = 318;
     val SYS_GETCPU:        usize = 309;
     val SYS_CLOSE_RANGE:   usize = 436;
+    val SYS_DUP2:          usize = 33;
 
     pub val FUTEX_WAIT: usize = 0;
     pub val FUTEX_WAKE: usize = 1;
@@ -875,6 +876,22 @@ fwd os_shared.was_stopped;
 fwd os_shared.stop_signal;
 fwd os_shared.was_continued;
 
+# close_inherited_fds: close every file descriptor >= 3 in the caller.
+#
+# used by the child between fork and exec to avoid leaking parent FDs
+# (pipes, sockets, etc.); falls back to a bounded loop when close_range
+# is unavailable.
+fun close_inherited_fds() {
+    val r: i64 = syscall3(SYS_CLOSE_RANGE, 3, ~(0::usize), 0);
+    if (r < 0) {
+        var fd: i32 = 3;
+        for (fd < 1024) {
+            syscall1(SYS_CLOSE, fd::isize::usize);
+            fd = fd + 1;
+        }
+    }
+}
+
 # spawn: create a child process running the given program.
 #
 # closes inherited file descriptors >= 3 in the child before exec to
@@ -885,19 +902,42 @@ fwd os_shared.was_continued;
 # envp:     null-terminated environment array
 # ret:      child PID on success, or negative errno
 pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
+    ret spawn_redirected(pathname, argv, envp, -1, -1, -1);
+}
+
+# spawn_redirected: spawn a child with its standard streams bound to
+# caller-supplied descriptors.
+#
+# forks, duplicates each non-negative descriptor onto the matching
+# standard stream (-1 inherits the parent's stream), closes inherited
+# descriptors >= 3 (including both ends of a capture pipe), and execs.
+# the parent keeps ownership of the passed descriptors; pairing one with
+# a pipe end lets the parent stream the child's stdio. the child exits
+# 126 when a redirect fails and 127 when exec fails.
+# ---
+# pathname:  path to executable
+# argv:      null-terminated argument array
+# envp:      null-terminated environment array
+# stdin_fd:  descriptor to install as the child's stdin, or -1 to inherit
+# stdout_fd: descriptor to install as the child's stdout, or -1 to inherit
+# stderr_fd: descriptor to install as the child's stderr, or -1 to inherit
+# ret:       child PID on success, or negative errno
+pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32) i64 {
     val pid: i64 = fork();
     if (pid < 0) {
         ret pid;
     }
     if (pid == 0) {
-        val r: i64 = syscall3(SYS_CLOSE_RANGE, 3, ~(0::usize), 0);
-        if (r < 0) {
-            var fd: i32 = 3;
-            for (fd < 1024) {
-                syscall1(SYS_CLOSE, fd::isize::usize);
-                fd = fd + 1;
-            }
+        if (stdin_fd != -1 && syscall2(SYS_DUP2, stdin_fd::isize::usize, STDIN_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
         }
+        if (stdout_fd != -1 && syscall2(SYS_DUP2, stdout_fd::isize::usize, STDOUT_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+        if (stderr_fd != -1 && syscall2(SYS_DUP2, stderr_fd::isize::usize, STDERR_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+        close_inherited_fds();
         exec(pathname, argv, envp);
         syscall1(SYS_EXIT_GROUP, 127);
     }
@@ -940,11 +980,15 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
 }
 
 # getenv: look up an environment variable by name.
+#
+# when the value fits (ret < cap) it is copied and null-terminated.
+# always returns the full value length, so ret >= cap signals truncation
+# (buffer contents unspecified) and ret + 1 is the capacity to retry with.
 # ---
 # name: null-terminated variable name
 # buf:  destination buffer for the value
 # cap:  buffer capacity in bytes
-# ret:  length of value on success, or NOT_FOUND
+# ret:  full length of the value, or NOT_FOUND
 pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     if (_envp == 0) { ret os_shared.NOT_FOUND; }
     val envp: **u8 = _envp::**u8;
@@ -953,17 +997,15 @@ pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     for (envp[i]::usize != 0) {
         val entry: *u8 = envp[i];
         if (str_starts_with(entry, name) && entry[name_len] == '='::u8) {
-            if (cap == 0) { ret 0; }
             val val_start: usize = name_len + 1;
+            val len: usize = str_len(?entry[val_start]);
             var j: usize = 0;
-            for (entry[val_start + j] != 0 && j < cap - 1) {
+            for (j < len && j + 1 < cap) {
                 buf[j] = entry[val_start + j];
                 j = j + 1;
             }
-            if (j < cap) {
-                buf[j] = 0;
-            }
-            ret j::i64;
+            if (j < cap) { buf[j] = 0; }
+            ret len::i64;
         }
         i = i + 1;
     }

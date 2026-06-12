@@ -1,8 +1,11 @@
 # std.system.os.windows.shared: code shared across all windows ISA implementations.
 #
 # windows has no stable syscall interface. all OS interaction goes through
-# kernel32.dll and ntdll.dll via ext fun declarations. a HANDLE-to-fd
-# mapping table bridges the POSIX-style fd interface used by os.mach.
+# kernel32.dll and ntdll.dll via ext fun declarations, plus ws2_32.dll for
+# sockets and advapi32.dll for RtlGenRandom; the latter two are pinned with
+# `$<sym>.library` so the PE import directory attributes them to the right DLL
+# rather than the first dependency. a HANDLE-to-fd mapping table bridges the
+# POSIX-style fd interface used by os.mach.
 
 use std.types.size.usize;
 use std.types.size.isize;
@@ -10,6 +13,7 @@ use std.types.bool.bool;
 use std.types.bool.true;
 use std.types.bool.false;
 use std.types.string.str;
+use std.types.string.str_len;
 
 use os_shared: std.system.os.shared;
 use atomic:    std.sync.atomic;
@@ -105,6 +109,7 @@ val ERROR_DIRECTORY:        u32 = 267;
 val ERROR_TOO_MANY_OPEN_FILES: u32 = 4;
 val ERROR_BROKEN_PIPE:      u32 = 109;
 val ERROR_BUSY:             u32 = 170;
+val ERROR_ENVVAR_NOT_FOUND: u32 = 203;
 
 # lseek whence
 val SEEK_SET: i32 = 0;
@@ -116,6 +121,14 @@ val WAIT_OBJECT_0: u32 = 0;
 val WAIT_TIMEOUT:  u32 = 258;
 val WAIT_FAILED:   u32 = 0xFFFFFFFF;
 val INFINITE:      u32 = 0xFFFFFFFF;
+
+# CreateProcess / STARTUPINFO
+val STARTF_USESTDHANDLES:         u32 = 0x00000100;
+val HANDLE_FLAG_INHERIT:          u32 = 0x00000001;
+val EXTENDED_STARTUPINFO_PRESENT: u32 = 0x00080000;
+val PROC_THREAD_ATTRIBUTE_HANDLE_LIST: usize = 0x20002;
+val STARTUPINFOA_SIZE:   usize = 104;
+val STARTUPINFOEXA_SIZE: usize = 112;
 
 # FILETIME epoch offset (100-ns intervals from 1601-01-01 to 1970-01-01)
 val FILETIME_UNIX_EPOCH: i64 = 116444736000000000;
@@ -157,8 +170,11 @@ val ENOTSOCK:      i64 = -88;
 
 ext fun ExitProcess(p0: u32);
 ext fun GetLastError() u32;
+ext fun SetLastError(p0: u32);
 ext fun GetStdHandle(p0: u32) isize;
 ext fun CloseHandle(p0: isize) i32;
+ext fun GetModuleHandleA(p0: *u8) isize;
+ext fun GetProcAddress(p0: isize, p1: *u8) ptr;
 
 ext fun VirtualAlloc(p0: ptr, p1: usize, p2: u32, p3: u32) ptr;
 ext fun VirtualFree(p0: ptr, p1: usize, p2: u32) i32;
@@ -198,35 +214,52 @@ ext fun CreateThread(p0: ptr, p1: usize, p2: usize, p3: ptr, p4: u32, p5: *u32) 
 ext fun WaitOnAddress(p0: ptr, p1: ptr, p2: usize, p3: u32) i32;
 ext fun WakeByAddressSingle(p0: ptr);
 
-# Winsock2 API imports (ws2_32.dll)
+# Winsock2 API imports (ws2_32.dll). each is pinned to ws2_32.dll with
+# `$<sym>.library`; without it an `ext` import binds to the first dependency
+# (kernel32.dll) and aborts at call time on a real loader.
 
+$WSAStartup.library = "ws2_32.dll";
 ext fun WSAStartup(p0: u16, p1: *u8) i32;
+$WSAGetLastError.library = "ws2_32.dll";
 ext fun WSAGetLastError() i32;
-$ws2_socket.symbol = "socket";
+$ws2_socket.library = "ws2_32.dll";
+$ws2_socket.symbol  = "socket";
 ext fun ws2_socket(p0: i32, p1: i32, p2: i32) usize;
-$ws2_bind.symbol = "bind";
+$ws2_bind.library = "ws2_32.dll";
+$ws2_bind.symbol  = "bind";
 ext fun ws2_bind(p0: usize, p1: *u8, p2: i32) i32;
-$ws2_listen.symbol = "listen";
+$ws2_listen.library = "ws2_32.dll";
+$ws2_listen.symbol  = "listen";
 ext fun ws2_listen(p0: usize, p1: i32) i32;
-$ws2_accept.symbol = "accept";
+$ws2_accept.library = "ws2_32.dll";
+$ws2_accept.symbol  = "accept";
 ext fun ws2_accept(p0: usize, p1: *u8, p2: *i32) usize;
-$ws2_connect.symbol = "connect";
+$ws2_connect.library = "ws2_32.dll";
+$ws2_connect.symbol  = "connect";
 ext fun ws2_connect(p0: usize, p1: *u8, p2: i32) i32;
-$ws2_sendto.symbol = "sendto";
+$ws2_sendto.library = "ws2_32.dll";
+$ws2_sendto.symbol  = "sendto";
 ext fun ws2_sendto(p0: usize, p1: *u8, p2: i32, p3: i32, p4: *u8, p5: i32) i32;
-$ws2_recvfrom.symbol = "recvfrom";
+$ws2_recvfrom.library = "ws2_32.dll";
+$ws2_recvfrom.symbol  = "recvfrom";
 ext fun ws2_recvfrom(p0: usize, p1: *u8, p2: i32, p3: i32, p4: *u8, p5: *i32) i32;
-$ws2_shutdown.symbol = "shutdown";
+$ws2_shutdown.library = "ws2_32.dll";
+$ws2_shutdown.symbol  = "shutdown";
 ext fun ws2_shutdown(p0: usize, p1: i32) i32;
-$ws2_setsockopt.symbol = "setsockopt";
+$ws2_setsockopt.library = "ws2_32.dll";
+$ws2_setsockopt.symbol  = "setsockopt";
 ext fun ws2_setsockopt(p0: usize, p1: i32, p2: i32, p3: *u8, p4: i32) i32;
-$ws2_send.symbol = "send";
+$ws2_send.library = "ws2_32.dll";
+$ws2_send.symbol  = "send";
 ext fun ws2_send(p0: usize, p1: *u8, p2: i32, p3: i32) i32;
-$ws2_recv.symbol = "recv";
+$ws2_recv.library = "ws2_32.dll";
+$ws2_recv.symbol  = "recv";
 ext fun ws2_recv(p0: usize, p1: *u8, p2: i32, p3: i32) i32;
+$closesocket.library = "ws2_32.dll";
 ext fun closesocket(p0: usize) i32;
 
 # advapi32.dll
+$SystemFunction036.library = "advapi32.dll";
 ext fun SystemFunction036(p0: *u8, p1: u32) i32;
 
 ext fun GetCurrentProcessId() u32;
@@ -236,10 +269,16 @@ ext fun WaitForSingleObject(p0: isize, p1: u32) u32;
 ext fun WaitForMultipleObjects(p0: u32, p1: ptr, p2: i32, p3: u32) u32;
 ext fun GetExitCodeProcess(p0: isize, p1: *u32) i32;
 ext fun CreatePipe(p0: *isize, p1: *isize, p2: ptr, p3: u32) i32;
-$SleepW.symbol = "Sleep";
-ext fun SleepW(p0: u32);
+ext fun GetHandleInformation(p0: isize, p1: *u32) i32;
+ext fun SetHandleInformation(p0: isize, p1: u32, p2: u32) i32;
+ext fun InitializeProcThreadAttributeList(p0: ptr, p1: u32, p2: u32, p3: *usize) i32;
+ext fun UpdateProcThreadAttribute(p0: ptr, p1: u32, p2: usize, p3: ptr, p4: usize, p5: ptr, p6: ptr) i32;
+ext fun DeleteProcThreadAttributeList(p0: ptr);
+ext fun Sleep(p0: u32);
 ext fun GetCurrentDirectoryA(p0: u32, p1: *u8) u32;
 ext fun GetEnvironmentVariableA(p0: *u8, p1: *u8, p2: u32) u32;
+ext fun GetEnvironmentStringsA() *u8;
+ext fun FreeEnvironmentStringsA(p0: *u8) i32;
 
 # Win32 structures
 
@@ -279,6 +318,35 @@ rec PROCESS_INFORMATION {
     hThread:     isize;
     dwProcessId: u32;
     dwThreadId:  u32;
+}
+
+# explicit padding fields pin the win64 ABI layout (104 bytes)
+rec STARTUPINFOA {
+    cb:              u32;
+    _pad0:           u32;
+    lpReserved:      usize;
+    lpDesktop:       usize;
+    lpTitle:         usize;
+    dwX:             u32;
+    dwY:             u32;
+    dwXSize:         u32;
+    dwYSize:         u32;
+    dwXCountChars:   u32;
+    dwYCountChars:   u32;
+    dwFillAttribute: u32;
+    dwFlags:         u32;
+    wShowWindow:     u16;
+    cbReserved2:     u16;
+    _pad1:           u32;
+    lpReserved2:     usize;
+    hStdInput:       isize;
+    hStdOutput:      isize;
+    hStdError:       isize;
+}
+
+rec STARTUPINFOEXA {
+    StartupInfo:     STARTUPINFOA;
+    lpAttributeList: ptr;
 }
 
 # kernel ABI types (POSIX-compatible layout for os.mach interface)
@@ -457,13 +525,29 @@ fun free_fd(fd: i32) {
     fd_spin_unlock();
 }
 
-# child process tracking table
-
+# child process tracking table.
+#
+# fixed-size, like the fd table above. the bound is pinned by
+# WaitForMultipleObjects' MAXIMUM_WAIT_OBJECTS (64): the wait-any path
+# passes every live handle in a single call, so MAX_PROCS must never
+# exceed it. an exhausted table fails spawn with EAGAIN, mirroring POSIX
+# fork() under RLIMIT_NPROC rather than silently dropping a child.
 val MAX_PROCS: usize = 64;
-var _proc_handles: [64]isize;
-var _proc_pids: [64]u32;
+var _proc_handles: [MAX_PROCS]isize;
+var _proc_pids: [MAX_PROCS]u32;
 var _procs_init: u8 = 0;
 var _proc_lock: i64 = 0;
+
+# a slot claimed by reserve_proc but not yet bound to a child: reserved
+# ahead of CreateProcess, committed once the child exists. distinct from
+# INVALID_HANDLE_VALUE (free) so a concurrent reserve skips it and every
+# lookup/scan ignores it until it holds a real handle.
+val PROC_RESERVED: isize = -2;
+
+# whether a slot holds a real child handle (neither free nor reserved).
+fun proc_slot_live(h: isize) bool {
+    ret h != INVALID_HANDLE_VALUE && h != PROC_RESERVED;
+}
 
 fun proc_spin_lock() {
     var expected: i64 = 0;
@@ -487,21 +571,47 @@ fun init_procs() {
     _procs_init = 1;
 }
 
-fun alloc_proc(pid: u32, handle: isize) bool {
+# reserve a free slot ahead of CreateProcess so an exhausted table fails
+# the spawn before a child is ever launched, never leaving a live child
+# unwaitable. the slot holds PROC_RESERVED until commit_proc binds it.
+# ---
+# ret: slot index, or -1 when the table is full
+fun reserve_proc() i32 {
     proc_spin_lock();
     init_procs();
     var i: usize = 0;
     for (i < MAX_PROCS) {
+        # free slots already hold pid 0 (init_procs/free_proc invariant)
         if (_proc_handles[i] == INVALID_HANDLE_VALUE) {
-            _proc_handles[i] = handle;
-            _proc_pids[i] = pid;
+            _proc_handles[i] = PROC_RESERVED;
             proc_spin_unlock();
-            ret true;
+            ret i::i32;
         }
         i = i + 1;
     }
     proc_spin_unlock();
-    ret false;
+    ret -1;
+}
+
+# bind a reserved slot to a spawned child's pid and process handle.
+# the pid is published before the handle so a torn observation can never
+# pair a live handle with a stale pid.
+fun commit_proc(slot: i32, pid: u32, handle: isize) {
+    proc_spin_lock();
+    _proc_pids[slot::usize] = pid;
+    _proc_handles[slot::usize] = handle;
+    proc_spin_unlock();
+}
+
+# return a reserved slot to the free pool when the spawn fails. only a
+# PROC_RESERVED slot is cleared: calling this on a committed slot would
+# leak a live handle, so anything else is left untouched.
+fun release_proc(slot: i32) {
+    proc_spin_lock();
+    if (_proc_handles[slot::usize] == PROC_RESERVED) {
+        _proc_handles[slot::usize] = INVALID_HANDLE_VALUE;
+    }
+    proc_spin_unlock();
 }
 
 fun get_proc_handle(pid: u32) isize {
@@ -509,7 +619,7 @@ fun get_proc_handle(pid: u32) isize {
     init_procs();
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_pids[i] == pid && _proc_handles[i] != INVALID_HANDLE_VALUE) {
+        if (_proc_pids[i] == pid && proc_slot_live(_proc_handles[i])) {
             val h: isize = _proc_handles[i];
             proc_spin_unlock();
             ret h;
@@ -521,10 +631,15 @@ fun get_proc_handle(pid: u32) isize {
 }
 
 fun free_proc(pid: u32) {
+    # pid 0 is never a child; rejecting it keeps a bogus lookup from
+    # matching a reserved slot's zero pid
+    if (pid == 0) {
+        ret;
+    }
     proc_spin_lock();
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_pids[i] == pid && _proc_handles[i] != INVALID_HANDLE_VALUE) {
+        if (_proc_pids[i] == pid && proc_slot_live(_proc_handles[i])) {
             _proc_handles[i] = INVALID_HANDLE_VALUE;
             _proc_pids[i] = 0;
             proc_spin_unlock();
@@ -541,7 +656,7 @@ fun count_procs() usize {
     var n: usize = 0;
     var i: usize = 0;
     for (i < MAX_PROCS) {
-        if (_proc_handles[i] != INVALID_HANDLE_VALUE) {
+        if (proc_slot_live(_proc_handles[i])) {
             n = n + 1;
         }
         i = i + 1;
@@ -577,19 +692,32 @@ fun filetime_to_unix(ft: FILETIME, sec: *i64, nsec: *i64) {
     @nsec = (unix_ticks % 10000000) * 100;
 }
 
+# append one byte to the command line, reserving the terminator slot.
+# ---
+# ret: false when the byte does not fit
+fun cmd_put(buf: *u8, cap: usize, off: *usize, b: u8) bool {
+    if (@off + 1 >= cap) {
+        ret false;
+    }
+    buf[@off] = b;
+    @off = @off + 1;
+    ret true;
+}
+
 # build a command line string from a null-terminated argv array.
-# escapes per the CommandLineToArgvW convention:
+# escapes per the CommandLineToArgvW convention.
 # ---
 # argv: null-terminated array of null-terminated strings
 # buf:  destination buffer
 # cap:  size of buf in bytes
-fun build_cmdline(argv: **u8, buf: *u8, cap: usize) {
+# ret:  true on success, false when the joined line exceeds cap
+#       (buffer contents are then unspecified)
+fun build_cmdline(argv: **u8, buf: *u8, cap: usize) bool {
     var off: usize = 0;
     var i: usize = 0;
-    for (argv[i]::usize != 0 && off < cap - 1) {
-        if (i > 0 && off < cap - 1) {
-            buf[off] = 32;
-            off = off + 1;
+    for (argv[i]::usize != 0) {
+        if (i > 0 && !cmd_put(buf, cap, ?off, 32)) {
+            ret false;
         }
         val arg: *u8 = argv[i];
         var needs_quote: u8 = 0;
@@ -600,58 +728,56 @@ fun build_cmdline(argv: **u8, buf: *u8, cap: usize) {
             }
             j = j + 1;
         }
-        if (needs_quote != 0 && off < cap - 1) {
-            buf[off] = 34;
-            off = off + 1;
+        # an empty argument must still emit "" so it survives the round-trip
+        if (arg[0] == 0) {
+            needs_quote = 1;
+        }
+        if (needs_quote != 0 && !cmd_put(buf, cap, ?off, 34)) {
+            ret false;
         }
         j = 0;
-        for (arg[j] != 0 && off < cap - 1) {
+        for (arg[j] != 0) {
             if (needs_quote != 0 && arg[j] == 92) {
                 var nbs: usize = 0;
                 for (arg[j + nbs] == 92) {
                     nbs = nbs + 1;
                 }
+                # backslashes before a quote (or the closing quote at end
+                # of argument) must be doubled; elsewhere they are literal
+                var emit: usize = nbs;
                 if (arg[j + nbs] == 34 || arg[j + nbs] == 0) {
-                    var k: usize = 0;
-                    for (k < nbs * 2 && off < cap - 1) {
-                        buf[off] = 92;
-                        off = off + 1;
-                        k = k + 1;
+                    emit = nbs * 2;
+                }
+                var k: usize = 0;
+                for (k < emit) {
+                    if (!cmd_put(buf, cap, ?off, 92)) {
+                        ret false;
                     }
-                } or {
-                    var k: usize = 0;
-                    for (k < nbs && off < cap - 1) {
-                        buf[off] = 92;
-                        off = off + 1;
-                        k = k + 1;
-                    }
+                    k = k + 1;
                 }
                 j = j + nbs;
             } or (needs_quote != 0 && arg[j] == 34) {
-                if (off < cap - 1) {
-                    buf[off] = 92;
-                    off = off + 1;
+                if (!cmd_put(buf, cap, ?off, 92)) {
+                    ret false;
                 }
-                if (off < cap - 1) {
-                    buf[off] = 34;
-                    off = off + 1;
+                if (!cmd_put(buf, cap, ?off, 34)) {
+                    ret false;
                 }
                 j = j + 1;
             } or {
-                buf[off] = arg[j];
-                off = off + 1;
+                if (!cmd_put(buf, cap, ?off, arg[j])) {
+                    ret false;
+                }
                 j = j + 1;
             }
         }
-        if (needs_quote != 0 && off < cap - 1) {
-            buf[off] = 34;
-            off = off + 1;
+        if (needs_quote != 0 && !cmd_put(buf, cap, ?off, 34)) {
+            ret false;
         }
         i = i + 1;
     }
-    if (off < cap) {
-        buf[off] = 0;
-    }
+    buf[off] = 0;
+    ret true;
 }
 
 # POSIX prot flags → Win32 page protection
@@ -835,7 +961,13 @@ pub fun read(fd: i32, buf: *u8, count: usize) i64 {
     var bytes_read: u32 = 0;
     val ok: i32 = ReadFile(h, buf, count::u32, ?bytes_read, nil);
     if (ok == 0) {
-        ret last_error();
+        val e: i64 = last_error();
+        # an anonymous pipe with all write ends closed reports a broken
+        # pipe on read; that is end-of-file under posix read semantics
+        if (e == EPIPE) {
+            ret 0;
+        }
+        ret e;
     }
     ret bytes_read::i64;
 }
@@ -1110,47 +1242,324 @@ pub fun abort() {
     ExitProcess(255);
 }
 
-# spawn: create a child process running the given program.
-#
-# uses CreateProcess to launch the child. the process handle is tracked
-# in the process table for wait/wait_pid. envp is ignored; the child
-# inherits the parent's environment.
-# ---
-# pathname: path to executable
-# argv:     null-terminated argument array
-# envp:     null-terminated environment array (ignored on windows)
-# ret:      child PID on success, or negative errno
-pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
-    var cmdline: [32768]u8;
-    build_cmdline(argv, ?cmdline[0], 32768);
-
-    var si: [104]u8;
-    var k: usize = 0;
-    for (k < 104) {
-        si[k] = 0;
-        k = k + 1;
+fun zero_bytes(p: *u8, n: usize) {
+    var i: usize = 0;
+    for (i < n) {
+        p[i] = 0;
+        i = i + 1;
     }
-    si[0] = 104;
+}
+
+# build a CreateProcess environment block from a null-terminated envp array.
+#
+# the block is a sequence of null-terminated "NAME=VALUE" strings followed
+# by a final null. ownership transfers to the caller, which frees it with
+# deallocate(block, size) after CreateProcess copies it into the child.
+# ---
+# envp:     null-terminated environment array
+# out_size: receives the block size in bytes (for deallocate)
+# ret:      pointer to the block, or nil on allocation failure
+fun build_env_block(envp: **u8, out_size: *usize) ptr {
+    var total: usize = 0;
+    var i: usize = 0;
+    for (envp[i]::usize != 0) {
+        total = total + str_len(envp[i]) + 1;
+        i = i + 1;
+    }
+    # +2 terminates the block and keeps an empty environment a valid "\0\0"
+    val size: usize = total + 2;
+    val block: ptr = allocate(size);
+    if (block == nil) {
+        ret nil;
+    }
+    var dst: usize = block::usize;
+    i = 0;
+    for (envp[i]::usize != 0) {
+        val len: usize = str_len(envp[i]);
+        var j: usize = 0;
+        for (j < len + 1) {
+            @(dst::*u8) = envp[i][j];
+            dst = dst + 1;
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+    @(dst::*u8) = 0;
+    @((dst + 1)::*u8) = 0;
+    @out_size = size;
+    ret block;
+}
+
+# spawn lock: serializes the inheritance-sensitive span of process
+# creation. a redirected spawn temporarily marks its pipe handles
+# inheritable; any CreateProcess with bInheritHandles executing inside
+# that mark→create→restore window would inherit them, holding the pipe
+# open in an unrelated child.
+var _spawn_lock: i64 = 0;
+
+fun spawn_spin_lock() {
+    var expected: i64 = 0;
+    for (!atomic.cas(?_spawn_lock, ?expected, 1)) {
+        expected = 0;
+    }
+}
+
+fun spawn_spin_unlock() {
+    atomic.store(?_spawn_lock, 0);
+}
+
+# bind a freshly created child to its pre-reserved table slot for
+# wait/wait_pid. the slot was reserved before CreateProcess, so this
+# cannot fail or close the live handle.
+# ---
+# ret: the child pid
+fun register_child(pi: PROCESS_INFORMATION, slot: i32) i64 {
+    CloseHandle(pi.hThread);
+    commit_proc(slot, pi.dwProcessId, pi.hProcess);
+    ret pi.dwProcessId::i64;
+}
+
+# restore the inherit flag of the first n handles to its saved state.
+fun restore_inherit(list: *isize, prev: *u32, n: usize) {
+    var i: usize = 0;
+    for (i < n) {
+        SetHandleInformation(list[i], HANDLE_FLAG_INHERIT, prev[i] & HANDLE_FLAG_INHERIT);
+        i = i + 1;
+    }
+}
+
+# create a child with its standard streams redirected.
+#
+# inheritance is scoped with PROC_THREAD_ATTRIBUTE_HANDLE_LIST so the child
+# receives exactly the listed std handles — concurrent spawns cannot leak
+# unrelated inheritable handles (e.g. another thread's pipe ends) into it.
+# each listed handle is temporarily marked inheritable and restored to its
+# prior state on every path. a parent stream that does not exist (NULL or
+# invalid from GetStdHandle on a detached parent) passes through in hStd*
+# but is excluded from the inherit list.
+#
+# slot is a reserved process-table entry owned by the caller: success
+# commits it via register_child; on any failure return the caller must
+# release_proc it.
+fun create_redirected(pathname: *u8, cmdline: *u8, env_block: ptr, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32, slot: i32) i64 {
+    var fds: [3]i32;
+    fds[0] = stdin_fd;
+    fds[1] = stdout_fd;
+    fds[2] = stderr_fd;
+    var ids: [3]u32;
+    ids[0] = STD_INPUT_HANDLE;
+    ids[1] = STD_OUTPUT_HANDLE;
+    ids[2] = STD_ERROR_HANDLE;
+    var hs: [3]isize;
+
+    var i: usize = 0;
+    for (i < 3) {
+        if (fds[i] == -1) {
+            hs[i] = GetStdHandle(ids[i]);
+        } or {
+            hs[i] = get_handle(fds[i]);
+            if (hs[i] == INVALID_HANDLE_VALUE || hs[i] == 0) {
+                ret EBADF;
+            }
+        }
+        i = i + 1;
+    }
+
+    # unique valid handles to inherit; at least one exists because some
+    # stream was explicitly redirected through a validated fd
+    var list: [3]isize;
+    var prev: [3]u32;
+    var n: usize = 0;
+    i = 0;
+    for (i < 3) {
+        if (hs[i] != 0 && hs[i] != INVALID_HANDLE_VALUE) {
+            var dup: bool = false;
+            var j: usize = 0;
+            for (j < n) {
+                if (list[j] == hs[i]) {
+                    dup = true;
+                }
+                j = j + 1;
+            }
+            if (!dup) {
+                list[n] = hs[i];
+                n = n + 1;
+            }
+        }
+        i = i + 1;
+    }
+
+    # mark each listed handle inheritable, remembering its prior flags;
+    # the spawn lock covers the whole mark→create→restore window
+    spawn_spin_lock();
+    i = 0;
+    for (i < n) {
+        if (GetHandleInformation(list[i], ?prev[i]) == 0) {
+            val e: i64 = last_error();
+            restore_inherit(?list[0], ?prev[0], i);
+            spawn_spin_unlock();
+            ret e;
+        }
+        if (SetHandleInformation(list[i], HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) == 0) {
+            val e: i64 = last_error();
+            restore_inherit(?list[0], ?prev[0], i);
+            spawn_spin_unlock();
+            ret e;
+        }
+        i = i + 1;
+    }
+
+    var attr_buf: [128]u8;
+    var attr_size: usize = 0;
+    InitializeProcThreadAttributeList(nil, 1, 0, ?attr_size);
+    if (attr_size == 0 || attr_size > 128) {
+        restore_inherit(?list[0], ?prev[0], n);
+        spawn_spin_unlock();
+        ret ENOMEM;
+    }
+    if (InitializeProcThreadAttributeList((?attr_buf[0])::ptr, 1, 0, ?attr_size) == 0) {
+        val e: i64 = last_error();
+        restore_inherit(?list[0], ?prev[0], n);
+        spawn_spin_unlock();
+        ret e;
+    }
+    if (UpdateProcThreadAttribute((?attr_buf[0])::ptr, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, (?list[0])::ptr, n * 8, nil, nil) == 0) {
+        val e: i64 = last_error();
+        DeleteProcThreadAttributeList((?attr_buf[0])::ptr);
+        restore_inherit(?list[0], ?prev[0], n);
+        spawn_spin_unlock();
+        ret e;
+    }
+
+    var six: STARTUPINFOEXA;
+    zero_bytes((?six)::*u8, STARTUPINFOEXA_SIZE);
+    six.StartupInfo.cb = STARTUPINFOEXA_SIZE::u32;
+    six.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    six.StartupInfo.hStdInput = hs[0];
+    six.StartupInfo.hStdOutput = hs[1];
+    six.StartupInfo.hStdError = hs[2];
+    six.lpAttributeList = (?attr_buf[0])::ptr;
 
     var pi: PROCESS_INFORMATION;
-
     val ok: i32 = CreateProcessA(
-        pathname, ?cmdline[0],
+        pathname, cmdline,
+        nil, nil,
+        1, EXTENDED_STARTUPINFO_PRESENT,
+        env_block, nil,
+        (?six)::*u8, (?pi)::*u8
+    );
+    val spawn_err: i64 = last_error();
+    DeleteProcThreadAttributeList((?attr_buf[0])::ptr);
+    restore_inherit(?list[0], ?prev[0], n);
+    spawn_spin_unlock();
+    if (ok == 0) {
+        ret spawn_err;
+    }
+    ret register_child(pi, slot);
+}
+
+# create a child that inherits all three parent standard streams natively
+# (no STARTF_USESTDHANDLES), preserving working defaults even when the
+# parent is detached and GetStdHandle would report no stream.
+#
+# bInheritHandles is set with no attribute list, so the spawn lock keeps
+# this create out of a concurrent redirected spawn's mark→restore window.
+#
+# slot is a reserved process-table entry owned by the caller: success
+# commits it via register_child; on any failure return the caller must
+# release_proc it.
+fun create_inherit(pathname: *u8, cmdline: *u8, env_block: ptr, slot: i32) i64 {
+    var si: STARTUPINFOA;
+    zero_bytes((?si)::*u8, STARTUPINFOA_SIZE);
+    si.cb = STARTUPINFOA_SIZE::u32;
+
+    var pi: PROCESS_INFORMATION;
+    spawn_spin_lock();
+    val ok: i32 = CreateProcessA(
+        pathname, cmdline,
         nil, nil,
         1, 0,
-        nil, nil,
-        ?si[0], (?pi)::*u8
+        env_block, nil,
+        (?si)::*u8, (?pi)::*u8
     );
+    spawn_spin_unlock();
     if (ok == 0) {
         ret last_error();
     }
+    ret register_child(pi, slot);
+}
 
-    CloseHandle(pi.hThread);
-    if (!alloc_proc(pi.dwProcessId, pi.hProcess)) {
-        CloseHandle(pi.hProcess);
+# spawn: create a child process running the given program.
+#
+# collapses onto spawn_redirected with all three streams inherited.
+# ---
+# pathname: path to executable
+# argv:     null-terminated argument array
+# envp:     null-terminated environment array, or nil to inherit
+# ret:      child PID on success, or negative errno
+pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
+    ret spawn_redirected(pathname, argv, envp, -1, -1, -1);
+}
+
+# spawn_redirected: spawn a child with its standard streams bound to
+# caller-supplied descriptors (-1 inherits the parent's stream).
+#
+# with no redirection the child inherits the parent's streams natively;
+# otherwise inheritance is scoped to exactly the child's std handles via
+# PROC_THREAD_ATTRIBUTE_HANDLE_LIST (see create_redirected). the process
+# handle is tracked in the process table for wait/wait_pid. envp maps to
+# the CreateProcess environment block; nil inherits the parent's
+# environment. an argv whose joined command line exceeds the 32 KiB
+# windows limit fails with E2BIG.
+# ---
+# pathname:  path to executable
+# argv:      null-terminated argument array
+# envp:      null-terminated environment array, or nil to inherit
+# stdin_fd:  descriptor to install as the child's stdin, or -1 to inherit
+# stdout_fd: descriptor to install as the child's stdout, or -1 to inherit
+# stderr_fd: descriptor to install as the child's stderr, or -1 to inherit
+# ret:       child PID on success, or negative errno
+pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32) i64 {
+    var cmdline: [32768]u8;
+    if (!build_cmdline(argv, ?cmdline[0], 32768)) {
+        ret E2BIG;
+    }
+
+    var env_size: usize = 0;
+    var env_block: ptr = nil;
+    if (envp != nil) {
+        env_block = build_env_block(envp, ?env_size);
+        if (env_block == nil) {
+            ret ENOMEM;
+        }
+    }
+
+    # claim a process-table slot before CreateProcess: a full table fails
+    # here, so a child is never launched only to be left unwaitable. the
+    # create paths commit the slot on success; any failure releases it.
+    # reserve takes the proc lock and the create paths take the spawn lock
+    # disjointly, so the two never nest and cannot invert.
+    val slot: i32 = reserve_proc();
+    if (slot < 0) {
+        if (env_block != nil) {
+            deallocate(env_block, env_size);
+        }
         ret EAGAIN;
     }
-    ret pi.dwProcessId::i64;
+
+    var r: i64 = 0;
+    if (stdin_fd == -1 && stdout_fd == -1 && stderr_fd == -1) {
+        r = create_inherit(pathname, ?cmdline[0], env_block, slot);
+    } or {
+        r = create_redirected(pathname, ?cmdline[0], env_block, stdin_fd, stdout_fd, stderr_fd, slot);
+    }
+    if (env_block != nil) {
+        deallocate(env_block, env_size);
+    }
+    if (r < 0) {
+        release_proc(slot);
+    }
+    ret r;
 }
 
 # getpid: return the current process ID.
@@ -1194,7 +1603,7 @@ pub fun pipe(fds: *i32) i64 {
 pub fun sleep(nsec: i64) {
     if (nsec <= 0) { ret; }
     val ms: u32 = (nsec / 1000000)::u32;
-    SleepW(ms);
+    Sleep(ms);
 }
 
 # getcwd: get the current working directory.
@@ -1211,36 +1620,125 @@ pub fun getcwd(buf: *u8, size: usize) i64 {
 }
 
 # getenv: look up an environment variable by name.
+#
+# when the value fits (ret < cap) it is copied and null-terminated.
+# always returns the full value length, so ret >= cap signals truncation
+# (buffer contents unspecified) and ret + 1 is the capacity to retry with.
 # ---
 # name: null-terminated variable name
 # buf:  destination buffer for the value
 # cap:  buffer capacity in bytes
-# ret:  length of value on success, or NOT_FOUND
+# ret:  full length of the value, NOT_FOUND, or EIO
 pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
+    # reset last-error so a 0 return distinguishes an empty value
+    # from a missing variable or a failure
+    SetLastError(ERROR_SUCCESS);
     val len: u32 = GetEnvironmentVariableA(name, buf, cap::u32);
     if (len == 0) {
         val err: u32 = GetLastError();
-        if (err == 203) {
+        if (err == ERROR_SUCCESS) {
+            # variable exists with an empty value; the api already
+            # null-terminated the buffer
+            ret 0;
+        }
+        if (err == ERROR_ENVVAR_NOT_FOUND) {
             ret os_shared.NOT_FOUND;
         }
         ret EIO;
     }
+    # on truncation the api reports the required size including the
+    # null terminator; normalize to the value length
+    if (len::usize >= cap) {
+        ret len::i64 - 1;
+    }
     ret len::i64;
 }
 
-# environ: windows does not capture a unix-style envp array; always nil.
-# use getenv for individual lookups.
+# captured environment vector, built once from the win32 environment block.
+var _environ_vec:  **u8 = nil;
+var _environ_init: u8 = 0;
+var _environ_lock: i64 = 0;
+
+fun environ_spin_lock() {
+    var expected: i64 = 0;
+    for (!atomic.cas(?_environ_lock, ?expected, 1)) {
+        expected = 0;
+    }
+}
+
+fun environ_spin_unlock() {
+    atomic.store(?_environ_lock, 0);
+}
+
+# environ: the process environment as a unix-style "NAME=VALUE" vector.
+#
+# parses the win32 environment block (GetEnvironmentStrings) into a
+# null-terminated array of pointers on first call and caches it for the
+# process lifetime; the block backs the entries, so it is retained rather
+# than freed. the hidden drive-cwd entries the block prepends (names
+# starting with '=', e.g. "=C:=C:\...") are skipped — they violate the
+# NAME=value contract. returns nil if the block is unavailable or
+# allocation fails; failure is not cached, so a later call may succeed.
 pub fun environ() **u8 {
-    ret nil;
+    if (_environ_init != 0) {
+        ret _environ_vec;
+    }
+    environ_spin_lock();
+    if (_environ_init != 0) {
+        environ_spin_unlock();
+        ret _environ_vec;
+    }
+    val block: *u8 = GetEnvironmentStringsA();
+    if (block::usize == 0) {
+        environ_spin_unlock();
+        ret nil;
+    }
+    var count: usize = 0;
+    var p: usize = block::usize;
+    for (@(p::*u8) != 0) {
+        if (@(p::*u8) != '=') {
+            count = count + 1;
+        }
+        p = p + str_len(p::*u8) + 1;
+    }
+    val arr: ptr = allocate((count + 1) * 8);
+    if (arr == nil) {
+        FreeEnvironmentStringsA(block);
+        environ_spin_unlock();
+        ret nil;
+    }
+    var vec: **u8 = arr::**u8;
+    var i: usize = 0;
+    p = block::usize;
+    for (@(p::*u8) != 0) {
+        if (@(p::*u8) != '=') {
+            vec[i] = p::*u8;
+            i = i + 1;
+        }
+        p = p + str_len(p::*u8) + 1;
+    }
+    vec[count] = nil;
+    # publish the vector before the init flag so a lock-free fast-path
+    # reader never observes the flag without the data
+    _environ_vec = vec;
+    _environ_init = 1;
+    environ_spin_unlock();
+    ret vec;
 }
 
 # wait: wait for a child process to change state.
 #
 # uses the process handle table to look up children by pid.
 # pid == -1 waits for any child. WNOHANG uses a zero timeout.
+#
+# WAIT_FAILED is treated as a dead handle — on windows it is in practice
+# ERROR_INVALID_HANDLE, a permanent condition no retry can clear — so the
+# affected child is purged (best-effort CloseHandle + slot freed) rather
+# than left pinning the table forever. a single-pid wait purges and
+# returns the error; the wait-any path probes each snapshot handle
+# individually, purges the unwaitable ones, and retries the multi-wait
+# once so one poisoned handle cannot block reaping of healthy children.
 pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
-    init_procs();
-
     if (pid > 0) {
         val h: isize = get_proc_handle(pid::u32);
         if (h == INVALID_HANDLE_VALUE) {
@@ -1257,7 +1755,11 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
             ret 0;
         }
         if (result == WAIT_FAILED) {
-            ret last_error();
+            # dead handle: purge the slot so it cannot pin the table
+            val e: i64 = last_error();
+            CloseHandle(h);
+            free_proc(pid::u32);
+            ret e;
         }
 
         var ec: u32 = 0;
@@ -1271,50 +1773,78 @@ pub fun wait(pid: i64, wstatus: *i32, options: i32, rusage: *u8) i64 {
     }
 
     if (pid == -1) {
-        var wait_handles: [64]isize;
-        var wait_pids: [64]u32;
-        var n: usize = 0;
-        var i: usize = 0;
-
-        for (i < MAX_PROCS) {
-            if (_proc_handles[i] != INVALID_HANDLE_VALUE) {
-                wait_handles[n] = _proc_handles[i];
-                wait_pids[n] = _proc_pids[i];
-                n = n + 1;
-            }
-            i = i + 1;
-        }
-
-        if (n == 0) {
-            ret ECHILD;
-        }
-
         var timeout: u32 = INFINITE;
         if ((options & WNOHANG) != 0) {
             timeout = 0;
         }
 
-        val result: u32 = WaitForMultipleObjects(n::u32, (?wait_handles[0])::ptr, 0, timeout);
-        if (result == WAIT_TIMEOUT) {
-            ret 0;
-        }
-        if (result == WAIT_FAILED) {
-            ret last_error();
-        }
-        if (result >= n::u32) {
-            ret EIO;
-        }
+        # at most one retry, after purging unwaitable handles
+        var attempt: usize = 0;
+        for (attempt < 2) {
+            var wait_handles: [MAX_PROCS]isize;
+            var wait_pids: [MAX_PROCS]u32;
+            var n: usize = 0;
+            var i: usize = 0;
 
-        val idx: usize = result::usize;
-        var ec: u32 = 0;
-        GetExitCodeProcess(wait_handles[idx], ?ec);
-        if (wstatus != nil) {
-            @wstatus = (ec::i32 << 8);
+            # snapshot live slots under the table lock, skipping reserved
+            # ones (a child mid-spawn has no handle to wait on yet); the
+            # lock is dropped before the blocking wait below
+            proc_spin_lock();
+            init_procs();
+            for (i < MAX_PROCS) {
+                if (proc_slot_live(_proc_handles[i])) {
+                    wait_handles[n] = _proc_handles[i];
+                    wait_pids[n] = _proc_pids[i];
+                    n = n + 1;
+                }
+                i = i + 1;
+            }
+            proc_spin_unlock();
+
+            if (n == 0) {
+                ret ECHILD;
+            }
+
+            val result: u32 = WaitForMultipleObjects(n::u32, (?wait_handles[0])::ptr, 0, timeout);
+            if (result == WAIT_TIMEOUT) {
+                ret 0;
+            }
+            if (result == WAIT_FAILED) {
+                val e: i64 = last_error();
+                # one dead handle poisons the whole multi-wait: probe each
+                # snapshot handle and purge the unwaitable ones so healthy
+                # children stay reapable
+                var purged: usize = 0;
+                i = 0;
+                for (i < n) {
+                    if (WaitForSingleObject(wait_handles[i], 0) == WAIT_FAILED) {
+                        CloseHandle(wait_handles[i]);
+                        free_proc(wait_pids[i]);
+                        purged = purged + 1;
+                    }
+                    i = i + 1;
+                }
+                if (purged == 0 || attempt == 1) {
+                    ret e;
+                }
+                attempt = attempt + 1;
+            } or {
+                if (result >= n::u32) {
+                    ret EIO;
+                }
+                val idx: usize = result::usize;
+                var ec: u32 = 0;
+                GetExitCodeProcess(wait_handles[idx], ?ec);
+                if (wstatus != nil) {
+                    @wstatus = (ec::i32 << 8);
+                }
+                val child_pid: u32 = wait_pids[idx];
+                CloseHandle(wait_handles[idx]);
+                free_proc(child_pid);
+                ret child_pid::i64;
+            }
         }
-        val child_pid: u32 = wait_pids[idx];
-        CloseHandle(wait_handles[idx]);
-        free_proc(child_pid);
-        ret child_pid::i64;
+        ret EIO;
     }
 
     ret EINVAL;
@@ -1414,6 +1944,24 @@ pub fun thread_wait(addr: *i64, expected: i64) i64 {
 pub fun thread_wake(addr: *i64) i64 {
     WakeByAddressSingle(addr::ptr);
     ret 0;
+}
+
+# runtime environment
+
+# running_under_wine: detect whether the process is running under the wine
+# windows compatibility layer rather than on genuine windows.
+#
+# probes ntdll for the wine-only `wine_get_version` export, the canonical
+# wine marker; it is absent on real windows. ntdll is always mapped into a
+# win32 process, so GetModuleHandleA resolves it without a load.
+# ---
+# ret: true under wine, false on genuine windows
+pub fun running_under_wine() bool {
+    val ntdll: isize = GetModuleHandleA("ntdll.dll");
+    if (ntdll == 0) {
+        ret false;
+    }
+    ret GetProcAddress(ntdll, "wine_get_version") != nil;
 }
 
 # sockets
