@@ -61,6 +61,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   leaking the slot — the wait-any path probes each snapshot handle, purges the
   unwaitable ones, and retries the multi-wait once so one poisoned handle
   cannot block reaping of healthy children (#238).
+- `std.types.path` parsing (`is_abs`/`is_root`/`filename`/`extension`/`stem`/
+  `parent` and `join`'s separator-already-present check) now accepts both `/`
+  and `\` as component separators on windows, matching the Win32 file APIs,
+  while construction still emits the platform separator and `parent` preserves
+  the input's leading separator for root results; posix is unchanged (`\`
+  stays a legal filename byte). Fixes 7 `/`-form path tests under windows
+  (#243).
 
 ## [0.6.0] - 2026-06-12
 

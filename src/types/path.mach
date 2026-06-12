@@ -4,6 +4,12 @@
 # through the caller-provided Allocator. functions that return views into
 # existing paths (filename, extension) return pointers into the input and
 # do not allocate.
+#
+# separator contract: parsing accepts any platform separator. on windows
+# both '/' and '\' separate components (matching the Win32 file APIs); on
+# posix only '/' separates ('\' is a legal filename byte). construction
+# (join, separator) emits the platform-preferred separator, and stored
+# paths are never normalized.
 
 use std.types.bool.bool;
 use std.types.bool.true;
@@ -26,9 +32,21 @@ use page:      std.allocator.page;
 
 pub def Path: str;
 
-# separator: platform path separator character.
+# separator: platform path separator character, emitted by construction.
 pub fun separator() u8 {
     ret os.separator;
+}
+
+# is_separator: whether c separates path components on the target.
+#
+# windows accepts both '/' and '\'; posix treats only '/' as a separator.
+fun is_separator(c: u8) bool {
+    $if ($mach.target.os == $mach.os.windows) {
+        ret c == separator() || c == '/';
+    }
+    $or {
+        ret c == separator();
+    }
 }
 
 # is_empty: check whether a path is empty or nil.
@@ -40,7 +58,7 @@ pub fun is_empty(p: Path) bool {
 pub fun is_abs(p: Path) bool {
     if (p == nil) { ret false; }
 
-    ret p[0] == separator();
+    ret is_separator(p[0]);
 }
 
 # is_root: check whether a path consists only of separators.
@@ -48,11 +66,10 @@ pub fun is_root(p: Path) bool {
     if (is_empty(p)) { ret false; }
 
     val len: usize = str_len(p);
-    val sep: u8    = separator();
     var i:   usize = 0;
 
     for (i < len) {
-        if (p[i] != sep) { ret false; }
+        if (!is_separator(p[i])) { ret false; }
         i = i + 1;
     }
 
@@ -69,12 +86,11 @@ pub fun is_root(p: Path) bool {
 pub fun filename(p: Path) str {
     if (is_empty(p)) { ret nil; }
     val len: usize = str_len(p);
-    val sep: u8    = separator();
     var i:   usize = len;
 
     for (i > 0) {
         i = i - 1;
-        if (p[i] == sep) {
+        if (is_separator(p[i])) {
             ret (p::usize + i + 1)::str;
         }
     }
@@ -178,7 +194,7 @@ pub fun join(a: *allocator.Allocator, left: Path, right: Path) Result[Path, str]
     val sep:       u8    = separator();
     val left_len:  usize = str_len(left);
     val right_len: usize = str_len(right);
-    val has_sep:   bool  = left[left_len - 1] == sep || right[0] == sep;
+    val has_sep:   bool  = is_separator(left[left_len - 1]) || is_separator(right[0]);
 
     var extra: usize = 0;
     if (!has_sep) { extra = 1; }
@@ -214,28 +230,29 @@ pub fun parent(a: *allocator.Allocator, p: Path) Result[Path, str] {
     if (is_empty(p)) { ret clone(a, "."); }
 
     val len: usize = str_len(p);
-    val sep: u8    = separator();
 
+    # root results preserve the input's leading separator rather than
+    # forcing the platform one, so a '/'-rooted path stays '/'-rooted.
     var end: usize = len;
-    for (end > 0 && p[end - 1] == sep) {
+    for (end > 0 && is_separator(p[end - 1])) {
         end = end - 1;
     }
-    if (end == 0) { ret clone_sep(a, sep); }
+    if (end == 0) { ret clone_sep(a, p[0]); }
 
     var i: usize = end;
     for (i > 0) {
         i = i - 1;
-        if (p[i] == sep) { brk; }
+        if (is_separator(p[i])) { brk; }
     }
 
-    if (i == 0 && p[0] != sep) { ret clone(a, "."); }
-    if (i == 0)                { ret clone_sep(a, sep); }
+    if (i == 0 && !is_separator(p[0])) { ret clone(a, "."); }
+    if (i == 0)                        { ret clone_sep(a, p[0]); }
 
     var parent_end: usize = i;
-    for (parent_end > 0 && p[parent_end - 1] == sep) {
+    for (parent_end > 0 && is_separator(p[parent_end - 1])) {
         parent_end = parent_end - 1;
     }
-    if (parent_end == 0) { ret clone_sep(a, sep); }
+    if (parent_end == 0) { ret clone_sep(a, p[0]); }
 
     val r: Result[*u8, str] = allocator.allocate[u8](a, parent_end + 1);
     if (is_err[*u8, str](r)) {
@@ -351,4 +368,45 @@ test "path: parent root" {
     val p: str = unwrap_ok[Path, str](r);
     if (!str_equals(p, "/")) { ret 1; }
     ret 0;
+}
+
+# windows accepts '\' as a separator alongside '/'; these are guarded
+# because '\' is a legal filename byte on posix and parses differently.
+$if ($mach.target.os == $mach.os.windows) {
+    test "path: is_abs with backslash root" {
+        if (!is_abs("\\foo")) { ret 1; }
+        ret 0;
+    }
+
+    test "path: filename with backslash" {
+        val f: str = filename("foo\\bar.txt");
+        if (!str_equals(f, "bar.txt")) { ret 1; }
+        ret 0;
+    }
+
+    test "path: filename mixed separators" {
+        val f: str = filename("/foo\\bar.txt");
+        if (!str_equals(f, "bar.txt")) { ret 1; }
+        ret 0;
+    }
+
+    test "path: parent with backslash" {
+        var a: allocator.Allocator;
+        page.make(?a);
+        val r: Result[Path, str] = parent(?a, "\\foo\\bar");
+        if (is_err[Path, str](r)) { ret 1; }
+        val p: str = unwrap_ok[Path, str](r);
+        if (!str_equals(p, "\\foo")) { ret 1; }
+        ret 0;
+    }
+
+    test "path: parent mixed preserves leading separator" {
+        var a: allocator.Allocator;
+        page.make(?a);
+        val r: Result[Path, str] = parent(?a, "/foo\\bar");
+        if (is_err[Path, str](r)) { ret 1; }
+        val p: str = unwrap_ok[Path, str](r);
+        if (!str_equals(p, "/foo")) { ret 1; }
+        ret 0;
+    }
 }
