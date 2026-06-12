@@ -119,6 +119,7 @@ fwd shared.pipe;
 fwd shared.sleep;
 fwd shared.getcwd;
 fwd shared.getenv;
+fwd shared.environ;
 fwd shared.wait;
 fwd shared.wait_pid;
 fwd shared.has_exited;

@@ -32,18 +32,21 @@ pub rec Thread {
 # handles clone and trampoline setup. the child sets the done flag and
 # wakes waiters on exit.
 #
+# the handle is caller-owned and initialized in place: the child writes
+# the completion flag through ?t.done, so the record must stay at a
+# stable address for the thread's lifetime (a by-value return would
+# hand the child the address of a dead frame — see issue #195).
 # ---
-# f:   function to execute in the new thread
-# ret: a Thread handle, or a Thread with tid < 0 on failure
-pub fun spawn(f: fun()) Thread {
-    var t: Thread;
+# f: function to execute in the new thread
+# t: caller-owned handle, initialized by this call; t.tid < 0 on failure
+pub fun spawn(f: fun(), t: *Thread) {
     t.tid = -1;
     t.stack = 0;
     t.done = 0;
 
     val stack_base: usize = sys.allocate(STACK_SIZE)::usize;
     if (stack_base == 0) {
-        ret t;
+        ret;
     }
 
     t.stack = stack_base;
@@ -55,11 +58,10 @@ pub fun spawn(f: fun()) Thread {
         sys.deallocate(stack_base::ptr, STACK_SIZE);
         t.stack = 0;
         t.tid = tid;
-        ret t;
+        ret;
     }
 
     t.tid = tid;
-    ret t;
 }
 
 # wait for a thread to finish.
@@ -103,7 +105,8 @@ test "thread: Thread record initializes" {
 
 test "thread: spawn and join" {
     atomic_mod.store(?test_flag, 0);
-    var t: Thread = spawn(test_worker);
+    var t: Thread;
+    spawn(test_worker, ?t);
     if (t.tid < 0) { ret 1; }
     join(?t);
     if (atomic_mod.load(?test_flag) != 1) { ret 1; }
@@ -112,7 +115,8 @@ test "thread: spawn and join" {
 
 test "thread: is_done after join" {
     atomic_mod.store(?test_flag, 0);
-    var t: Thread = spawn(test_worker);
+    var t: Thread;
+    spawn(test_worker, ?t);
     if (t.tid < 0) { ret 1; }
     join(?t);
     if (!is_done(?t)) { ret 1; }

@@ -788,6 +788,13 @@ pub fun seek(fd: i32, offset: i64, whence: i32) i64 {
 # environment (set by runtime at program start)
 pub var _envp: usize = 0;
 
+# environ: pointer to the environment captured by the runtime at program
+# start (null-terminated array of "NAME=value" strings). nil before
+# runtime init.
+pub fun environ() **u8 {
+    ret _envp::**u8;
+}
+
 # process
 
 # terminate: exit the process with the given code.

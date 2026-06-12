@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-12
+
+Bug-clearing release: all three known-failing tests are fixed for real (thread
+clone race, json key lookup, env PATH harness dependency), and the environment
+vector is now accessible. The thread fix required a breaking `spawn` signature
+change, hence the minor bump.
+
+### Added
+
+- `std.process.env.environ() **u8` — the captured environment vector (`_envp`),
+  forwarded through every OS layer next to `getenv`; documented always-nil on
+  windows until a windows environment-block reader exists (#188, accessor half).
+- `std.data.json.value_key_len(v, index) usize` — byte length of an object key,
+  parallel to `value_key` (#196).
+
+### Changed
+
+- **BREAKING**: `std.sync.thread.spawn(f: fun()) Thread` is now
+  `spawn(f: fun(), t: *Thread)`. The handle is caller-owned and initialized in
+  place: the child thread writes its completion flag through the handle, so the
+  record must live at a stable address for the thread's lifetime — a by-value
+  return handed the child the address of a dead frame and made `join` wait
+  forever (#195).
+- json object keys keep their byte lengths (`keys_len` parallel array);
+  `value_find` compares length-bounded and key emission uses the stored length
+  instead of assuming null termination. `value_key` is documented as
+  non-null-terminated (#196).
+- the `env: get PATH` test is harness-independent: it asserts termination and
+  repeatability when PATH is inherited instead of requiring an inherited
+  environment the test harness does not currently provide (#197).
+
+### Fixed
+
+- thread spawn/join no longer deadlocks: parent/child discrimination after
+  `clone` happens entirely in registers (the child jumps straight to the
+  trampoline), eliminating the shared-stack-slot race under `CLONE_VM` (#195).
+- `json.value_find` matches keys again — lookups previously failed for every
+  key because non-terminated key slices were compared null-terminated (#196).
+
 ## [0.5.0] - 2026-06-12
 
 Manifest migrated to the v1.4.0 format and windows link requirements declared

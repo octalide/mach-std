@@ -35,6 +35,11 @@ pub fun page_size() usize {
 
 val THREAD_CLONE_FLAGS: usize = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD | CLONE_SYSVSEM;
 
+# entered by a direct jump from the child side of clone (see thread_spawn);
+# the symbol is pinned so the inline-asm branch can target it. at entry rsp
+# points at the argument block on the child stack, so after the prologue the
+# args sit at [rbp+8..rbp+32] exactly as if the trampoline had been called.
+$thread_trampoline.symbol = "_std_thread_trampoline";
 fun thread_trampoline() {
     var fn_addr: usize = 0;
     var done_addr: usize = 0;
@@ -81,19 +86,22 @@ fun thread_trampoline() {
 # stack_size: size of the stack in bytes
 # ret:        thread ID on success, or negative errno on failure
 pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: usize) i64 {
-    val tramp: fun() = thread_trampoline;
     val stack_top: usize = stack_base + stack_size;
-    val child_sp: usize = stack_top - 48;
-    @(child_sp::*usize) = tramp::usize;
-    @((child_sp + 8)::*usize) = f::usize;
-    @((child_sp + 16)::*usize) = done_ptr::usize;
-    @((child_sp + 24)::*usize) = stack_base;
-    @((child_sp + 32)::*usize) = stack_size;
+    val child_sp: usize = stack_top - 40;
+    @(child_sp::*usize) = f::usize;
+    @((child_sp + 8)::*usize) = done_ptr::usize;
+    @((child_sp + 16)::*usize) = stack_base;
+    @((child_sp + 24)::*usize) = stack_size;
 
     var flags: usize = THREAD_CLONE_FLAGS;
     var stack_ptr: usize = child_sp;
     var result: i64 = 0;
 
+    # parent/child discrimination must stay in registers: under CLONE_VM the
+    # child's rbp still addresses the parent frame, so a shared stack local
+    # would race (both sides writing the same slot — see issue #195). the
+    # child jumps straight to the trampoline off its own stack; the parent
+    # falls through and stores the tid.
     asm x86_64 { mfence }
     asm x86_64 {
         mov rdi, {flags}
@@ -103,11 +111,9 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
         xor r8, r8
         mov rax, 56           # SYS_clone
         syscall
-        mov {result}, rax
-    }
-
-    if (result == 0) {
-        asm x86_64 { ret }
+        test rax, rax
+        jz _std_thread_trampoline
+        mov {result}, rax     # parent: tid, or negative errno on failure
     }
 
     ret result;
@@ -214,6 +220,7 @@ fwd shared.sync_file;
 
 # environment
 fwd shared._envp;
+fwd shared.environ;
 
 # filesystem
 fwd shared.read;
