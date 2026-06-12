@@ -128,14 +128,41 @@ pub fun query(hostname: str, addr: *ip.IPv4) bool {
     ret parse_response(?resp[0], recvd::usize, addr, qid);
 }
 
-# resolve: resolve a hostname, trying the hosts file first then DNS.
+# resolve: resolve a hostname to an IPv4 address.
+#
+# per RFC 6761 the name `localhost` and any name ending in `.localhost`
+# resolve to the loopback address (127.0.0.1) without consulting the hosts
+# file or a nameserver — this is resolver behavior, not hosts-file content,
+# and so is portable across platforms whose hosts file omits localhost.
+# other names fall back to the hosts file, then a DNS query.
 # ---
 # hostname: null-terminated hostname to resolve
 # addr:     pointer to an IPv4 to fill on success
 # ret:      true if resolution succeeded
 pub fun resolve(hostname: str, addr: *ip.IPv4) bool {
+    if (is_localhost(hostname)) {
+        addr.octets[0] = 127;
+        addr.octets[1] = 0;
+        addr.octets[2] = 0;
+        addr.octets[3] = 1;
+        ret true;
+    }
     if (lookup_hosts(hostname, addr)) { ret true; }
     ret query(hostname, addr);
+}
+
+# is_localhost: report whether hostname is an RFC 6761 localhost name.
+#
+# matches `localhost` or any name ending in `.localhost`, case-insensitively.
+fun is_localhost(hostname: str) bool {
+    val host_len: usize = str_len(hostname);
+    if (host_len == 9 && region_eq(hostname, "localhost", 9)) { ret true; }
+    if (host_len > 9
+        && (hostname::*u8)[host_len - 10] == '.'
+        && region_eq(?(hostname::*u8)[host_len - 9], "localhost", 9)) {
+        ret true;
+    }
+    ret false;
 }
 
 fun region_eq(a: *u8, b: *u8, len: usize) bool {
@@ -276,14 +303,16 @@ fun parse_response(buf: *u8, len: usize, addr: *ip.IPv4, qid: u16) bool {
     ret false;
 }
 
-test "dns: lookup_hosts localhost" {
+test "dns: resolve localhost" {
     var addr: ip.IPv4;
-    val found: bool = lookup_hosts("localhost", ?addr);
-    if (!found) { ret 1; }
-    if (addr.octets[0] != 127) { ret 1; }
-    if (addr.octets[1] != 0) { ret 1; }
-    if (addr.octets[2] != 0) { ret 1; }
-    if (addr.octets[3] != 1) { ret 1; }
+    if (!resolve("localhost", ?addr)) { ret 1; }
+    if (addr.octets[0] != 127 || addr.octets[1] != 0
+        || addr.octets[2] != 0 || addr.octets[3] != 1) { ret 1; }
+
+    var sub: ip.IPv4;
+    if (!resolve("web.localhost", ?sub)) { ret 1; }
+    if (sub.octets[0] != 127 || sub.octets[1] != 0
+        || sub.octets[2] != 0 || sub.octets[3] != 1) { ret 1; }
     ret 0;
 }
 
