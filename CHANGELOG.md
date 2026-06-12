@@ -5,7 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-06-12
+
+Native-windows loader compliance: the wait-on-address family is pinned to its
+real apiset DLL (mach exes previously failed to load on real windows), and the
+path module understands drive-letter and UNC absolute roots. Unblocks the
+compiler's native windows CI lane.
 
 ### Added
 
