@@ -698,8 +698,47 @@ pub fun seek(fd: i32, offset: i64, whence: i32) i64 {
 
 # process
 
+# fork: create a child process by duplicating the caller.
+#
+# the XNU fork trap returns the child PID in the primary register
+# (rax/x0) for BOTH processes and flags the child via the second return
+# register (rdx == 1 on x86_64, x1 == 1 on aarch64). a plain syscall0
+# would leave the child seeing pid != 0, so this wrapper reads the child
+# indicator and returns 0 in the child, mirroring libc's fork stub. the
+# carry flag is materialized into `fail` (`setc`/`cset`) and the branch
+# happens in mach code, matching the syscall wrappers and pipe.
+# ---
+# ret: child PID in the parent, 0 in the child, or negative errno
 pub fun fork() i64 {
-    ret syscall0(SYS_FORK);
+    var n: usize = SYS_FORK;
+    var out: i64 = 0;
+    var fail: i64 = 0;
+    var child: i64 = 0;
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, 0x2000000
+            or rax, {n}
+            syscall
+            mov rcx, 0
+            setc cl
+            mov {fail}, rcx
+            mov {out}, rax
+            mov {child}, rdx
+        }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            mov x16, {n}
+            svc 0x80
+            cset x9, cs
+            str x9, {fail}
+            str x0, {out}
+            str x1, {child}
+        }
+    }
+    if (fail != 0) { ret -out; }
+    if (child != 0) { ret 0; }
+    ret out;
 }
 
 pub fun vfork() i64 {
