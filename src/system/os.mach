@@ -129,6 +129,7 @@ fwd impl.stat;
 fwd impl.stat_path;
 fwd impl.unlink;
 fwd impl.rename;
+fwd impl.symlink;
 fwd impl.make_dir;
 fwd impl.read_dir;
 fwd impl.access;

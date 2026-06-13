@@ -173,6 +173,7 @@ fwd shared.stat;
 fwd shared.stat_path;
 fwd shared.unlink;
 fwd shared.rename;
+fwd shared.symlink;
 fwd shared.make_dir;
 fwd shared.read_dir;
 fwd shared.access;
