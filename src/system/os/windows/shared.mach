@@ -285,6 +285,7 @@ ext fun UpdateProcThreadAttribute(p0: ptr, p1: u32, p2: usize, p3: ptr, p4: usiz
 ext fun DeleteProcThreadAttributeList(p0: ptr);
 ext fun Sleep(p0: u32);
 ext fun GetCurrentDirectoryA(p0: u32, p1: *u8) u32;
+ext fun GetTempPathA(p0: u32, p1: *u8) u32;
 ext fun GetEnvironmentVariableA(p0: *u8, p1: *u8, p2: u32) u32;
 ext fun GetEnvironmentStringsA() *u8;
 ext fun FreeEnvironmentStringsA(p0: *u8) i32;
@@ -1657,6 +1658,30 @@ pub fun getenv(name: *u8, buf: *u8, cap: usize) i64 {
     }
     # on truncation the api reports the required size including the
     # null terminator; normalize to the value length
+    if (len::usize >= cap) {
+        ret len::i64 - 1;
+    }
+    ret len::i64;
+}
+
+# temp_dir: resolve the directory designated for temporary files.
+#
+# GetTempPathA consults TMP, then TEMP, then USERPROFILE, then the windows
+# directory, returning the first as a path that ends with a separator. it
+# follows the getenv truncation contract: ret < cap means the path was
+# copied and null-terminated; ret >= cap means the buffer was too small and
+# ret is the full path length.
+# ---
+# buf: destination buffer for the path
+# cap: buffer capacity in bytes
+# ret: full length of the path, or negative errno
+pub fun temp_dir(buf: *u8, cap: usize) i64 {
+    val len: u32 = GetTempPathA(cap::u32, buf);
+    if (len == 0) {
+        ret last_error();
+    }
+    # on truncation the api reports the required size including the null
+    # terminator; normalize to the path length
     if (len::usize >= cap) {
         ret len::i64 - 1;
     }

@@ -4,7 +4,9 @@
 # for platform-specific functionality, import the target module
 # directly (e.g. std.system.os.linux).
 
+use std.types.size.usize;
 use std.types.string.str;
+use std.types.string.str_len;
 
 use shared: std.system.os.shared;
 
@@ -189,6 +191,49 @@ fwd impl.random_fill;
 fwd impl.thread_spawn;
 fwd impl.thread_wait;
 fwd impl.thread_wake;
+
+# temp directory
+
+# temp_dir: resolve the directory designated for temporary files.
+#
+# follows the env.get truncation contract: ret < cap means the path was
+# copied and null-terminated; ret >= cap signals truncation and ret is the
+# full path length. lookup order is per-OS:
+#   windows: GetTempPathA — TMP, then TEMP, then USERPROFILE, then the
+#            windows directory; the result ends with a path separator
+#   posix:   the $TMPDIR environment variable, falling back to "/tmp"
+# ---
+# buf: destination buffer for the path
+# cap: buffer capacity in bytes
+# ret: full length of the path, or negative on error
+pub fun temp_dir(buf: *u8, cap: usize) i64 {
+    $if ($mach.target.os == $mach.os.windows) {
+        ret impl.temp_dir(buf, cap);
+    }
+    $or {
+        val n: i64 = impl.getenv("TMPDIR", buf, cap);
+        if (n > 0) { ret n; }
+        ret temp_dir_posix_default(buf, cap);
+    }
+}
+
+$if ($mach.target.os != $mach.os.windows) {
+    val TEMP_DIR_DEFAULT: str = "/tmp";
+
+    # copy the posix fallback temp directory into buf under the temp_dir
+    # truncation contract (used when $TMPDIR is unset or empty).
+    fun temp_dir_posix_default(buf: *u8, cap: usize) i64 {
+        val src: *u8 = TEMP_DIR_DEFAULT::*u8;
+        val len: usize = str_len(TEMP_DIR_DEFAULT);
+        var i: usize = 0;
+        for (i + 1 < cap && i < len) {
+            buf[i] = src[i];
+            i = i + 1;
+        }
+        if (i < cap) { buf[i] = 0; }
+        ret len::i64;
+    }
+}
 
 # time
 
