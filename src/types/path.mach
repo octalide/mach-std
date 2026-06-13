@@ -51,7 +51,7 @@ pub fun separator() u8 {
 # is_separator: whether c separates path components on the target.
 #
 # windows accepts both '/' and '\'; posix treats only '/' as a separator.
-fun is_separator(c: u8) bool {
+pub fun is_separator(c: u8) bool {
     $if ($mach.target.os == $mach.os.windows) {
         ret c == separator() || c == '/';
     }
