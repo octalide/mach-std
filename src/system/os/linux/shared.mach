@@ -53,6 +53,7 @@ $if ($mach.target.arch == $mach.arch.x86_64) {
     val SYS_UNLINKAT:      usize = 263;
     val SYS_RENAMEAT:      usize = 264;
     val SYS_FACCESSAT:     usize = 269;
+    val SYS_SYMLINK:       usize = 88;
     pub val SYS_FUTEX:     usize = 202;
     val SYS_SENDTO:        usize = 44;
     val SYS_RECVFROM:      usize = 45;
@@ -743,6 +744,18 @@ pub fun unlink(dirfd: i32, path: *u8, flags: i32) i64 {
 # ret:     0 on success, or negative errno
 pub fun rename(olddir: i32, oldpath: *u8, newdir: i32, newpath: *u8) i64 {
     ret syscall4(SYS_RENAMEAT, olddir::isize::usize, oldpath::usize, newdir::isize::usize, newpath::usize);
+}
+
+# symlink: create a symbolic link at linkpath pointing to target.
+#
+# target is stored verbatim: a relative target stays relative, so the link
+# keeps resolving correctly after the containing tree is moved.
+# ---
+# target:   path the link points to (stored as given, not resolved)
+# linkpath: path of the link to create
+# ret:      0 on success, or negative errno
+pub fun symlink(target: *u8, linkpath: *u8) i64 {
+    ret syscall2(SYS_SYMLINK, target::usize, linkpath::usize);
 }
 
 # mkdirat: create a directory relative to a directory fd.
