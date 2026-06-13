@@ -312,6 +312,22 @@ pub fun info_path(p: str) Result[FileInfo, str] {
     ret ok[FileInfo, str](info_from_stat(?st));
 }
 
+# info_link: get metadata for a path without following a final symbolic link.
+#
+# the lstat counterpart to info_path: a symbolic link reports its own metadata
+# (info_is_symlink is true) rather than the target's. use it to detect links
+# without resolving them.
+# ---
+# p:   path to query
+# ret: file metadata, or an error message
+pub fun info_link(p: str) Result[FileInfo, str] {
+    if (p == nil) { ret err[FileInfo, str]("path is nil"); }
+    var st: os.stat_t;
+    val raw: i64 = os.stat_path(os.AT_FDCWD, p, ?st, os.AT_SYMLINK_NOFOLLOW);
+    if (raw < 0) { ret err[FileInfo, str](os.message(raw)); }
+    ret ok[FileInfo, str](info_from_stat(?st));
+}
+
 # is_dir: check whether a path is an existing directory.
 pub fun is_dir(p: str) bool {
     val r: Result[FileInfo, str] = info_path(p);
@@ -350,6 +366,25 @@ pub fun unlink(p: str) Result[bool, str] {
 # ret:  true on success, or an error message
 pub fun rename(from: str, to: str) Result[bool, str] {
     val raw: i64 = os.rename(os.AT_FDCWD, from, os.AT_FDCWD, to);
+    if (raw < 0) { ret err[bool, str](os.message(raw)); }
+    ret ok[bool, str](true);
+}
+
+# symlink: create a symbolic link at linkpath pointing to target.
+#
+# the target is stored verbatim: a relative target is preserved as given, with
+# no resolution or normalization, so the link keeps resolving correctly after
+# its containing tree is moved. on posix this is symlink(2); on windows it is
+# CreateSymbolicLinkA requesting unprivileged creation, and a refusal for lack
+# of privilege surfaces as "operation not permitted".
+# ---
+# target:   path the link points to (preserved verbatim)
+# linkpath: path of the link to create
+# ret:      true on success, or an error message
+pub fun symlink(target: str, linkpath: str) Result[bool, str] {
+    if (target == nil)   { ret err[bool, str]("target is nil"); }
+    if (linkpath == nil) { ret err[bool, str]("linkpath is nil"); }
+    val raw: i64 = os.symlink(target, linkpath);
     if (raw < 0) { ret err[bool, str](os.message(raw)); }
     ret ok[bool, str](true);
 }
@@ -398,6 +433,170 @@ pub fun create_dir_all(a: *allocator.Allocator, p: str, mode: i32) Result[bool, 
     if (is_ok[bool, str](final_res)) { ret final_res; }
     if (is_dir(p)) { ret ok[bool, str](true); }
     ret final_res;
+}
+
+# bound on recursion depth for remove_all, guarding against unbounded
+# directory nesting (and any cyclic structure a symlink walk could never
+# create, since symlinks are removed rather than followed).
+val REMOVE_MAX_DEPTH: usize = 1024;
+
+# size of the stack buffer used per directory level to read raw directory
+# entries; large enough to hold several entries per read_dir call.
+val DIRENT_BUF_SIZE: usize = 8192;
+
+# remove_all: recursively remove a file, directory, or symbolic link.
+#
+# directories are removed depth-first — their contents first, then the
+# directory itself. symbolic links are removed as links and never followed:
+# a link inside the tree that points outside it leaves the target untouched.
+# this is the safety property a recursive delete must hold, and it relies on
+# an lstat-equivalent type check (info_is_symlink) rather than following the
+# link. removing a path that does not exist succeeds, so the operation is
+# idempotent like `rm -rf`.
+# ---
+# a:   allocator for transient child-path strings
+# p:   path to remove
+# ret: true on success, or an error message
+pub fun remove_all(a: *allocator.Allocator, p: str) Result[bool, str] {
+    if (a == nil) { ret err[bool, str]("allocator is nil"); }
+    if (p == nil) { ret err[bool, str]("path is nil"); }
+    ret remove_all_at(a, p, 0);
+}
+
+fun remove_all_at(a: *allocator.Allocator, p: str, depth: usize) Result[bool, str] {
+    if (depth >= REMOVE_MAX_DEPTH) {
+        ret err[bool, str]("remove_all: directory tree too deep");
+    }
+
+    # lstat (AT_SYMLINK_NOFOLLOW) so a symlink reports as a link, not its
+    # target — the walk must remove the link itself, never descend through it.
+    var st: os.stat_t;
+    val sr: i64 = os.stat_path(os.AT_FDCWD, p, ?st, os.AT_SYMLINK_NOFOLLOW);
+    if (sr < 0) {
+        if (sr == os.ENOENT) { ret ok[bool, str](true); }
+        ret err[bool, str](os.message(sr));
+    }
+    val fi: FileInfo = info_from_stat(?st);
+
+    # only a real directory is descended into; a symlink (even to a directory)
+    # is unlinked as a link
+    if (!info_is_dir(?fi) || info_is_symlink(?fi)) {
+        ret unlink(p);
+    }
+
+    val contents: Result[bool, str] = remove_dir_contents(a, p, depth);
+    if (is_err[bool, str](contents)) { ret contents; }
+
+    val rr: i64 = os.unlink(os.AT_FDCWD, p, os.AT_REMOVEDIR);
+    if (rr < 0) { ret err[bool, str](os.message(rr)); }
+    ret ok[bool, str](true);
+}
+
+# remove every entry inside directory p, then leave p empty for the caller to
+# remove. the full set of child names is collected before any removal so the
+# directory is never modified while it is being enumerated.
+fun remove_dir_contents(a: *allocator.Allocator, p: str, depth: usize) Result[bool, str] {
+    val open_res: i64 = os.open(os.AT_FDCWD, p, os.O_RDONLY | os.O_DIRECTORY, 0);
+    if (open_res < 0) { ret err[bool, str](os.message(open_res)); }
+    val dfd: i32 = open_res::i32;
+
+    var names: *u8 = nil;
+    var names_len: usize = 0;
+    var names_cap: usize = 0;
+    val read_res: Result[bool, str] = read_dir_names(a, dfd, ?names, ?names_len, ?names_cap);
+    os.close(dfd);
+    if (is_err[bool, str](read_res)) { ret read_res; }
+
+    var result: Result[bool, str] = ok[bool, str](true);
+    var off: usize = 0;
+    for (off < names_len) {
+        val name: str = (names::usize + off)::str;
+        off = off + str_len(name) + 1;
+
+        val join_res: Result[path.Path, str] = path.join(a, p, name);
+        if (is_err[path.Path, str](join_res)) {
+            result = err[bool, str](unwrap_err[path.Path, str](join_res));
+            brk;
+        }
+        val child: path.Path = unwrap_ok[path.Path, str](join_res);
+        val rr: Result[bool, str] = remove_all_at(a, child, depth + 1);
+        allocator.deallocate[u8](a, child::ptr::*u8, str_len(child) + 1);
+        if (is_err[bool, str](rr)) { result = rr; brk; }
+    }
+
+    if (names != nil) { allocator.deallocate[u8](a, names, names_cap); }
+    ret result;
+}
+
+# read all child names of an open directory fd into a single allocated buffer
+# of NUL-terminated strings, skipping "." and "..". on success the buffer,
+# its used length, and its capacity are returned through the out-pointers
+# (nil/0/0 for an empty directory); on error the buffer is freed.
+fun read_dir_names(a: *allocator.Allocator, dfd: i32, out_buf: **u8, out_len: *usize, out_cap: *usize) Result[bool, str] {
+    var dbuf: [DIRENT_BUF_SIZE]u8;
+    var buf: *u8 = nil;
+    var len: usize = 0;
+    var cap: usize = 0;
+
+    for (true) {
+        val n: i64 = os.read_dir(dfd, (?dbuf[0])::*os.dirent64, DIRENT_BUF_SIZE);
+        if (n < 0) {
+            if (buf != nil) { allocator.deallocate[u8](a, buf, cap); }
+            ret err[bool, str](os.message(n));
+        }
+        if (n == 0) { brk; }
+
+        var pos: usize = 0;
+        for (pos < n::usize) {
+            val ent:    *os.dirent64 = ((?dbuf[0])::usize + pos)::*os.dirent64;
+            val reclen: usize        = ent.d_reclen::usize;
+            val name:   *u8          = ?ent.d_name[0];
+
+            if (!is_dot_name(name)) {
+                val nl:   usize = str_len(name);
+                val need: usize = len + nl + 1;
+                if (need > cap) {
+                    var newcap: usize = cap;
+                    if (newcap == 0) { newcap = 256; }
+                    for (newcap < need) { newcap = newcap * 2; }
+                    val gr: Result[*u8, str] = grow_names(a, buf, cap, newcap);
+                    if (is_err[*u8, str](gr)) {
+                        if (buf != nil) { allocator.deallocate[u8](a, buf, cap); }
+                        ret err[bool, str](unwrap_err[*u8, str](gr));
+                    }
+                    buf = unwrap_ok[*u8, str](gr);
+                    cap = newcap;
+                }
+                mem.raw_copy((buf::usize + len)::ptr, name::ptr, nl);
+                buf[len + nl] = 0;
+                len = len + nl + 1;
+            }
+
+            # a zero record length would never advance pos; guard against a
+            # malformed buffer rather than spin forever
+            if (reclen == 0) { brk; }
+            pos = pos + reclen;
+        }
+    }
+
+    @out_buf = buf;
+    @out_len = len;
+    @out_cap = cap;
+    ret ok[bool, str](true);
+}
+
+fun grow_names(a: *allocator.Allocator, buf: *u8, cap: usize, newcap: usize) Result[*u8, str] {
+    if (buf == nil) { ret allocator.allocate[u8](a, newcap); }
+    ret allocator.reallocate[u8](a, buf, cap, newcap);
+}
+
+# whether a directory entry name is "." or ".." (the self/parent links that a
+# recursive walk must skip).
+fun is_dot_name(name: *u8) bool {
+    if (name[0] != '.'::u8) { ret false; }
+    if (name[1] == 0) { ret true; }
+    if (name[1] == '.'::u8 && name[2] == 0) { ret true; }
+    ret false;
 }
 
 # temp_create: create a temporary file with a unique name.
@@ -674,5 +873,163 @@ test "filesystem: unlink removes file" {
 
     val open_res: Result[File, str] = open(p);
     if (is_ok[File, str](open_res)) { ret 3; }
+    ret 0;
+}
+
+# allocate a unique, currently-unused path under the temp directory, built
+# from the prefix and the process id (no entropy source), and cleared of any
+# leftover from a prior interrupted run. avoiding the random temp name keeps
+# these tests off the RtlGenRandom path, which faults under wine on mach#1388;
+# the returned path string is caller-owned.
+fun temp_unique_name(a: *allocator.Allocator, prefix: str) Result[path.Path, str] {
+    var buf: [512]u8;
+
+    val dir_raw: i64 = os.temp_dir(?buf[0], 512);
+    if (dir_raw < 0 || dir_raw::usize >= 512) {
+        ret err[path.Path, str]("temp directory unavailable");
+    }
+    var off: usize = dir_raw::usize;
+    if (off == 0 || !path.is_separator(buf[off - 1])) {
+        buf[off] = os.separator;
+        off = off + 1;
+    }
+
+    off = append_str(?buf[0], 512, off, "machstd_");
+    if (prefix != nil) { off = append_str(?buf[0], 512, off, prefix); }
+    off = append_str(?buf[0], 512, off, "_");
+    off = write_u64(off, ?buf[0], 512, os.getpid()::u64);
+    if (off + 1 >= 512) { ret err[path.Path, str]("temp path too long"); }
+    buf[off] = 0;
+
+    val r: Result[*u8, str] = allocator.allocate[u8](a, off + 1);
+    if (is_err[*u8, str](r)) {
+        ret err[path.Path, str](unwrap_err[*u8, str](r));
+    }
+    val out: *u8 = unwrap_ok[*u8, str](r);
+    mem.raw_copy(out::ptr, ?buf[0], off);
+    out[off] = 0;
+
+    remove_all(a, out::str);
+    ret ok[path.Path, str](out::str);
+}
+
+# append s to buf at off, returning the new offset (unchanged if it would not
+# fit, reserving the terminator slot).
+fun append_str(buf: *u8, cap: usize, off: usize, s: str) usize {
+    val len: usize = str_len(s);
+    if (off + len + 1 > cap) { ret off; }
+    mem.raw_copy((buf::usize + off)::ptr, s::ptr, len);
+    ret off + len;
+}
+
+test "filesystem: symlink relative target survives tree move" {
+    var a: allocator.Allocator;
+    page.make(?a);
+
+    val da: Result[path.Path, str] = temp_unique_name(?a, "symmv");
+    if (is_err[path.Path, str](da)) { ret 1; }
+    val dir_a: path.Path = unwrap_ok[path.Path, str](da);
+    if (is_err[bool, str](create_dir(dir_a, 0o755))) { ret 2; }
+
+    val tgt_res: Result[path.Path, str] = path.join(?a, dir_a, "target.txt");
+    if (is_err[path.Path, str](tgt_res)) { ret 3; }
+    val tgt: path.Path = unwrap_ok[path.Path, str](tgt_res);
+    val data: str = "verbatim-survives";
+    if (is_err[bool, str](write_file(tgt, data, str_len(data), 0o644))) { ret 4; }
+
+    val link_res: Result[path.Path, str] = path.join(?a, dir_a, "link");
+    if (is_err[path.Path, str](link_res)) { ret 5; }
+    val link: path.Path = unwrap_ok[path.Path, str](link_res);
+
+    # relative target, stored verbatim
+    if (is_err[bool, str](symlink("target.txt", link))) { ret 6; }
+
+    # lstat reports the link itself, not its target
+    val li: Result[FileInfo, str] = info_link(link);
+    if (is_err[FileInfo, str](li)) { ret 7; }
+    val lfi: FileInfo = unwrap_ok[FileInfo, str](li);
+    if (!info_is_symlink(?lfi)) { ret 8; }
+
+    # the link resolves to the target's contents in place
+    val rd1: Result[str, str] = read_all(?a, link);
+    if (is_err[str, str](rd1)) { ret 9; }
+    if (!str_starts_with(unwrap_ok[str, str](rd1), "verbatim-survives")) { ret 10; }
+
+    # move the whole tree: a verbatim relative target keeps resolving, while a
+    # resolved absolute target would now dangle
+    val nb: Result[path.Path, str] = temp_unique_name(?a, "symmv2");
+    if (is_err[path.Path, str](nb)) { ret 11; }
+    val dir_b: path.Path = unwrap_ok[path.Path, str](nb);
+    if (is_err[bool, str](rename(dir_a, dir_b))) { ret 12; }
+
+    val link_b_res: Result[path.Path, str] = path.join(?a, dir_b, "link");
+    if (is_err[path.Path, str](link_b_res)) { ret 13; }
+    val link_b: path.Path = unwrap_ok[path.Path, str](link_b_res);
+    val rd2: Result[str, str] = read_all(?a, link_b);
+    if (is_err[str, str](rd2)) { ret 14; }
+    if (!str_starts_with(unwrap_ok[str, str](rd2), "verbatim-survives")) { ret 15; }
+
+    remove_all(?a, dir_b);
+    ret 0;
+}
+
+test "filesystem: remove_all clears tree without following symlinks" {
+    var a: allocator.Allocator;
+    page.make(?a);
+
+    # an outside directory holding a file that must survive intact
+    val od: Result[path.Path, str] = temp_unique_name(?a, "rmout");
+    if (is_err[path.Path, str](od)) { ret 1; }
+    val outside: path.Path = unwrap_ok[path.Path, str](od);
+    if (is_err[bool, str](create_dir(outside, 0o755))) { ret 2; }
+    val keep_res: Result[path.Path, str] = path.join(?a, outside, "keep.txt");
+    if (is_err[path.Path, str](keep_res)) { ret 3; }
+    val keep: path.Path = unwrap_ok[path.Path, str](keep_res);
+    val kdata: str = "keepme";
+    if (is_err[bool, str](write_file(keep, kdata, str_len(kdata), 0o644))) { ret 4; }
+
+    # a small nested tree to remove
+    val rt: Result[path.Path, str] = temp_unique_name(?a, "rmtree");
+    if (is_err[path.Path, str](rt)) { ret 5; }
+    val root: path.Path = unwrap_ok[path.Path, str](rt);
+    if (is_err[bool, str](create_dir(root, 0o755))) { ret 6; }
+    val sub_res: Result[path.Path, str] = path.join(?a, root, "sub");
+    if (is_err[path.Path, str](sub_res)) { ret 7; }
+    val sub: path.Path = unwrap_ok[path.Path, str](sub_res);
+    if (is_err[bool, str](create_dir(sub, 0o755))) { ret 8; }
+    val f_res: Result[path.Path, str] = path.join(?a, sub, "file.txt");
+    if (is_err[path.Path, str](f_res)) { ret 9; }
+    val f: path.Path = unwrap_ok[path.Path, str](f_res);
+    if (is_err[bool, str](write_file(f, kdata, str_len(kdata), 0o644))) { ret 10; }
+
+    # a symlink inside the tree pointing at the outside directory; remove_all
+    # must delete the link and never recurse through it into `outside`
+    val danger_res: Result[path.Path, str] = path.join(?a, sub, "danger");
+    if (is_err[path.Path, str](danger_res)) { ret 11; }
+    val danger: path.Path = unwrap_ok[path.Path, str](danger_res);
+    if (is_err[bool, str](symlink(outside, danger))) { ret 12; }
+
+    if (is_err[bool, str](remove_all(?a, root))) { ret 13; }
+    if (exists(root)) { ret 14; }
+
+    # the outside directory and its file survived: the link was removed, not
+    # followed
+    if (!is_dir(outside)) { ret 15; }
+    if (!is_file(keep)) { ret 16; }
+
+    remove_all(?a, outside);
+    ret 0;
+}
+
+test "filesystem: remove_all on a missing path succeeds" {
+    var a: allocator.Allocator;
+    page.make(?a);
+
+    val miss: Result[path.Path, str] = temp_unique_name(?a, "rmgone");
+    if (is_err[path.Path, str](miss)) { ret 1; }
+    val gone: path.Path = unwrap_ok[path.Path, str](miss);
+
+    # the placeholder was already removed, so the path does not exist
+    if (is_err[bool, str](remove_all(?a, gone))) { ret 2; }
     ret 0;
 }

@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `std.filesystem.symlink(target, linkpath)` creates a symbolic link
+  (`symlink(2)` on posix, `CreateSymbolicLinkA` on windows). Relative targets
+  are preserved verbatim so links keep resolving after their containing tree
+  is moved. The windows path requests unprivileged creation and reports a
+  privilege refusal as "operation not permitted". This gives the compiler's
+  dep machinery a primitive to replace its `ln -s` shell-out (#257).
+- `std.filesystem.remove_all(a, path)` removes a file, directory, or symbolic
+  link recursively, depth-first. Symbolic links are removed as links and never
+  followed, so a link pointing outside the tree leaves its target untouched;
+  removing a missing path succeeds. Replaces the dep machinery's `rm -rf`
+  shell-out (#257).
+- `std.filesystem.info_link(p)` is the `lstat` counterpart of `info_path`,
+  reporting a symbolic link's own metadata without following it.
+- `std.system.os.symlink(target, linkpath)` wires the new OS primitive through
+  the linux, darwin, and windows layers.
+
 ## [0.9.0] - 2026-06-13
 
 Native-windows temp-file support: the temp directory is resolved per-OS at

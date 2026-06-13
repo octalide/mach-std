@@ -111,6 +111,11 @@ val ERROR_TOO_MANY_OPEN_FILES: u32 = 4;
 val ERROR_BROKEN_PIPE:      u32 = 109;
 val ERROR_BUSY:             u32 = 170;
 val ERROR_ENVVAR_NOT_FOUND: u32 = 203;
+val ERROR_PRIVILEGE_NOT_HELD: u32 = 1314;
+
+# CreateSymbolicLink flags
+val SYMBOLIC_LINK_FLAG_DIRECTORY:                 u32 = 0x1;
+val SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE: u32 = 0x2;
 
 # lseek whence
 val SEEK_SET: i32 = 0;
@@ -206,6 +211,10 @@ ext fun FindFirstFileA(p0: *u8, p1: *u8) isize;
 ext fun FindNextFileA(p0: isize, p1: *u8) i32;
 ext fun FindClose(p0: isize) i32;
 ext fun GetFinalPathNameByHandleA(p0: isize, p1: *u8, p2: u32, p3: u32) u32;
+# CreateSymbolicLinkA is exported by kernel32.dll (the first dependency), so
+# an unqualified import binds correctly without a `$<sym>.library` pin (unlike
+# the synch-apiset functions of #253). it returns a BOOLEAN — a single byte.
+ext fun CreateSymbolicLinkA(p0: *u8, p1: *u8, p2: u32) u8;
 
 ext fun GetSystemTimeAsFileTime(p0: *u8);
 ext fun QueryPerformanceCounter(p0: *i64) i32;
@@ -680,6 +689,8 @@ fun last_error() i64 {
     val err: u32 = GetLastError();
     if (err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND) { ret ENOENT; }
     or (err == ERROR_ACCESS_DENIED) { ret EACCES; }
+    # symlink creation without developer mode or SeCreateSymbolicLinkPrivilege
+    or (err == ERROR_PRIVILEGE_NOT_HELD) { ret EPERM; }
     or (err == ERROR_ALREADY_EXISTS || err == ERROR_FILE_EXISTS) { ret EEXIST; }
     or (err == ERROR_INVALID_HANDLE || err == ERROR_INVALID_PARAMETER) { ret EINVAL; }
     or (err == ERROR_NOT_ENOUGH_MEMORY || err == ERROR_OUTOFMEMORY) { ret ENOMEM; }
@@ -1103,6 +1114,18 @@ pub fun stat_path(dirfd: i32, path: *u8, st: *stat_t, flags: i32) i64 {
     if (attr == 0xFFFFFFFF) {
         ret last_error();
     }
+    # lstat: under AT_SYMLINK_NOFOLLOW a reparse point is reported as a symlink
+    # without opening it, so the type reflects the link itself rather than its
+    # target. this is the property the recursive-remove walk relies on to delete
+    # the link and never follow it. only the type is populated; a symlink's
+    # size and timestamps are not read.
+    if ((flags & AT_SYMLINK_NOFOLLOW) != 0 && (attr & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+        zero_bytes(st::*u8, $size_of(stat_t));
+        st.st_mode = S_IFLNK | 0o777::u32;
+        st.st_nlink = 1;
+        st.st_blksize = 4096;
+        ret 0;
+    }
     var open_flags: i32 = O_RDONLY;
     if ((attr & FILE_ATTRIBUTE_DIRECTORY) != 0) {
         open_flags = open_flags | O_DIRECTORY;
@@ -1125,6 +1148,19 @@ pub fun unlink(dirfd: i32, path: *u8, flags: i32) i64 {
         }
         ret 0;
     }
+    # a directory symlink or junction is a reparse point that also carries the
+    # directory attribute; like posix unlinkat on a symlink it is removed with
+    # RemoveDirectoryA, which unlinks the link itself and never the target.
+    # this keeps the recursive remove from failing on directory links.
+    val attr: u32 = GetFileAttributesA(path);
+    if (attr != 0xFFFFFFFF
+        && (attr & FILE_ATTRIBUTE_REPARSE_POINT) != 0
+        && (attr & FILE_ATTRIBUTE_DIRECTORY) != 0) {
+        if (RemoveDirectoryA(path) == 0) {
+            ret last_error();
+        }
+        ret 0;
+    }
     if (DeleteFileA(path) == 0) {
         ret last_error();
     }
@@ -1137,6 +1173,100 @@ pub fun rename(olddir: i32, oldpath: *u8, newdir: i32, newpath: *u8) i64 {
         ret last_error();
     }
     ret 0;
+}
+
+# symlink: create a symbolic link at linkpath pointing to target.
+#
+# uses CreateSymbolicLinkA (the -A/ANSI entry point, consistent with the rest
+# of this layer; the file is uniformly ANSI and no UTF-8→UTF-16 helper exists).
+# target is passed verbatim so relative targets stay relative. the directory
+# flag is set when the target resolves to a directory — relative targets are
+# resolved against linkpath's parent, matching how the link itself resolves at
+# use time. ALLOW_UNPRIVILEGED_CREATE is always requested (it is honored under
+# developer mode and ignored otherwise); when the OS refuses for lack of
+# privilege the error maps to EPERM ("operation not permitted").
+# ---
+# target:   path the link points to (stored as given, not resolved)
+# linkpath: path of the link to create
+# ret:      0 on success, or negative errno
+pub fun symlink(target: *u8, linkpath: *u8) i64 {
+    var flags: u32 = SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE;
+    if (symlink_target_is_dir(target, linkpath)) {
+        flags = flags | SYMBOLIC_LINK_FLAG_DIRECTORY;
+    }
+    if (CreateSymbolicLinkA(linkpath, target, flags) == 0) {
+        ret last_error();
+    }
+    ret 0;
+}
+
+# whether the link target names a directory, for the CreateSymbolicLink
+# directory flag. an absolute target is queried directly; a relative target is
+# resolved against linkpath's parent directory (the same base the link resolves
+# against). a target that does not exist yet returns false, so a dangling link
+# is created as a file link.
+fun symlink_target_is_dir(target: *u8, linkpath: *u8) bool {
+    var attr: u32 = 0xFFFFFFFF;
+    if (path_is_abs(target)) {
+        attr = GetFileAttributesA(target);
+    }
+    or {
+        var buf: [520]u8;
+        if (!symlink_resolve_target(target, linkpath, ?buf[0], 520)) {
+            ret false;
+        }
+        attr = GetFileAttributesA((?buf[0])::*u8);
+    }
+    if (attr == 0xFFFFFFFF) {
+        ret false;
+    }
+    ret (attr & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
+# build "<linkpath-parent><sep><target>" into buf for the directory probe.
+# when linkpath has no directory component the target is left relative to the
+# cwd (copied as-is). returns false when the joined path would overflow buf.
+fun symlink_resolve_target(target: *u8, linkpath: *u8, buf: *u8, cap: usize) bool {
+    val link_len: usize = str_len(linkpath);
+    var parent_len: usize = 0;
+    var i: usize = 0;
+    for (i < link_len) {
+        if (linkpath[i] == '/'::u8 || linkpath[i] == '\\'::u8) {
+            parent_len = i + 1;
+        }
+        i = i + 1;
+    }
+    val target_len: usize = str_len(target);
+    if (parent_len + target_len + 1 > cap) {
+        ret false;
+    }
+    var j: usize = 0;
+    for (j < parent_len) {
+        buf[j] = linkpath[j];
+        j = j + 1;
+    }
+    var k: usize = 0;
+    for (k < target_len) {
+        buf[parent_len + k] = target[k];
+        k = k + 1;
+    }
+    buf[parent_len + target_len] = 0;
+    ret true;
+}
+
+# whether a path is absolute on windows: a leading separator, or a drive
+# letter followed by a colon (e.g. "C:\\...").
+fun path_is_abs(p: *u8) bool {
+    val c: u8 = p[0];
+    if (c == '/'::u8 || c == '\\'::u8) {
+        ret true;
+    }
+    if ((c >= 'A'::u8 && c <= 'Z'::u8) || (c >= 'a'::u8 && c <= 'z'::u8)) {
+        if (p[1] == ':'::u8) {
+            ret true;
+        }
+    }
+    ret false;
 }
 
 pub fun make_dir(dirfd: i32, path: *u8, mode: i32) i64 {
