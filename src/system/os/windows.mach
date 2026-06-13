@@ -121,6 +121,7 @@ fwd impl.pipe;
 fwd impl.sleep;
 fwd impl.getcwd;
 fwd impl.getenv;
+fwd impl.temp_dir;
 fwd impl.environ;
 fwd impl.wait;
 fwd impl.wait_pid;

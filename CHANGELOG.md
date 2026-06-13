@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `std.system.os.temp_dir(buf, cap)` resolves the OS temporary directory at
+  use time under the `env.get` truncation contract. Lookup order is per-OS:
+  posix consults `$TMPDIR` and falls back to `/tmp`; windows uses
+  `GetTempPathA` (`TMP` → `TEMP` → `USERPROFILE` → the windows directory).
+  `std.types.path.is_separator` is now public.
+
+### Fixed
+
+- `std.filesystem.temp_create` no longer hardcodes `/tmp`, which does not
+  exist on native windows; it resolves the temp directory per call via
+  `os.temp_dir`, fixing temp-file creation (and everything routed through it)
+  on windows while preserving posix behavior (#258).
+
 ## [0.8.0] - 2026-06-12
 
 Native-windows loader compliance: the wait-on-address family is pinned to its
