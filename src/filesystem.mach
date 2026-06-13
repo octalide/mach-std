@@ -876,17 +876,50 @@ test "filesystem: unlink removes file" {
     ret 0;
 }
 
-# allocate a unique, currently-unused path under the temp directory by
-# creating and removing a temp file, leaving its name free for the caller to
-# use as a fresh file or directory. the returned path string is caller-owned.
+# allocate a unique, currently-unused path under the temp directory, built
+# from the prefix and the process id (no entropy source), and cleared of any
+# leftover from a prior interrupted run. avoiding the random temp name keeps
+# these tests off the RtlGenRandom path, which faults under wine on mach#1388;
+# the returned path string is caller-owned.
 fun temp_unique_name(a: *allocator.Allocator, prefix: str) Result[path.Path, str] {
-    val tr: Result[TempFile, str] = temp_create(a, prefix);
-    if (is_err[TempFile, str](tr)) {
-        ret err[path.Path, str](unwrap_err[TempFile, str](tr));
+    var buf: [512]u8;
+
+    val dir_raw: i64 = os.temp_dir(?buf[0], 512);
+    if (dir_raw < 0 || dir_raw::usize >= 512) {
+        ret err[path.Path, str]("temp directory unavailable");
     }
-    var tf: TempFile = unwrap_ok[TempFile, str](tr);
-    temp_close_and_remove(?tf);
-    ret ok[path.Path, str](tf.path);
+    var off: usize = dir_raw::usize;
+    if (off == 0 || !path.is_separator(buf[off - 1])) {
+        buf[off] = os.separator;
+        off = off + 1;
+    }
+
+    off = append_str(?buf[0], 512, off, "machstd_");
+    if (prefix != nil) { off = append_str(?buf[0], 512, off, prefix); }
+    off = append_str(?buf[0], 512, off, "_");
+    off = write_u64(off, ?buf[0], 512, os.getpid()::u64);
+    if (off + 1 >= 512) { ret err[path.Path, str]("temp path too long"); }
+    buf[off] = 0;
+
+    val r: Result[*u8, str] = allocator.allocate[u8](a, off + 1);
+    if (is_err[*u8, str](r)) {
+        ret err[path.Path, str](unwrap_err[*u8, str](r));
+    }
+    val out: *u8 = unwrap_ok[*u8, str](r);
+    mem.raw_copy(out::ptr, ?buf[0], off);
+    out[off] = 0;
+
+    remove_all(a, out::str);
+    ret ok[path.Path, str](out::str);
+}
+
+# append s to buf at off, returning the new offset (unchanged if it would not
+# fit, reserving the terminator slot).
+fun append_str(buf: *u8, cap: usize, off: usize, s: str) usize {
+    val len: usize = str_len(s);
+    if (off + len + 1 > cap) { ret off; }
+    mem.raw_copy((buf::usize + off)::ptr, s::ptr, len);
+    ret off + len;
 }
 
 test "filesystem: symlink relative target survives tree move" {
