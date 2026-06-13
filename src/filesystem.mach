@@ -76,7 +76,6 @@ pub val stdin:  File = File{fd: 0};
 pub val stdout: File = File{fd: 1};
 pub val stderr: File = File{fd: 2};
 
-val TEMP_DIR:          str   = "/tmp";
 val TEMP_MAX_ATTEMPTS: usize = 100;
 val HEX_CHARS:         str   = "0123456789abcdef";
 
@@ -402,9 +401,12 @@ pub fun create_dir_all(a: *allocator.Allocator, p: str, mode: i32) Result[bool, 
 }
 
 # temp_create: create a temporary file with a unique name.
+#
+# the file is created under the OS temp directory resolved at call time
+# (see os.temp_dir): $TMPDIR or "/tmp" on posix, GetTempPathA on windows.
 # ---
 # a:      allocator for the path
-# prefix: name prefix (e.g. "test" → "/tmp/test_<n>")
+# prefix: name prefix (e.g. "test" → "<tempdir>/test_<n>")
 # ret:    the created TempFile, or an error message
 pub fun temp_create(a: *allocator.Allocator, prefix: str) Result[TempFile, str] {
     var attempt: usize = 0;
@@ -480,24 +482,33 @@ fun file_read_cb(ctx: ptr, buf: *u8, len: usize) Result[usize, str] {
 }
 
 fun temp_build_path(a: *allocator.Allocator, prefix: str, rnd: *u8) Result[path.Path, str] {
-    var buf: [256]u8;
-    var off: usize = 0;
+    var buf: [512]u8;
 
-    val dir_len: usize = str_len(TEMP_DIR);
+    val dir_raw: i64 = os.temp_dir(?buf[0], 512);
+    if (dir_raw < 0) {
+        ret err[path.Path, str]("temp file: temp directory unavailable");
+    }
+    if (dir_raw::usize >= 512) {
+        ret err[path.Path, str]("temp path too long");
+    }
+    var off: usize = dir_raw::usize;
+
+    # GetTempPathA yields a trailing separator; $TMPDIR and "/tmp" do not.
+    # insert exactly one separator between the directory and the file name.
+    if (off == 0 || !path.is_separator(buf[off - 1])) {
+        buf[off] = os.separator;
+        off = off + 1;
+    }
+
     var prefix_len: usize = 0;
     if (prefix != nil) {
         prefix_len = str_len(prefix);
     }
-    val needed: usize = dir_len + 1 + prefix_len + 1 + 16 + 1;
-    if (needed > 256) {
+
+    val needed: usize = off + prefix_len + 1 + 16 + 1;
+    if (needed > 512) {
         ret err[path.Path, str]("temp path too long");
     }
-
-    mem.raw_copy(?buf[0], TEMP_DIR, dir_len);
-    off = dir_len;
-
-    buf[off] = 47;
-    off = off + 1;
 
     if (prefix != nil) {
         mem.raw_copy(?buf[off], prefix, prefix_len);
