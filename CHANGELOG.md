@@ -5,7 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0] - 2026-06-13
+
+Native-windows temp-file support: the temp directory is resolved per-OS at
+use time (GetTempPathA on windows, $TMPDIR with /tmp fallback on posix). With v0.8.0's
+loader fixes this completes the std side of the compiler's native windows
+CI lane (octalide/mach#1351); the exec-fixture half of #258 was already
+fixed in v0.7.0's OS-gated tests and ships via the pin bump.
 
 ### Added
 
