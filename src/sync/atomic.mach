@@ -38,6 +38,9 @@ pub fun load(ptr: *i64) i64 {
             ldar {result}, [x12]
         }
     }
+    $or {
+        $error("std.sync.atomic.load: unsupported architecture");
+    }
     ret result;
 }
 
@@ -62,6 +65,9 @@ pub fun store(ptr: *i64, v: i64) {
             mov x12, {ptr}
             stlr {v}, [x12]
         }
+    }
+    $or {
+        $error("std.sync.atomic.store: unsupported architecture");
     }
 }
 
@@ -104,6 +110,9 @@ pub fun cas(ptr: *i64, expected: *i64, desired: i64) bool {
             dmb ish
         }
     }
+    $or {
+        $error("std.sync.atomic.cas: unsupported architecture");
+    }
     if (old == exp) { ret true; }
     @expected = old;
     ret false;
@@ -140,6 +149,9 @@ pub fun fetch_add(ptr: *i64, v: i64) i64 {
             dmb ish
         }
     }
+    $or {
+        $error("std.sync.atomic.fetch_add: unsupported architecture");
+    }
     ret old;
 }
 
@@ -175,6 +187,9 @@ pub fun fetch_sub(ptr: *i64, v: i64) i64 {
             dmb ish
         }
     }
+    $or {
+        $error("std.sync.atomic.fetch_sub: unsupported architecture");
+    }
     ret old;
 }
 
@@ -208,6 +223,9 @@ pub fun exchange(ptr: *i64, v: i64) i64 {
             dmb ish
         }
     }
+    $or {
+        $error("std.sync.atomic.exchange: unsupported architecture");
+    }
     ret old;
 }
 
@@ -223,6 +241,9 @@ pub fun fence() {
             dmb ish
         }
     }
+    $or {
+        $error("std.sync.atomic.fence: unsupported architecture");
+    }
 }
 
 # cpu yield hint for spin loops.
@@ -236,6 +257,9 @@ pub fun spin_hint() {
         asm aarch64 {
             yield
         }
+    }
+    $or {
+        $error("std.sync.atomic.spin_hint: unsupported architecture");
     }
 }
 
