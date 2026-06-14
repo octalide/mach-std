@@ -69,8 +69,8 @@ fun thread_trampoline() {
     shared.syscall6(shared.SYS_FUTEX, done_addr, shared.FUTEX_WAKE, 1, 0, 0, 0);
     asm aarch64 {
         # munmap stack then exit
-        mov x0, {stack_base}
-        mov x1, {stack_size}
+        ldr x0, {stack_base}
+        ldr x1, {stack_size}
         mov x8, 215           # SYS_munmap
         svc 0
         mov x0, 0
@@ -117,8 +117,8 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
     # flags/stack are zero here.
     asm aarch64 { dmb ish }
     asm aarch64 {
-        mov x0, {flags}
-        mov x1, {stack_ptr}
+        ldr x0, {flags}
+        ldr x1, {stack_ptr}
         mov x2, 0
         mov x3, 0
         mov x4, 0
