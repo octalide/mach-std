@@ -11,6 +11,9 @@ $if ($mach.target.os != $mach.os.linux) {
 $if ($mach.target.arch == $mach.arch.x86_64) {
     use impl: std.system.os.linux.x86_64;
 }
+$or ($mach.target.arch == $mach.arch.aarch64) {
+    use impl: std.system.os.linux.aarch64;
+}
 $or {
     $error("std.system.os.linux: unsupported architecture");
 }
