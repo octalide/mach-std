@@ -34,8 +34,9 @@ pub fun load(ptr: *i64) i64 {
         # load-acquire pairs with STLR stores for seq-cst ordering
         # {ptr} binds to a stack slot, so stage the address in x12 first
         asm aarch64 {
-            mov x12, {ptr}
-            ldar {result}, [x12]
+            ldr x12, {ptr}
+            ldar x9, [x12]
+            str x9, {result}
         }
     }
     $or {
@@ -62,8 +63,9 @@ pub fun store(ptr: *i64, v: i64) {
         # store-release pairs with LDAR loads for seq-cst ordering
         # {ptr} binds to a stack slot, so stage the address in x12 first
         asm aarch64 {
-            mov x12, {ptr}
-            stlr {v}, [x12]
+            ldr x12, {ptr}
+            ldr x9, {v}
+            stlr x9, [x12]
         }
     }
     $or {
@@ -97,16 +99,17 @@ pub fun cas(ptr: *i64, expected: *i64, desired: i64) bool {
         # LDAXR/STLXR retry loop; trailing DMB ISH gives full seq-cst order
         # {ptr} binds to a stack slot, so stage the address in x12 first
         asm aarch64 {
-            mov x9, {exp}
-            mov x12, {ptr}
-        cas_retry:
+            ldr x9, {exp}
+            ldr x12, {ptr}
+            ldr x13, {desired}
+        1:
             ldaxr x10, [x12]
             cmp x10, x9
-            b.ne cas_done
-            stlxr w11, {desired}, [x12]
-            cbnz w11, cas_retry
-        cas_done:
-            mov {old}, x10
+            b.ne 2f
+            stlxr w11, x13, [x12]
+            cbnz w11, 1b
+        2:
+            str x10, {old}
             dmb ish
         }
     }
@@ -139,13 +142,14 @@ pub fun fetch_add(ptr: *i64, v: i64) i64 {
         # LDAXR/STLXR add loop; trailing DMB ISH gives full seq-cst order
         # {ptr} binds to a stack slot, so stage the address in x12 first
         asm aarch64 {
-            mov x12, {ptr}
-        fadd_retry:
+            ldr x12, {ptr}
+            ldr x14, {v}
+        1:
             ldaxr x9, [x12]
-            add x10, x9, {v}
+            add x10, x9, x14
             stlxr w11, x10, [x12]
-            cbnz w11, fadd_retry
-            mov {old}, x9
+            cbnz w11, 1b
+            str x9, {old}
             dmb ish
         }
     }
@@ -177,13 +181,14 @@ pub fun fetch_sub(ptr: *i64, v: i64) i64 {
         # LDAXR/STLXR sub loop; trailing DMB ISH gives full seq-cst order
         # {ptr} binds to a stack slot, so stage the address in x12 first
         asm aarch64 {
-            mov x12, {ptr}
-        fsub_retry:
+            ldr x12, {ptr}
+            ldr x14, {v}
+        1:
             ldaxr x9, [x12]
-            sub x10, x9, {v}
+            sub x10, x9, x14
             stlxr w11, x10, [x12]
-            cbnz w11, fsub_retry
-            mov {old}, x9
+            cbnz w11, 1b
+            str x9, {old}
             dmb ish
         }
     }
@@ -214,12 +219,13 @@ pub fun exchange(ptr: *i64, v: i64) i64 {
         # LDAXR/STLXR swap loop; trailing DMB ISH gives full seq-cst order
         # {ptr} binds to a stack slot, so stage the address in x12 first
         asm aarch64 {
-            mov x12, {ptr}
-        xchg_retry:
+            ldr x12, {ptr}
+            ldr x14, {v}
+        1:
             ldaxr x9, [x12]
-            stlxr w11, {v}, [x12]
-            cbnz w11, xchg_retry
-            mov {old}, x9
+            stlxr w11, x14, [x12]
+            cbnz w11, 1b
+            str x9, {old}
             dmb ish
         }
     }
