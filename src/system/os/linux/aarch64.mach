@@ -108,10 +108,13 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
 
     # parent/child discrimination must stay in registers: under CLONE_VM the
     # child's frame pointer still addresses the parent frame, so a shared stack
-    # local would race (both sides writing the same slot — see issue #195). the
-    # child branches straight to the trampoline off its own stack; the parent
-    # falls through and stores the tid. clone arg order on aarch64 is
-    # (flags, stack, ptid, tls, ctid); all but flags/stack are zero here.
+    # local would race (both sides writing the same slot — see issue #195). a
+    # conditional branch can target only a numeric local label on aarch64, not a
+    # symbol (there is no imm19 symbol reloc), so the parent (x0 != 0) skips via
+    # cbnz to local label 1, and the child (x0 == 0) falls through to an
+    # unconditional `b` to the trampoline symbol (CALL26; never returns). clone
+    # arg order on aarch64 is (flags, stack, ptid, tls, ctid); all but
+    # flags/stack are zero here.
     asm aarch64 { dmb ish }
     asm aarch64 {
         mov x0, {flags}
@@ -121,7 +124,9 @@ pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: us
         mov x4, 0
         mov x8, 220           # SYS_clone
         svc 0
-        cbz x0, _std_thread_trampoline
+        cbnz x0, 1f           # parent (tid != 0): skip the child dispatch
+        b _std_thread_trampoline   # child (x0 == 0): branch to trampoline (no return)
+    1:
         str x0, {result}      # parent: tid, or negative errno on failure
     }
 
