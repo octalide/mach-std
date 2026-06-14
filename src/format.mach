@@ -159,6 +159,10 @@ pub fun write_ptr(w: *writer.Writer, p: ptr) Result[usize, str] {
 
 pub val ERR_BAD_FORMAT: str = "bad format";
 
+# aarch64 varargs is deferred to v1.6.x (#276): gate the variadic surface so
+# the rest of std cross-compiles. the write_* primitives above stay available.
+$if ($mach.target.arch != $mach.arch.aarch64) {
+
 # vformat: format variadic arguments into a writer.
 #
 # format specifiers: %% (literal %), %s (string), %d (signed i64),
@@ -363,3 +367,4 @@ test "variadic: baseline f64 vararg" {
     if (va_f64(0, 1234.0)::i64 != 1234) { ret 1; }
     ret 0;
 }
+}  # end $if (arch != aarch64) — varargs deferred to v1.6.x (#276)
