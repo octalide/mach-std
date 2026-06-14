@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Known limitations
+
+- **aarch64-linux: variadic formatting is unavailable.** `std.format.format`/`vformat`
+  and `std.print.printf`/`eprintf`/`printlnf`/`eprintlnf` are arch-gated out on aarch64;
+  AAPCS64 varargs lowering is deferred to v1.6.x pending a cross-platform varargs
+  redesign. Non-variadic output (`std.print.print`/`println`/`eprint`,
+  `std.format.write_*`, all of `std.log`) is fully available. (#276)
+
 ## [0.10.0] - 2026-06-13
 
 Filesystem symlink and recursive-removal primitives, giving the compiler's

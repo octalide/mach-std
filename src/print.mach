@@ -95,6 +95,10 @@ pub fun eu64(n: u64) Result[usize, str] {
     ret f.write_u64(?w, n);
 }
 
+# aarch64 varargs is deferred to v1.6.x (#276): gate the variadic print API
+# so the rest of std cross-compiles. non-varargs print/println/u64 stay.
+$if ($mach.target.arch != $mach.arch.aarch64) {
+
 # formatted output to stdout.
 # ---
 # format: format string (see std.format.vformat for specifiers)
@@ -166,3 +170,4 @@ pub fun eprintlnf(format: str, ...) Result[usize, str] {
 
     ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
 }
+}  # end $if (arch != aarch64) — varargs deferred to v1.6.x (#276)
