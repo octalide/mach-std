@@ -16,6 +16,8 @@ use std.types.size.usize;
 use std.types.option.Option;
 use std.types.option.some;
 use std.types.option.none;
+use std.types.option.is_some;
+use std.types.option.unwrap;
 use std.types.string.str;
 use std.types.string.str_equals;
 use std.types.string.str_len;
@@ -24,6 +26,7 @@ use std.allocator.Allocator;
 use std.allocator.allocate;
 
 use mem: std.memory;
+use page: std.allocator.page;
 
 pub val TYPE_STRING:  u8 = 0;
 pub val TYPE_INTEGER: u8 = 1;
@@ -1459,4 +1462,63 @@ pub fun parse(a: *Allocator, src: str) Result[Table, str] {
     }
 
     ret ok[Table, str](root);
+}
+
+# float regression tests (#278). these exercise the f64 paths that transit
+# memory — apply_pow10's [20]f64 array-element load feeding an FP multiply
+# (exponents) and the Value f64 union field store/load (value_float/get_float).
+# they catch an aarch64 f64 memory-load/store miscompile that produced wrong
+# values with zero test signal; before that compiler fix they fail on aarch64,
+# after it they pass (and they always pass on x86_64).
+
+test "toml: plain fractional float round-trips" {
+    var a: Allocator;
+    page.make(?a);
+    val r: Result[Table, str] = parse(?a, "x = 3.14");
+    if (is_err[Table, str](r)) { ret 1; }
+    var t: Table = unwrap_ok[Table, str](r);
+    val o: Option[f64] = get_float(?t, "x");
+    if (!is_some[f64](o)) { ret 2; }
+    val v: f64 = unwrap[f64](o);
+    if (v < 3.13 || v > 3.15) { ret 3; }
+    ret 0;
+}
+
+test "toml: float with positive exponent (apply_pow10 multiply)" {
+    var a: Allocator;
+    page.make(?a);
+    val r: Result[Table, str] = parse(?a, "x = 1.5e3");
+    if (is_err[Table, str](r)) { ret 1; }
+    var t: Table = unwrap_ok[Table, str](r);
+    val o: Option[f64] = get_float(?t, "x");
+    if (!is_some[f64](o)) { ret 2; }
+    val v: f64 = unwrap[f64](o);
+    if (v < 1499.0 || v > 1501.0) { ret 3; }
+    ret 0;
+}
+
+test "toml: float with large exponent (multi-chunk apply_pow10)" {
+    var a: Allocator;
+    page.make(?a);
+    val r: Result[Table, str] = parse(?a, "x = 2e10");
+    if (is_err[Table, str](r)) { ret 1; }
+    var t: Table = unwrap_ok[Table, str](r);
+    val o: Option[f64] = get_float(?t, "x");
+    if (!is_some[f64](o)) { ret 2; }
+    val v: f64 = unwrap[f64](o);
+    if (v < 19999990000.0 || v > 20000010000.0) { ret 3; }
+    ret 0;
+}
+
+test "toml: float with negative exponent (apply_pow10 divide)" {
+    var a: Allocator;
+    page.make(?a);
+    val r: Result[Table, str] = parse(?a, "x = 1.5e-2");
+    if (is_err[Table, str](r)) { ret 1; }
+    var t: Table = unwrap_ok[Table, str](r);
+    val o: Option[f64] = get_float(?t, "x");
+    if (!is_some[f64](o)) { ret 2; }
+    val v: f64 = unwrap[f64](o);
+    if (v < 0.0149 || v > 0.0151) { ret 3; }
+    ret 0;
 }
