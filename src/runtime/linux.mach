@@ -1,6 +1,9 @@
 $if ($mach.target.arch == $mach.arch.x86_64) {
     use std.runtime.linux.x86_64;
 }
+$or ($mach.target.arch == $mach.arch.aarch64) {
+    use std.runtime.linux.aarch64;
+}
 $or {
     $error("std.runtime.linux: unsupported architecture");
 }
