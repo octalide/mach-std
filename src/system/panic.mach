@@ -14,12 +14,26 @@ pub fun panic(msg: *u8) {
     for (msg[len] != 0) { len = len + 1; }
 
     $if ($mach.target.os == $mach.os.linux) {
-        asm x86_64 {
-            mov eax, 1        # SYS_write
-            mov edi, 2        # fd = stderr
-            mov rsi, {msg}
-            mov rdx, {len}
-            syscall
+        $if ($mach.target.arch == $mach.arch.x86_64) {
+            asm x86_64 {
+                mov eax, 1        # SYS_write
+                mov edi, 2        # fd = stderr
+                mov rsi, {msg}
+                mov rdx, {len}
+                syscall
+            }
+        }
+        $or ($mach.target.arch == $mach.arch.aarch64) {
+            asm aarch64 {
+                mov x8, 64    # SYS_write (linux aarch64)
+                mov x0, 2     # fd = stderr
+                mov x1, {msg}
+                mov x2, {len}
+                svc 0
+            }
+        }
+        $or {
+            $error("std.system.panic: unsupported linux architecture");
         }
     }
     $or {
