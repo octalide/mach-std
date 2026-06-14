@@ -41,6 +41,9 @@ pub fun panic(msg: *u8) {
                 svc 0x80
             }
         }
+        $or {
+            $error("std.system.panic: unsupported darwin architecture");
+        }
     }
 
     $if ($mach.target.arch == $mach.arch.x86_64) {
@@ -48,5 +51,8 @@ pub fun panic(msg: *u8) {
     }
     $or ($mach.target.arch == $mach.arch.aarch64) {
         asm aarch64 { brk 0 }
+    }
+    $or {
+        $error("std.system.panic: unsupported architecture");
     }
 }
