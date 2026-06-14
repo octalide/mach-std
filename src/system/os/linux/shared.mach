@@ -998,7 +998,13 @@ pub fun environ() **u8 {
 # code: exit code
 pub fun terminate(code: i64) {
     syscall1(SYS_EXIT_GROUP, code::usize);
-    asm x86_64 { hlt }
+    # exit_group never returns; trap loudly if it somehow does.
+    $if ($mach.target.arch == $mach.arch.x86_64) {
+        asm x86_64 { hlt }
+    }
+    $or ($mach.target.arch == $mach.arch.aarch64) {
+        asm aarch64 { brk 0 }
+    }
 }
 
 # abort: abort the process immediately with exit code 255.
