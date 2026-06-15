@@ -28,6 +28,7 @@ fwd std.filesystem;
 
 fwd std.math;
 fwd std.math.bits;
+fwd std.math.bignum;
 
 fwd std.format;
 fwd std.print;

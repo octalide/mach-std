@@ -16,6 +16,7 @@ use std.types.char.char_is_space;
 use std.types.char.char_digit_val;
 
 use mem: std.memory;
+use bn: std.math.bignum;
 
 # std.text.parse: number parsing utilities
 # ---
@@ -355,6 +356,151 @@ pub fun parse_i64_exact(s: str, base: u8) Result[i64, str] {
 #
 # handles optional sign, integer part, fractional part, and exponent.
 # also handles special values inf, -inf, nan, +inf, +nan.
+# cmp_ratio_pow2: sign of (num/den - 2^p) — compares the rational num/den to 2^p.
+fun cmp_ratio_pow2(num: *bn.Big, den: *bn.Big, p: i64) i64 {
+    var a: bn.Big;
+    var b: bn.Big;
+    bn.copy(?a, num);
+    bn.copy(?b, den);
+    if (p >= 0) { bn.shl(?b, p::usize); }
+    or { bn.shl(?a, (0 - p)::usize); }
+    ret bn.cmp(?a, ?b);
+}
+
+# decimal_to_f64: nearest f64 bit pattern (sign excluded) to M * 10^D, round-to-
+# nearest-even, via exact bignum arithmetic. M is non-negative; the caller ORs in
+# the sign bit. handles subnormals, overflow (-> inf), and underflow (-> 0).
+fun decimal_to_f64(M: *bn.Big, D: i64, trunc: bool) u64 {
+    if (bn.is_zero(M)) { ret 0; }
+
+    # short-circuit clearly out-of-range magnitudes (keeps the bignum bounded).
+    val approx: i64 = D + (bn.bitlen(M)::i64 * 1233) / 4096;
+    if (approx > 320) { ret 0x7FF0000000000000; }
+    if (approx < -340) { ret 0; }
+
+    # exact rational num/den = M * 10^D.
+    var num: bn.Big;
+    var den: bn.Big;
+    bn.copy(?num, M);
+    bn.from_u64(?den, 1);
+    if (D >= 0) { bn.mul_pow10(?num, D::usize); }
+    or { bn.mul_pow10(?den, (0 - D)::usize); }
+
+    # find e2 with 2^(e2+52) <= value < 2^(e2+53) (53-bit normal mantissa window).
+    var e2: i64 = bn.bitlen(?num)::i64 - bn.bitlen(?den)::i64 - 53;
+    var done: bool = false;
+    for (!done) {
+        if (cmp_ratio_pow2(?num, ?den, e2 + 53) >= 0) { e2 = e2 + 1; cnt; }
+        if (cmp_ratio_pow2(?num, ?den, e2 + 52) < 0)  { e2 = e2 - 1; cnt; }
+        done = true;
+    }
+
+    # clamp the mantissa LSB to the subnormal floor (2^-1074) — a single rounding.
+    var lsb: i64 = e2;
+    if (lsb < -1074) { lsb = -1074; }
+
+    # nn/dd = value / 2^lsb.
+    var nn: bn.Big;
+    var dd: bn.Big;
+    bn.copy(?nn, ?num);
+    bn.copy(?dd, ?den);
+    if (lsb >= 0) { bn.shl(?dd, lsb::usize); }
+    or { bn.shl(?nn, (0 - lsb)::usize); }
+
+    # q = floor(nn / dd) via binary long division; remainder left in rem.
+    var q: u64 = 0;
+    var rem: bn.Big;
+    bn.copy(?rem, ?nn);
+    var b: i64 = 53;
+    for (b >= 0) {
+        var t: bn.Big;
+        bn.copy(?t, ?dd);
+        bn.shl(?t, b::usize);
+        if (bn.cmp(?rem, ?t) >= 0) {
+            bn.sub(?rem, ?t);
+            q = q | (1::u64 << b::usize);
+        }
+        b = b - 1;
+    }
+
+    # round-to-nearest-even using 2*rem vs dd.
+    var rem2: bn.Big;
+    bn.copy(?rem2, ?rem);
+    bn.shl(?rem2, 1);
+    val c: i64 = bn.cmp(?rem2, ?dd);
+    if (c > 0) { q = q + 1; }
+    or (c == 0) {
+        # M*10^D sits exactly on the midpoint: dropped nonzero digits (trunc)
+        # push the true value above it, so round up instead of to-even.
+        if (trunc) { q = q + 1; }
+        or { if ((q & 1) == 1) { q = q + 1; } }
+    }
+
+    if (lsb == -1074) {
+        # subnormal regime (and the smallest normals): the bit pattern is q itself.
+        ret q;
+    }
+    var biased: i64 = e2 + 1075;
+    if (q == 0x20000000000000) {
+        q = 0x10000000000000;
+        biased = biased + 1;
+    }
+    if (biased >= 2047) { ret 0x7FF0000000000000; }
+    ret (biased::u64 << 52) | (q & 0xFFFFFFFFFFFFF);
+}
+
+# collect_significand: scan integer + fractional digits from s at @i into M
+# (capped at 768 significant digits — well past what f64 rounding can use, so
+# excess digits are dropped without affecting the result). advances @i and writes
+# the decimal-exponent contribution to @out_dexp (value-so-far = M * 10^out_dexp).
+# returns true iff at least one digit was seen.
+fun collect_significand(s: str, len: usize, i: *usize, M: *bn.Big, out_dexp: *i64, out_trunc: *bool) bool {
+    bn.from_u64(M, 0);
+    var sig: i64 = 0;
+    var dexp: i64 = 0;
+    var seen: bool = false;
+    var truncated: bool = false;
+    val MAXSIG: i64 = 768;
+    for (@i < len) {
+        val c: u8 = s[@i];
+        if (c == '_') { @i = @i + 1; cnt; }
+        if (c < '0' || c > '9') { brk; }
+        seen = true;
+        if (sig < MAXSIG) {
+            bn.mul_small(M, 10);
+            bn.add_small(M, (c - '0')::u32);
+            if (!bn.is_zero(M)) { sig = sig + 1; }
+        }
+        or {
+            dexp = dexp + 1;
+            if (c != '0') { truncated = true; }
+        }
+        @i = @i + 1;
+    }
+    if (@i < len && s[@i] == '.') {
+        @i = @i + 1;
+        for (@i < len) {
+            val c: u8 = s[@i];
+            if (c == '_') { @i = @i + 1; cnt; }
+            if (c < '0' || c > '9') { brk; }
+            seen = true;
+            if (sig < MAXSIG) {
+                bn.mul_small(M, 10);
+                bn.add_small(M, (c - '0')::u32);
+                if (!bn.is_zero(M)) { sig = sig + 1; }
+                dexp = dexp - 1;
+            }
+            or {
+                if (c != '0') { truncated = true; }
+            }
+            @i = @i + 1;
+        }
+    }
+    @out_dexp = dexp;
+    @out_trunc = truncated;
+    ret seen;
+}
+
 # stops at the first character that is not part of a valid float. use
 # parse_f64_exact to require full input consumption.
 # ---
@@ -394,46 +540,22 @@ pub fun parse_f64(s: str) Result[f64, str] {
         ret ok[f64, str](nan_val);
     }
 
-    # integer part
-    var int_part: f64 = 0.0;
-    var has_digit: bool = false;
-    for (i < len) {
-        val c: u8 = s[i];
-        if (c == '_') { i = i + 1; cnt; }
-        if (c < '0' || c > '9') { brk; }
-        has_digit = true;
-        int_part = int_part * 10.0 + (c - '0')::u64::f64;
-        i = i + 1;
+    # significand digits and decimal exponent.
+    var M: bn.Big;
+    var dexp: i64 = 0;
+    var trunc: bool = false;
+    if (!collect_significand(s, len, ?i, ?M, ?dexp, ?trunc)) {
+        ret err[f64, str]("no digits");
     }
-
-    # fractional part
-    var frac: f64 = 0.0;
-    var divisor: f64 = 1.0;
-    if (i < len && s[i] == '.') {
-        i = i + 1;
-        for (i < len) {
-            val c: u8 = s[i];
-            if (c == '_') { i = i + 1; cnt; }
-            if (c < '0' || c > '9') { brk; }
-            has_digit = true;
-            frac = frac * 10.0 + (c - '0')::u64::f64;
-            divisor = divisor * 10.0;
-            i = i + 1;
-        }
-    }
-
-    if (!has_digit) { ret err[f64, str]("no digits"); }
-
-    var result: f64 = (int_part + frac / divisor) * sign;
 
     # exponent
+    var exp: i64 = 0;
     if (i < len && (s[i] == 'e' || s[i] == 'E')) {
         i = i + 1;
         var exp_sign: i64 = 1;
         if (i < len && s[i] == '+') { i = i + 1; }
         or (i < len && s[i] == '-') { exp_sign = -1; i = i + 1; }
 
-        var exp: i64 = 0;
         var has_exp: bool = false;
         for (i < len) {
             val c: u8 = s[i];
@@ -444,16 +566,13 @@ pub fun parse_f64(s: str) Result[f64, str] {
             i = i + 1;
         }
         if (!has_exp) { ret err[f64, str]("no exponent digits"); }
-
-        var e: i64 = 0;
-        if (exp_sign > 0) {
-            for (e < exp) { result = result * 10.0; e = e + 1; }
-        }
-        or {
-            for (e < exp) { result = result / 10.0; e = e + 1; }
-        }
+        exp = exp * exp_sign;
     }
 
+    var bits: u64 = decimal_to_f64(?M, dexp + exp, trunc);
+    if (sign < 0.0) { bits = bits | 0x8000000000000000; }
+    var result: f64;
+    mem.raw_copy(?result, ?bits, 8);
     ret ok[f64, str](result);
 }
 
@@ -497,46 +616,22 @@ pub fun parse_f64_exact(s: str) Result[f64, str] {
         ret ok[f64, str](nan_val);
     }
 
-    # integer part
-    var int_part: f64 = 0.0;
-    var has_digit: bool = false;
-    for (i < len) {
-        val c: u8 = s[i];
-        if (c == '_') { i = i + 1; cnt; }
-        if (c < '0' || c > '9') { brk; }
-        has_digit = true;
-        int_part = int_part * 10.0 + (c - '0')::u64::f64;
-        i = i + 1;
+    # significand digits and decimal exponent.
+    var M: bn.Big;
+    var dexp: i64 = 0;
+    var trunc: bool = false;
+    if (!collect_significand(s, len, ?i, ?M, ?dexp, ?trunc)) {
+        ret err[f64, str]("no digits");
     }
-
-    # fractional part
-    var frac: f64 = 0.0;
-    var divisor: f64 = 1.0;
-    if (i < len && s[i] == '.') {
-        i = i + 1;
-        for (i < len) {
-            val c: u8 = s[i];
-            if (c == '_') { i = i + 1; cnt; }
-            if (c < '0' || c > '9') { brk; }
-            has_digit = true;
-            frac = frac * 10.0 + (c - '0')::u64::f64;
-            divisor = divisor * 10.0;
-            i = i + 1;
-        }
-    }
-
-    if (!has_digit) { ret err[f64, str]("no digits"); }
-
-    var result: f64 = (int_part + frac / divisor) * sign;
 
     # exponent
+    var exp: i64 = 0;
     if (i < len && (s[i] == 'e' || s[i] == 'E')) {
         i = i + 1;
         var exp_sign: i64 = 1;
         if (i < len && s[i] == '+') { i = i + 1; }
         or (i < len && s[i] == '-') { exp_sign = -1; i = i + 1; }
 
-        var exp: i64 = 0;
         var has_exp: bool = false;
         for (i < len) {
             val c: u8 = s[i];
@@ -547,20 +642,17 @@ pub fun parse_f64_exact(s: str) Result[f64, str] {
             i = i + 1;
         }
         if (!has_exp) { ret err[f64, str]("no exponent digits"); }
-
-        var e: i64 = 0;
-        if (exp_sign > 0) {
-            for (e < exp) { result = result * 10.0; e = e + 1; }
-        }
-        or {
-            for (e < exp) { result = result / 10.0; e = e + 1; }
-        }
+        exp = exp * exp_sign;
     }
 
     if (i != len) {
         ret err[f64, str]("unexpected character");
     }
 
+    var bits: u64 = decimal_to_f64(?M, dexp + exp, trunc);
+    if (sign < 0.0) { bits = bits | 0x8000000000000000; }
+    var result: f64;
+    mem.raw_copy(?result, ?bits, 8);
     ret ok[f64, str](result);
 }
 
@@ -906,5 +998,97 @@ test "parse: f64_exact inf" {
 test "parse: f64_exact inf trailing" {
     val r: Result[f64, str] = parse_f64_exact("inf ");
     if (is_ok[f64, str](r)) { ret 1; }
+    ret 0;
+}
+
+# pbits: parse s and return its f64 bit pattern (0xDEADBEEF sentinel on error).
+fun pbits(s: str) u64 {
+    val r: Result[f64, str] = parse_f64(s);
+    if (is_err[f64, str](r)) { ret 0xDEADBEEF; }
+    val v: f64 = unwrap_ok[f64, str](r);
+    var bits: u64;
+    mem.raw_copy(?bits, ?v, 8);
+    ret bits;
+}
+
+test "parse_f64: correctly-rounded golden bits" {
+    if (pbits("0") != 0) { ret 1; }
+    if (pbits("1") != 0x3FF0000000000000) { ret 1; }
+    if (pbits("-1") != 0xBFF0000000000000) { ret 1; }
+    if (pbits("0.5") != 0x3FE0000000000000) { ret 1; }
+    if (pbits("1.5") != 0x3FF8000000000000) { ret 1; }
+    if (pbits("0.1") != 0x3FB999999999999A) { ret 1; }
+    if (pbits("3.141592653589793") != 0x400921FB54442D18) { ret 1; }
+    if (pbits("10000000000000000") != 0x4341C37937E08000) { ret 1; }
+    if (pbits("1e100") != 0x54B249AD2594C37D) { ret 1; }
+    if (pbits("1.7976931348623157e308") != 0x7FEFFFFFFFFFFFFF) { ret 1; }
+    if (pbits("2.2250738585072014e-308") != 0x0010000000000000) { ret 1; }
+    if (pbits("5e-324") != 1) { ret 1; }
+    ret 0;
+}
+
+test "parse_f64: special and out-of-range" {
+    if (pbits("-0") != 0x8000000000000000) { ret 1; }
+    if (pbits("inf") != 0x7FF0000000000000) { ret 1; }
+    if (pbits("-inf") != 0xFFF0000000000000) { ret 1; }
+    if (pbits("nan") != 0x7FF8000000000000) { ret 1; }
+    if (pbits("1e400") != 0x7FF0000000000000) { ret 1; }
+    if (pbits("1e-400") != 0) { ret 1; }
+    ret 0;
+}
+
+test "parse_f64: round-to-even ties and carry-out" {
+    # exact midpoint 1.0 <-> 1+2^-52 -> round to even (down) = 1.0
+    if (pbits("1.00000000000000011102230246251565404236316680908203125") != 0x3FF0000000000000) { ret 1; }
+    # exact midpoint 1+2^-52 <-> 1+2*2^-52 -> round to even (up) = ...0002
+    if (pbits("1.00000000000000033306690738754696212708950042724609375") != 0x3FF0000000000002) { ret 1; }
+    # exact midpoint just below 1.0 -> round to even = 1.0 (exercises the q==2^53 carry-out)
+    if (pbits("0.99999999999999994448884876874217606037855148315429687500") != 0x3FF0000000000000) { ret 1; }
+    ret 0;
+}
+
+# the truncation tie: matches the 1.0 <-> 1+2^-52 midpoint to 768 significant
+# digits, then a nonzero 769th digit -> strictly above the midpoint, must round UP.
+# without the sticky bit this is misread as an exact tie and rounds to-even (down).
+test "parse_f64: 768-digit truncation tie rounds up (sticky)" {
+    var buf: [1024]u8;
+    val prefix: str = "1.00000000000000011102230246251565404236316680908203125";
+    var n: usize = 0;
+    var k: usize = 0;
+    for (prefix[k] != 0) {
+        buf[n] = prefix[k];
+        n = n + 1;
+        k = k + 1;
+    }
+    var z: usize = 0;
+    for (z < 714) {
+        buf[n] = '0';
+        n = n + 1;
+        z = z + 1;
+    }
+    buf[n] = '1';
+    n = n + 1;
+    buf[n] = 0;
+    if (pbits(?buf[0]) != 0x3FF0000000000001) { ret 1; }
+    ret 0;
+}
+
+test "parse_f64: overflow / underflow boundaries" {
+    if (pbits("1e320") != 0x7FF0000000000000) { ret 1; }
+    if (pbits("1e321") != 0x7FF0000000000000) { ret 1; }
+    if (pbits("1e-340") != 0) { ret 1; }
+    if (pbits("1e-341") != 0) { ret 1; }
+    if (pbits("4.9e-324") != 1) { ret 1; }
+    if (pbits("2.4e-324") != 0) { ret 1; }
+    ret 0;
+}
+
+test "parse_f64: subnormal ties and sticky (oracle)" {
+    # subnormal tie-to-even up
+    if (pbits("0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000074109846876186981626485318930233205854758970392148714663837852375101326090531312779794975454245398856969484704316857659638998506553390969459816219401617281718945106978546710679176872575177347315553307795408549809608457500958111373034747658096871009590975442271004757307809711118935784838675653998783503015228055934046593739791790738723868299395818481660169122019456499931289798411362062484498678713572180352209017023903285791732520220528974020802906854021606612375549983402671300035812486479041385743401875520901590172592547146296175134159774938718574737870961645638908718119841271673056017045493004705269590165763776884908267986972573366521765567941072508764337560846003984904972149117463085539556354188641513168478436313080237596295773983001708984375") != 0x0000000000000002) { ret 1; }
+    # subnormal->normal carry tie
+    if (pbits("0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000222507385850720113605740979670913197593481954635164564802342610972482222202107694551652952390813508791414915891303962110687008643869459464552765720740782062174337998814106326732925355228688137214901298112245145188984905722230728525513315575501591439747639798341180199932396254828901710708185069063066665599493827577257201576306269066333264756530000924588831643303777979186961204949739037782970490505108060994073026293712895895000358379996720725430436028407889577179615094551674824347103070260914462157228988025818254518032570701886087211312807951223342628836862232150377566662250398253433597456888442390026549819838548794829220689472168983109969836584681402285424333066033985088644580400103493397042756718644338377048603786162277173854562306587467901408672332763671875") != 0x0010000000000000) { ret 1; }
+    # subnormal sticky pushes up
+    if (pbits("0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002225073858507200641991763955462587799366026678130273282963623495400057796435394444841022253699383222614312797277047241310305390992976863718870946851468024222968583977359185141028540361975476844303195813273469348201130421165308554532083149367606760832492010670938404726154347408257301721683776564392101064823911617215885247576023130352707715620028417753432987127581235390742131919787390835897715495970664046616205505789259944223223424444728595704169556757585423752417124134805999073137808018133811049489046686648944255834488901008259721496147104204399198556535697531005523193544866389809548508960406603526818528245020786151024435136209123775979785215357703877750457056843614755302706830641135567489433450765873120061458113584868315215636869197624037042260169982910156251") != 0x000FFFFFFFFFFFFF) { ret 1; }
     ret 0;
 }
