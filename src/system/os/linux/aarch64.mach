@@ -1,0 +1,317 @@
+# std.system.os.linux.aarch64: aarch64-specific linux OS primitives.
+#
+# provides page_size and thread_spawn which require arch-specific assembly.
+# everything else is in shared.mach.
+
+use std.types.size.usize;
+
+use shared: std.system.os.linux.shared;
+
+# imported unaliased so the clone-flag constants bind under their bare names
+# into this module's comptime context; `THREAD_CLONE_FLAGS` then folds at
+# compile time (a module-qualified `shared.CLONE_*` member path is not
+# comptime-evaluable, so the global would otherwise have no constant value).
+use std.system.os.linux.shared.CLONE_VM;
+use std.system.os.linux.shared.CLONE_FS;
+use std.system.os.linux.shared.CLONE_FILES;
+use std.system.os.linux.shared.CLONE_SIGHAND;
+use std.system.os.linux.shared.CLONE_THREAD;
+use std.system.os.linux.shared.CLONE_SYSVSEM;
+
+$if ($mach.target.os != $mach.os.linux) {
+    $error("std.system.os.linux.aarch64: requires linux target");
+}
+
+$if ($mach.target.arch != $mach.arch.aarch64) {
+    $error("std.system.os.linux.aarch64: requires aarch64 target");
+}
+
+# page_size: return the system page size.
+# ---
+# NOTE: aarch64 linux supports 4 KiB, 16 KiB, and 64 KiB pages depending on
+# kernel configuration; 4096 is the common default and what qemu-user presents.
+# the robust fix is to query AT_PAGESZ from the auxiliary vector at startup;
+# tracked for follow-up once the runtime aux-vector plumbing lands.
+# ---
+# ret: page size in bytes
+pub fun page_size() usize {
+    ret 4096;
+}
+
+val THREAD_CLONE_FLAGS: usize = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_THREAD | CLONE_SYSVSEM;
+
+# entered by a direct branch from the child side of clone (see thread_spawn);
+# the symbol is pinned so the inline-asm branch can target it. at entry sp
+# points at the argument block on the child stack; the standard frame-record
+# prologue (stp x29,x30,[sp,#-16]!; mov x29,sp) then places the four args at
+# [x29+16..x29+40]. NOTE: this offset assumes that frame-record convention and
+# must be confirmed against the mach aarch64 prologue under qemu.
+$thread_trampoline.symbol = "_std_thread_trampoline";
+fun thread_trampoline() {
+    var fn_addr: usize = 0;
+    var done_addr: usize = 0;
+    var stack_base: usize = 0;
+    var stack_size: usize = 0;
+    asm aarch64 {
+        ldr x0, [x29, 16]
+        str x0, {fn_addr}
+        ldr x0, [x29, 24]
+        str x0, {done_addr}
+        ldr x0, [x29, 32]
+        str x0, {stack_base}
+        ldr x0, [x29, 40]
+        str x0, {stack_size}
+    }
+    val fn_ptr: fun() = fn_addr::fun();
+    fn_ptr();
+    val done: *i64 = done_addr::*i64;
+    @done = 1;
+    shared.syscall6(shared.SYS_FUTEX, done_addr, shared.FUTEX_WAKE, 1, 0, 0, 0);
+    asm aarch64 {
+        # munmap stack then exit
+        ldr x0, {stack_base}
+        ldr x1, {stack_size}
+        mov x8, 215           # SYS_munmap
+        svc 0
+        mov x0, 0
+        mov x8, 93            # SYS_exit
+        svc 0
+    }
+    asm aarch64 { brk 0 }
+}
+
+# thread_spawn: create a new thread sharing the current address space.
+#
+# uses clone with shared VM, FS, files, and signals. the child's stack
+# carries the function pointer and done_ptr, so no globals are needed.
+# the child calls the entry function, sets *done_ptr to 1, wakes one
+# futex waiter, and exits.
+# ---
+# f:          function to execute in the new thread
+# done_ptr:   pointer to a completion flag (set to 1 when thread exits)
+# stack_base: base address of the pre-allocated stack region
+# stack_size: size of the stack in bytes
+# ret:        thread ID on success, or negative errno on failure
+pub fun thread_spawn(f: fun(), done_ptr: *i64, stack_base: usize, stack_size: usize) i64 {
+    val stack_top: usize = stack_base + stack_size;
+    # 48 keeps the child sp 16-byte aligned (aarch64 ABI) while leaving four
+    # 8-byte argument slots at +0..+24.
+    val child_sp: usize = stack_top - 48;
+    @(child_sp::*usize) = f::usize;
+    @((child_sp + 8)::*usize) = done_ptr::usize;
+    @((child_sp + 16)::*usize) = stack_base;
+    @((child_sp + 24)::*usize) = stack_size;
+
+    var flags: usize = THREAD_CLONE_FLAGS;
+    var stack_ptr: usize = child_sp;
+    var result: i64 = 0;
+
+    # parent/child discrimination must stay in registers: under CLONE_VM the
+    # child's frame pointer still addresses the parent frame, so a shared stack
+    # local would race (both sides writing the same slot — see issue #195). a
+    # conditional branch can target only a numeric local label on aarch64, not a
+    # symbol (there is no imm19 symbol reloc), so the parent (x0 != 0) skips via
+    # cbnz to local label 1, and the child (x0 == 0) falls through to an
+    # unconditional `b` to the trampoline symbol (CALL26; never returns). clone
+    # arg order on aarch64 is (flags, stack, ptid, tls, ctid); all but
+    # flags/stack are zero here.
+    asm aarch64 { dmb ish }
+    asm aarch64 {
+        ldr x0, {flags}
+        ldr x1, {stack_ptr}
+        mov x2, 0
+        mov x3, 0
+        mov x4, 0
+        mov x8, 220           # SYS_clone
+        svc 0
+        cbnz x0, 1f           # parent (tid != 0): skip the child dispatch
+        b _std_thread_trampoline   # child (x0 == 0): branch to trampoline (no return)
+    1:
+        str x0, {result}      # parent: tid, or negative errno on failure
+    }
+
+    ret result;
+}
+
+# kernel ABI types
+fwd shared.stat_t;
+fwd shared.timespec;
+fwd shared.dirent64;
+
+# path
+fwd shared.separator;
+
+# constants
+fwd shared.STDIN_FD;
+fwd shared.STDOUT_FD;
+fwd shared.STDERR_FD;
+
+fwd shared.O_RDONLY;
+fwd shared.O_WRONLY;
+fwd shared.O_RDWR;
+fwd shared.O_CREAT;
+fwd shared.O_EXCL;
+fwd shared.O_TRUNC;
+fwd shared.O_APPEND;
+fwd shared.O_DIRECTORY;
+
+fwd shared.AT_FDCWD;
+fwd shared.AT_SYMLINK_NOFOLLOW;
+fwd shared.AT_REMOVEDIR;
+
+fwd shared.S_IFMT;
+fwd shared.S_IFDIR;
+fwd shared.S_IFREG;
+fwd shared.S_IFLNK;
+
+fwd shared.WNOHANG;
+fwd shared.WUNTRACED;
+fwd shared.WCONTINUED;
+
+fwd shared.CLOCK_REALTIME;
+fwd shared.CLOCK_MONOTONIC;
+
+fwd shared.EPERM;
+fwd shared.ENOENT;
+fwd shared.ESRCH;
+fwd shared.EINTR;
+fwd shared.EIO;
+fwd shared.ENXIO;
+fwd shared.E2BIG;
+fwd shared.EBADF;
+fwd shared.ECHILD;
+fwd shared.EAGAIN;
+fwd shared.ENOMEM;
+fwd shared.EACCES;
+fwd shared.EFAULT;
+fwd shared.EBUSY;
+fwd shared.EEXIST;
+fwd shared.ENODEV;
+fwd shared.ENOTDIR;
+fwd shared.EISDIR;
+fwd shared.EINVAL;
+fwd shared.ENFILE;
+fwd shared.EMFILE;
+fwd shared.ETXTBSY;
+fwd shared.ENOSPC;
+fwd shared.EROFS;
+fwd shared.EPIPE;
+fwd shared.ENOTEMPTY;
+fwd shared.ENOTSUP;
+
+fwd shared.EINTR_MAX_RETRIES;
+
+# feature detection
+fwd shared.has_numa;
+fwd shared.has_huge_pages;
+
+# syscall wrappers
+fwd shared.syscall0;
+fwd shared.syscall1;
+fwd shared.syscall2;
+fwd shared.syscall3;
+fwd shared.syscall4;
+fwd shared.syscall5;
+fwd shared.syscall6;
+
+# memory
+fwd shared.allocate;
+fwd shared.deallocate;
+fwd shared.reallocate;
+fwd shared.heap_region_base;
+fwd shared.heap_region_extend;
+fwd shared.protect;
+fwd shared.lock;
+fwd shared.unlock;
+fwd shared.advise;
+fwd shared.allocate_huge;
+fwd shared.numa_node_count;
+fwd shared.numa_current_node;
+fwd shared.numa_allocate;
+fwd shared.numa_move;
+fwd shared.map_file;
+fwd shared.sync_file;
+
+# environment
+fwd shared._envp;
+fwd shared.environ;
+
+# filesystem
+fwd shared.read;
+fwd shared.write;
+fwd shared.open;
+fwd shared.close;
+fwd shared.stat;
+fwd shared.stat_path;
+fwd shared.unlink;
+fwd shared.rename;
+fwd shared.symlink;
+fwd shared.make_dir;
+fwd shared.read_dir;
+fwd shared.access;
+fwd shared.seek;
+
+# process
+fwd shared.terminate;
+fwd shared.abort;
+fwd shared.spawn;
+fwd shared.spawn_redirected;
+fwd shared.getpid;
+fwd shared.pipe;
+fwd shared.sleep;
+fwd shared.getcwd;
+fwd shared.getenv;
+fwd shared.fork;
+fwd shared.vfork;
+fwd shared.exec;
+fwd shared.wait;
+fwd shared.wait_pid;
+fwd shared.has_exited;
+fwd shared.exit_code;
+fwd shared.was_signaled;
+fwd shared.term_signal;
+fwd shared.was_stopped;
+fwd shared.stop_signal;
+fwd shared.was_continued;
+
+# sockets
+fwd shared.AF_INET;
+fwd shared.SOCK_STREAM;
+fwd shared.SOCK_DGRAM;
+fwd shared.SOL_SOCKET;
+fwd shared.SO_REUSEADDR;
+fwd shared.SHUT_RD;
+fwd shared.SHUT_WR;
+fwd shared.SHUT_RDWR;
+fwd shared.SOCKADDR_IN_SIZE;
+fwd shared.sock_addr_init;
+fwd shared.sock_addr_read;
+fwd shared.sock_send;
+fwd shared.sock_recv;
+fwd shared.sock_close;
+fwd shared.sock_create;
+fwd shared.sock_bind;
+fwd shared.sock_listen;
+fwd shared.sock_accept;
+fwd shared.sock_connect;
+fwd shared.sock_sendto;
+fwd shared.sock_recvfrom;
+fwd shared.sock_shutdown;
+fwd shared.sock_setopt;
+
+# dns
+fwd shared.DNS_HOSTS_PATH;
+fwd shared.dns_nameserver;
+
+# random
+fwd shared.random_fill;
+
+# threads
+fwd shared.thread_wait;
+fwd shared.thread_wake;
+
+# time
+fwd shared.clock_gettime;
+
+# errno
+fwd shared.error_message;
