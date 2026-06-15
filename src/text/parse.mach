@@ -370,7 +370,7 @@ fun cmp_ratio_pow2(num: *bn.Big, den: *bn.Big, p: i64) i64 {
 # decimal_to_f64: nearest f64 bit pattern (sign excluded) to M * 10^D, round-to-
 # nearest-even, via exact bignum arithmetic. M is non-negative; the caller ORs in
 # the sign bit. handles subnormals, overflow (-> inf), and underflow (-> 0).
-fun decimal_to_f64(M: *bn.Big, D: i64) u64 {
+fun decimal_to_f64(M: *bn.Big, D: i64, trunc: bool) u64 {
     if (bn.is_zero(M)) { ret 0; }
 
     # short-circuit clearly out-of-range magnitudes (keeps the bignum bounded).
@@ -429,7 +429,12 @@ fun decimal_to_f64(M: *bn.Big, D: i64) u64 {
     bn.shl(?rem2, 1);
     val c: i64 = bn.cmp(?rem2, ?dd);
     if (c > 0) { q = q + 1; }
-    or (c == 0) { if ((q & 1) == 1) { q = q + 1; } }
+    or (c == 0) {
+        # M*10^D sits exactly on the midpoint: dropped nonzero digits (trunc)
+        # push the true value above it, so round up instead of to-even.
+        if (trunc) { q = q + 1; }
+        or { if ((q & 1) == 1) { q = q + 1; } }
+    }
 
     if (lsb == -1074) {
         # subnormal regime (and the smallest normals): the bit pattern is q itself.
@@ -449,11 +454,12 @@ fun decimal_to_f64(M: *bn.Big, D: i64) u64 {
 # excess digits are dropped without affecting the result). advances @i and writes
 # the decimal-exponent contribution to @out_dexp (value-so-far = M * 10^out_dexp).
 # returns true iff at least one digit was seen.
-fun collect_significand(s: str, len: usize, i: *usize, M: *bn.Big, out_dexp: *i64) bool {
+fun collect_significand(s: str, len: usize, i: *usize, M: *bn.Big, out_dexp: *i64, out_trunc: *bool) bool {
     bn.from_u64(M, 0);
     var sig: i64 = 0;
     var dexp: i64 = 0;
     var seen: bool = false;
+    var truncated: bool = false;
     val MAXSIG: i64 = 768;
     for (@i < len) {
         val c: u8 = s[@i];
@@ -467,6 +473,7 @@ fun collect_significand(s: str, len: usize, i: *usize, M: *bn.Big, out_dexp: *i6
         }
         or {
             dexp = dexp + 1;
+            if (c != '0') { truncated = true; }
         }
         @i = @i + 1;
     }
@@ -483,10 +490,14 @@ fun collect_significand(s: str, len: usize, i: *usize, M: *bn.Big, out_dexp: *i6
                 if (!bn.is_zero(M)) { sig = sig + 1; }
                 dexp = dexp - 1;
             }
+            or {
+                if (c != '0') { truncated = true; }
+            }
             @i = @i + 1;
         }
     }
     @out_dexp = dexp;
+    @out_trunc = truncated;
     ret seen;
 }
 
@@ -532,7 +543,8 @@ pub fun parse_f64(s: str) Result[f64, str] {
     # significand digits and decimal exponent.
     var M: bn.Big;
     var dexp: i64 = 0;
-    if (!collect_significand(s, len, ?i, ?M, ?dexp)) {
+    var trunc: bool = false;
+    if (!collect_significand(s, len, ?i, ?M, ?dexp, ?trunc)) {
         ret err[f64, str]("no digits");
     }
 
@@ -557,7 +569,7 @@ pub fun parse_f64(s: str) Result[f64, str] {
         exp = exp * exp_sign;
     }
 
-    var bits: u64 = decimal_to_f64(?M, dexp + exp);
+    var bits: u64 = decimal_to_f64(?M, dexp + exp, trunc);
     if (sign < 0.0) { bits = bits | 0x8000000000000000; }
     var result: f64;
     mem.raw_copy(?result, ?bits, 8);
@@ -607,7 +619,8 @@ pub fun parse_f64_exact(s: str) Result[f64, str] {
     # significand digits and decimal exponent.
     var M: bn.Big;
     var dexp: i64 = 0;
-    if (!collect_significand(s, len, ?i, ?M, ?dexp)) {
+    var trunc: bool = false;
+    if (!collect_significand(s, len, ?i, ?M, ?dexp, ?trunc)) {
         ret err[f64, str]("no digits");
     }
 
@@ -636,7 +649,7 @@ pub fun parse_f64_exact(s: str) Result[f64, str] {
         ret err[f64, str]("unexpected character");
     }
 
-    var bits: u64 = decimal_to_f64(?M, dexp + exp);
+    var bits: u64 = decimal_to_f64(?M, dexp + exp, trunc);
     if (sign < 0.0) { bits = bits | 0x8000000000000000; }
     var result: f64;
     mem.raw_copy(?result, ?bits, 8);
@@ -1021,5 +1034,51 @@ test "parse_f64: special and out-of-range" {
     if (pbits("nan") != 0x7FF8000000000000) { ret 1; }
     if (pbits("1e400") != 0x7FF0000000000000) { ret 1; }
     if (pbits("1e-400") != 0) { ret 1; }
+    ret 0;
+}
+
+test "parse_f64: round-to-even ties and carry-out" {
+    # exact midpoint 1.0 <-> 1+2^-52 -> round to even (down) = 1.0
+    if (pbits("1.00000000000000011102230246251565404236316680908203125") != 0x3FF0000000000000) { ret 1; }
+    # exact midpoint 1+2^-52 <-> 1+2*2^-52 -> round to even (up) = ...0002
+    if (pbits("1.00000000000000033306690738754696212708950042724609375") != 0x3FF0000000000002) { ret 1; }
+    # exact midpoint just below 1.0 -> round to even = 1.0 (exercises the q==2^53 carry-out)
+    if (pbits("0.99999999999999994448884876874217606037855148315429687500") != 0x3FF0000000000000) { ret 1; }
+    ret 0;
+}
+
+# the truncation tie: matches the 1.0 <-> 1+2^-52 midpoint to 768 significant
+# digits, then a nonzero 769th digit -> strictly above the midpoint, must round UP.
+# without the sticky bit this is misread as an exact tie and rounds to-even (down).
+test "parse_f64: 768-digit truncation tie rounds up (sticky)" {
+    var buf: [1024]u8;
+    val prefix: str = "1.00000000000000011102230246251565404236316680908203125";
+    var n: usize = 0;
+    var k: usize = 0;
+    for (prefix[k] != 0) {
+        buf[n] = prefix[k];
+        n = n + 1;
+        k = k + 1;
+    }
+    var z: usize = 0;
+    for (z < 714) {
+        buf[n] = '0';
+        n = n + 1;
+        z = z + 1;
+    }
+    buf[n] = '1';
+    n = n + 1;
+    buf[n] = 0;
+    if (pbits(?buf[0]) != 0x3FF0000000000001) { ret 1; }
+    ret 0;
+}
+
+test "parse_f64: overflow / underflow boundaries" {
+    if (pbits("1e320") != 0x7FF0000000000000) { ret 1; }
+    if (pbits("1e321") != 0x7FF0000000000000) { ret 1; }
+    if (pbits("1e-340") != 0) { ret 1; }
+    if (pbits("1e-341") != 0) { ret 1; }
+    if (pbits("4.9e-324") != 1) { ret 1; }
+    if (pbits("2.4e-324") != 0) { ret 1; }
     ret 0;
 }
