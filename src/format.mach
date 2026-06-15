@@ -157,6 +157,169 @@ pub fun write_ptr(w: *writer.Writer, p: ptr) Result[usize, str] {
     ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
 }
 
+# fixed-capacity big integer used by the dragon4 float formatter. limbs are
+# little-endian 32-bit; n counts active limbs (n == 0 is zero, no leading-zero
+# limbs). 128 limbs (4096 bits) comfortably covers every f64 (<= ~1100 bits).
+rec Big {
+    n: usize;
+    d: [128]u32;
+}
+
+# big_zero: set b to zero.
+fun big_zero(b: *Big) {
+    b.n = 0;
+}
+
+# big_norm: drop leading-zero limbs so n is exact.
+fun big_norm(b: *Big) {
+    for (b.n > 0 && b.d[b.n - 1] == 0) {
+        b.n = b.n - 1;
+    }
+}
+
+# big_from_u64: set b to v.
+fun big_from_u64(b: *Big, v: u64) {
+    b.d[0] = (v & 0xFFFFFFFF)::u32;
+    b.d[1] = (v >> 32)::u32;
+    b.n = 2;
+    big_norm(b);
+}
+
+# big_is_zero: true iff b == 0.
+fun big_is_zero(b: *Big) bool {
+    ret b.n == 0;
+}
+
+# big_to_u64: low 64 bits of b (exact when b < 2^64). used by tests.
+fun big_to_u64(b: *Big) u64 {
+    if (b.n == 0) { ret 0; }
+    if (b.n == 1) { ret b.d[0]::u64; }
+    ret b.d[0]::u64 | (b.d[1]::u64 << 32);
+}
+
+# big_copy: dst = src.
+fun big_copy(dst: *Big, src: *Big) {
+    dst.n = src.n;
+    var i: usize = 0;
+    for (i < src.n) {
+        dst.d[i] = src.d[i];
+        i = i + 1;
+    }
+}
+
+# big_cmp: -1 if a < b, 0 if equal, 1 if a > b.
+fun big_cmp(a: *Big, b: *Big) i64 {
+    if (a.n != b.n) {
+        if (a.n < b.n) { ret -1; }
+        ret 1;
+    }
+    var i: usize = a.n;
+    for (i > 0) {
+        i = i - 1;
+        if (a.d[i] != b.d[i]) {
+            if (a.d[i] < b.d[i]) { ret -1; }
+            ret 1;
+        }
+    }
+    ret 0;
+}
+
+# big_mul_small: b = b * m.
+fun big_mul_small(b: *Big, m: u32) {
+    if (b.n == 0 || m == 0) { big_zero(b); ret; }
+    var carry: u64 = 0;
+    var i: usize = 0;
+    for (i < b.n) {
+        val cur: u64 = b.d[i]::u64 * m::u64 + carry;
+        b.d[i] = (cur & 0xFFFFFFFF)::u32;
+        carry = cur >> 32;
+        i = i + 1;
+    }
+    if (carry > 0) {
+        b.d[b.n] = (carry & 0xFFFFFFFF)::u32;
+        b.n = b.n + 1;
+    }
+}
+
+# big_shl: b = b << bits (multiply by 2^bits).
+fun big_shl(b: *Big, bits: usize) {
+    if (b.n == 0 || bits == 0) { ret; }
+    val limb_shift: usize = bits / 32;
+    val bit_shift: usize = bits % 32;
+    if (bit_shift > 0) {
+        var carry: u64 = 0;
+        var i: usize = 0;
+        for (i < b.n) {
+            val v: u64 = (b.d[i]::u64 << bit_shift) | carry;
+            b.d[i] = (v & 0xFFFFFFFF)::u32;
+            carry = v >> 32;
+            i = i + 1;
+        }
+        if (carry > 0) {
+            b.d[b.n] = (carry & 0xFFFFFFFF)::u32;
+            b.n = b.n + 1;
+        }
+    }
+    if (limb_shift > 0) {
+        var i: usize = b.n;
+        for (i > 0) {
+            i = i - 1;
+            b.d[i + limb_shift] = b.d[i];
+        }
+        var j: usize = 0;
+        for (j < limb_shift) {
+            b.d[j] = 0;
+            j = j + 1;
+        }
+        b.n = b.n + limb_shift;
+    }
+}
+
+# big_add: a = a + b.
+fun big_add(a: *Big, b: *Big) {
+    var maxn: usize = a.n;
+    if (b.n > maxn) { maxn = b.n; }
+    var carry: u64 = 0;
+    var i: usize = 0;
+    for (i < maxn) {
+        var av: u64 = 0;
+        if (i < a.n) { av = a.d[i]::u64; }
+        var bv: u64 = 0;
+        if (i < b.n) { bv = b.d[i]::u64; }
+        val s: u64 = av + bv + carry;
+        a.d[i] = (s & 0xFFFFFFFF)::u32;
+        carry = s >> 32;
+        i = i + 1;
+    }
+    a.n = maxn;
+    if (carry > 0) {
+        a.d[a.n] = (carry & 0xFFFFFFFF)::u32;
+        a.n = a.n + 1;
+    }
+    big_norm(a);
+}
+
+# big_sub: a = a - b, requires a >= b.
+fun big_sub(a: *Big, b: *Big) {
+    var borrow: i64 = 0;
+    var i: usize = 0;
+    for (i < a.n) {
+        var bv: i64 = 0;
+        if (i < b.n) { bv = b.d[i]::i64; }
+        var t: i64 = a.d[i]::i64 - bv - borrow;
+        if (t < 0) {
+            t = t + 0x100000000;
+            borrow = 1;
+        }
+        or {
+            borrow = 0;
+        }
+        a.d[i] = t::u32;
+        i = i + 1;
+    }
+    big_norm(a);
+}
+
 pub val ERR_BAD_FORMAT: str = "bad format";
 
 # aarch64 varargs is deferred to v1.6.x (#276): gate the variadic surface so
@@ -368,3 +531,45 @@ test "variadic: baseline f64 vararg" {
     ret 0;
 }
 }  # end $if (arch != aarch64) — varargs deferred to v1.6.x (#276)
+
+test "bignum: from_u64 / to_u64 roundtrip" {
+    var a: Big;
+    big_from_u64(?a, 0);
+    if (!big_is_zero(?a)) { ret 1; }
+    big_from_u64(?a, 123456789);
+    if (big_to_u64(?a) != 123456789) { ret 1; }
+    big_from_u64(?a, 0xFFFFFFFFFF);
+    if (big_to_u64(?a) != 0xFFFFFFFFFF) { ret 1; }
+    ret 0;
+}
+
+test "bignum: mul_small and shl" {
+    var a: Big;
+    big_from_u64(?a, 123);
+    big_mul_small(?a, 10);
+    if (big_to_u64(?a) != 1230) { ret 1; }
+    big_from_u64(?a, 1);
+    big_shl(?a, 40);
+    if (big_to_u64(?a) != 0x10000000000) { ret 1; }
+    big_from_u64(?a, 0xFFFFFFFF);
+    big_mul_small(?a, 16);
+    if (big_to_u64(?a) != 0xFFFFFFFF0) { ret 1; }
+    ret 0;
+}
+
+test "bignum: add / sub / cmp" {
+    var a: Big;
+    var b: Big;
+    big_from_u64(?a, 0xFFFFFFFF);
+    big_from_u64(?b, 1);
+    big_add(?a, ?b);
+    if (big_to_u64(?a) != 0x100000000) { ret 1; }
+    big_sub(?a, ?b);
+    if (big_to_u64(?a) != 0xFFFFFFFF) { ret 1; }
+    big_from_u64(?a, 1000);
+    big_from_u64(?b, 999);
+    if (big_cmp(?a, ?b) != 1) { ret 1; }
+    if (big_cmp(?b, ?a) != -1) { ret 1; }
+    if (big_cmp(?a, ?a) != 0) { ret 1; }
+    ret 0;
+}
