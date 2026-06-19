@@ -1,6 +1,17 @@
 # formatting primitives.
 #
 # writes formatted data to any io.Writer without allocation.
+#
+# format strings fill `{}` holes from the arguments in order, each rendered by
+# its type: signed/unsigned integers (any width) in decimal, str as text, ptr as
+# 0x-hex, f64 as the shortest round-trippable decimal. bool and char share u8's
+# representation, so they render as their numeric value — a bool prints 1 or 0;
+# reach for the `{:c}` spec to render an integer's low byte as a character.
+#
+# a hole may carry a spec after `:` — `x`/`X` for lower/upper hex, `c` for a
+# low-byte char, a decimal minimum width, and a leading `0` to zero-pad rather
+# than space-pad (e.g. `{:x}`, `{:c}`, `{:5}`, `{:08x}`). `{{` and `}}` emit
+# literal braces. a hole/argument count mismatch is an error in either direction.
 
 use std.types.bool.bool;
 use std.types.bool.true;
