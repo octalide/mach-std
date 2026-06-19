@@ -47,14 +47,14 @@ pub fun dnit[T](vec: *Vector[T]) bool {
         ret true;
     }
 
-    val res: i64 = allo.deallocate[T](vec.alloc, vec.data, vec.cap);
-    if (res == 0) {
+    val freed: bool = is_ok[bool, str](allo.deallocate[T](vec.alloc, vec.data, vec.cap));
+    if (freed) {
         vec.data = nil;
         vec.len = 0;
         vec.cap = 0;
     }
 
-    ret res == 0;
+    ret freed;
 }
 
 # is_empty: check if the vector is empty.

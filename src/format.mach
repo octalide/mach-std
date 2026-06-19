@@ -4,7 +4,10 @@
 #
 # format strings fill `{}` holes from the arguments in order, each rendered by
 # its type: signed/unsigned integers (any width) in decimal, str as text, ptr as
-# 0x-hex, f64 as the shortest round-trippable decimal. bool and char share u8's
+# 0x-hex, f64 as the shortest round-trippable decimal. f32 widens to f64 (an
+# exact widening) and prints as that value, so it has no f32-specific shortest
+# round-trip — an inexact f32 shows the full f64 expansion of its widened value.
+# bool and char share u8's
 # representation, so they render as their numeric value — a bool prints 1 or 0;
 # reach for the `{:c}` spec to render an integer's low byte as a character.
 #
@@ -755,6 +758,7 @@ pub fun vformat(w: *writer.Writer, fmt: str, va: ...) Result[usize, str] {
         $if      ($type_of(arg) == str) { fr = fmt_str_field(w, (arg::usize)::str, ?sp); }
         $or ($type_of(arg) == ptr) { fr = fmt_ptr_field(w, (arg::usize)::ptr, ?sp); }
         $or ($type_of(arg) == f64) { fr = fmt_f64_field(w, arg::f64, ?sp); }
+        # f32 widens to f64 (exact) and prints as that value — no f32 shortest round-trip.
         $or ($type_of(arg) == f32) { fr = fmt_f64_field(w, arg::f64, ?sp); }
         $or ($type_of(arg) == i64) { fr = fmt_i64(w, arg::i64, ?sp); }
         $or ($type_of(arg) == i32) { fr = fmt_i64(w, arg::i64, ?sp); }
@@ -1015,5 +1019,71 @@ test "format: forwards whole pack through format wrapper" {
     s[tb.len] = 0;
     if (is_err[usize, str](r)) { ret 1; }
     if (!str_equals(?s[0], "1-2")) { ret 2; }
+    ret 0;
+}
+
+# f32 has no shortest-round-trip of its own: the f32 dispatch arm widens to f64
+# (exact) and formats that, so an f32 renders as its f64 value. an exactly
+# representable f32 is unaffected; an inexact one shows the full f64 expansion.
+test "format: f32 widens to f64" {
+    var s: [64]u8;
+    var r: Result[usize, str];
+
+    r = fmt_capture(?s[0], 64, "{}", 0.5::f32);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "0.5")) { ret 1; }
+
+    r = fmt_capture(?s[0], 64, "{}", 1.25::f32);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "1.25")) { ret 2; }
+
+    r = fmt_capture(?s[0], 64, "{}", 2.0::f32);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "2")) { ret 3; }
+
+    r = fmt_capture(?s[0], 64, "{}", (-3.5)::f32);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "-3.5")) { ret 4; }
+
+    # 0.1 is not exactly representable in f32; widening its value (bits
+    # 0x3DCCCCCD) to f64 yields the full expansion, not "0.1".
+    var x: f32;
+    var bits: u32 = 0x3DCCCCCD;
+    mem.raw_copy(?x, ?bits, 4);
+    r = fmt_capture(?s[0], 64, "{}", x);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "0.10000000149011612")) { ret 5; }
+    ret 0;
+}
+
+# every smaller integer width widens to i64/u64 and shares fmt_i64/fmt_u64; one
+# case per width class confirms the dispatch arms and the widening.
+test "format: smaller integer widths" {
+    var s: [64]u8;
+    var r: Result[usize, str];
+
+    r = fmt_capture(?s[0], 64, "{}", (-5)::i8);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "-5")) { ret 1; }
+
+    r = fmt_capture(?s[0], 64, "{}", (-300)::i16);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "-300")) { ret 2; }
+
+    r = fmt_capture(?s[0], 64, "{}", (-70000)::i32);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "-70000")) { ret 3; }
+
+    r = fmt_capture(?s[0], 64, "{}", 65535::u16);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "65535")) { ret 4; }
+
+    r = fmt_capture(?s[0], 64, "{}", 4000000000::u32);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "4000000000")) { ret 5; }
+    ret 0;
+}
+
+# signed hex renders the two's-complement bit pattern: the value casts through
+# i64 to u64, so {:x} of a negative i64 is its full 64-bit pattern.
+test "format: negative signed hex (two's complement)" {
+    var s: [64]u8;
+    var r: Result[usize, str];
+
+    r = fmt_capture(?s[0], 64, "{:x}", (-1)::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "ffffffffffffffff")) { ret 1; }
+
+    r = fmt_capture(?s[0], 64, "{:x}", (-42)::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "ffffffffffffffd6")) { ret 2; }
     ret 0;
 }

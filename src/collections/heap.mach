@@ -49,14 +49,14 @@ pub fun dnit[T](h: *Heap[T]) bool {
         ret true;
     }
 
-    val res: i64 = allo.deallocate[T](h.alloc, h.data, h.cap);
-    if (res == 0) {
+    val freed: bool = is_ok[bool, str](allo.deallocate[T](h.alloc, h.data, h.cap));
+    if (freed) {
         h.data = nil;
         h.len = 0;
         h.cap = 0;
     }
 
-    ret res == 0;
+    ret freed;
 }
 
 # check if the heap is empty.

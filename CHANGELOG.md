@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-06-19
+
+Process spawning no longer copies the parent's address space, so `mach test`
+and other fork-heavy programs stay robust on swapless `vm.overcommit_memory=0`
+hosts. Built with the mach 2.0.1 compiler.
+
+### Fixed
+
+- os: `spawn`/`spawn_redirected` (linux) now `clone(CLONE_VM|CLONE_VFORK|
+  SIGCHLD)` the child onto a private stack and a pinned trampoline instead of
+  `fork()`. Sharing the address space skips fork's copy-on-write commit
+  accounting, so spawn no longer fails with `ENOMEM` on a swapless
+  `vm.overcommit_memory=0` host (e.g. GitHub runners), and the fix benefits
+  every fork-heavy mach program. Verified on x86_64 and aarch64 (mach#1487).
+
+### Changed
+
+- allocator: the generic `deallocate[T]` now returns `Result[bool, str]` —
+  ok(true) on success (including the nil-pointer / count == 0 no-op), err on a
+  non-zero status — aligning it with `allocate`/`reallocate`. `deallocate_raw`
+  stays the raw i64 primitive; callers that inspected the status were updated
+  (#291).
+
+### Documented
+
+- format: documented that `f32` widens to `f64` and prints as that value (no
+  f32-specific shortest round-trip), with added tests for f32 widening, the
+  smaller integer widths (i8/i16/i32, u16/u32), and negative signed hex (#293).
+
 ## [0.12.0] - 2026-06-19
 
 The v1.7 collapse — every legacy comptime spelling is gone, replaced by the
