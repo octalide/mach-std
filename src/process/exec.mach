@@ -348,3 +348,21 @@ test "exec: capture reports full length on truncation" {
     if (cap_small[1] != 'e') { ret 1; }
     ret 0;
 }
+
+# fork-heavy regression (issue mach#1487): spawn now clones the child onto a
+# private stack with a shared address space (CLONE_VM|CLONE_VFORK) instead of
+# fork()ing, allocating and freeing that stack per call. exercise it across
+# many iterations to catch a leaked or corrupted child stack.
+test "exec: repeated spawns stay correct" {
+    var i: usize = 0;
+    for (i < 64) {
+        var argv: [4]usize = argv_ok();
+        val r: Result[ExitStatus, str] = run(prog_ok(), (?argv[0])::**u8, nil);
+        if (is_err[ExitStatus, str](r)) { ret 1; }
+        val s: ExitStatus = unwrap_ok[ExitStatus, str](r);
+        if (!exited(s)) { ret 1; }
+        if (code(s) != 0) { ret 1; }
+        i = i + 1;
+    }
+    ret 0;
+}
