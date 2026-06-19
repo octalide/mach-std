@@ -52,7 +52,7 @@ pub fun separator() u8 {
 #
 # windows accepts both '/' and '\'; posix treats only '/' as a separator.
 pub fun is_separator(c: u8) bool {
-    $if ($mach.target.os == $mach.os.windows) {
+    $if ($mach.build.os == $mach.os.windows) {
         ret c == separator() || c == '/';
     }
     $or {
@@ -67,7 +67,7 @@ pub fun is_separator(c: u8) bool {
 # and on all non-windows targets. callers use it so filename/parent/is_root
 # never split inside a volume or UNC root.
 fun root_len(p: Path) usize {
-    $if ($mach.target.os == $mach.os.windows) {
+    $if ($mach.build.os == $mach.os.windows) {
         if (is_empty(p)) { ret 0; }
         val len: usize = str_len(p);
 
@@ -107,7 +107,7 @@ pub fun is_abs(p: Path) bool {
     if (p == nil) { ret false; }
     if (is_separator(p[0])) { ret true; }
 
-    $if ($mach.target.os == $mach.os.windows) {
+    $if ($mach.build.os == $mach.os.windows) {
         if (char_is_alpha(p[0]) && p[1] == ':' && is_separator(p[2])) { ret true; }
     }
 
@@ -473,7 +473,7 @@ test "path: parent root" {
 
 # windows accepts '\' as a separator alongside '/'; these are guarded
 # because '\' is a legal filename byte on posix and parses differently.
-$if ($mach.target.os == $mach.os.windows) {
+$if ($mach.build.os == $mach.os.windows) {
     test "path: is_abs with backslash root" {
         if (!is_abs("\\foo")) { ret 1; }
         ret 0;

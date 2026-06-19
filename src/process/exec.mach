@@ -177,7 +177,7 @@ pub fun exit(code: i64) {
 # the exec contract is platform-neutral, but the test programs are not;
 # the $if blocks confine the differences to program paths, argv shapes,
 # and echo's line ending (cmd appends CRLF where posix echo appends LF).
-$if ($mach.target.os == $mach.os.windows) {
+$if ($mach.build.os == $mach.os.windows) {
     var comspec_buf: [260]u8;
 
     # %ComSpec% names the command interpreter; fall back to the canonical

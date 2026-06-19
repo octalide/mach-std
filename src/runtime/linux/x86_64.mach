@@ -20,24 +20,24 @@
 #      alive, hanging the process after main returns)
 #
 # user code must define:
-#   $main.symbol = "main";
+#   `symbol("main")`
 #   fun main(argc: i64, argv: **u8) i64 { ... }
 
 use os: std.system.os.linux.x86_64;
 
-$_rt_argc.symbol = "_rt_argc";
+`symbol("_rt_argc")`
 var _rt_argc: i64 = 0;
-$_rt_argv.symbol = "_rt_argv";
+`symbol("_rt_argv")`
 var _rt_argv: u64 = 0;
-$_rt_envp.symbol = "_rt_envp";
+`symbol("_rt_envp")`
 var _rt_envp: u64 = 0;
 
-$_rt_init.symbol = "_rt_init";
+`symbol("_rt_init")`
 fun _rt_init() {
     os._envp = _rt_envp;
 }
 
-$_start.symbol = "_start";
+`symbol("_start")`
 pub fun _start() {
     asm x86_64 {
         mov rax, rsp      # rax = initial stack pointer

@@ -13,7 +13,7 @@ use std.types.string.str;
 use std.types.string.str_len;
 use std.types.string.str_starts_with;
 
-$if ($mach.target.os != $mach.os.linux) {
+$if ($mach.build.os != $mach.os.linux) {
     $error("std.system.os.linux.shared: requires linux target");
 }
 
@@ -21,7 +21,7 @@ $if ($mach.target.os != $mach.os.linux) {
 # aarch64 uses the generic asm-generic/unistd table. the aarch64 table also
 # lacks fork/vfork/symlink/dup2 entirely — clone, symlinkat, and dup3 stand in
 # (see the fork, vfork, symlink, and spawn_redirected wrappers below).
-$if ($mach.target.arch == $mach.arch.x86_64) {
+$if ($mach.build.arch == $mach.arch.x86_64) {
     val SYS_READ:          usize = 0;
     val SYS_WRITE:         usize = 1;
     val SYS_CLOSE:         usize = 3;
@@ -73,7 +73,7 @@ $if ($mach.target.arch == $mach.arch.x86_64) {
     val SYS_CLOSE_RANGE:   usize = 436;
     val SYS_DUP2:          usize = 33;
 }
-$or ($mach.target.arch == $mach.arch.aarch64) {
+$or ($mach.build.arch == $mach.arch.aarch64) {
     val SYS_READ:          usize = 63;
     val SYS_WRITE:         usize = 64;
     val SYS_CLOSE:         usize = 57;
@@ -188,7 +188,7 @@ use os_shared: std.system.os.shared;
 # by architecture: x86_64 has its own layout, while aarch64 uses the
 # asm-generic layout (st_mode/st_nlink order swapped, narrower nlink/blksize).
 # the field names are identical so consumers are arch-agnostic.
-$if ($mach.target.arch == $mach.arch.x86_64) {
+$if ($mach.build.arch == $mach.arch.x86_64) {
     pub rec stat_t {
         st_dev:        u64;
         st_ino:        u64;
@@ -212,7 +212,7 @@ $if ($mach.target.arch == $mach.arch.x86_64) {
         _reserved2:    i64;
     }
 }
-$or ($mach.target.arch == $mach.arch.aarch64) {
+$or ($mach.build.arch == $mach.arch.aarch64) {
     pub rec stat_t {
         st_dev:        u64;
         st_ino:        u64;
@@ -270,10 +270,10 @@ pub val O_APPEND:    i32 = 1024;
 
 # O_DIRECTORY differs by arch: x86_64 = 0x10000, aarch64 (asm-generic) = 0x4000.
 # 0x10000 means O_DIRECT on aarch64, so the value must be arch-gated.
-$if ($mach.target.arch == $mach.arch.x86_64) {
+$if ($mach.build.arch == $mach.arch.x86_64) {
 pub val O_DIRECTORY: i32 = 0x10000;
 }
-$or ($mach.target.arch == $mach.arch.aarch64) {
+$or ($mach.build.arch == $mach.arch.aarch64) {
 pub val O_DIRECTORY: i32 = 0x4000;
 }
 
@@ -331,14 +331,14 @@ pub val EINTR_MAX_RETRIES: usize = 8;
 # ret: syscall result (negative on error)
 pub fun syscall0(n: usize) i64 {
     var out: i64;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, {n}
             syscall
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             ldr x8, {n}
             svc 0
@@ -355,7 +355,7 @@ pub fun syscall0(n: usize) i64 {
 # ret: syscall result (negative on error)
 pub fun syscall1(n: usize, a0: usize) i64 {
     var out: i64;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, {n}
             mov rdi, {a0}
@@ -363,7 +363,7 @@ pub fun syscall1(n: usize, a0: usize) i64 {
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             ldr x8, {n}
             ldr x0, {a0}
@@ -382,7 +382,7 @@ pub fun syscall1(n: usize, a0: usize) i64 {
 # ret: syscall result (negative on error)
 pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
     var out: i64;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, {n}
             mov rdi, {a0}
@@ -391,7 +391,7 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             ldr x8, {n}
             ldr x0, {a0}
@@ -412,7 +412,7 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
 # ret: syscall result (negative on error)
 pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
     var out: i64;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, {n}
             mov rdi, {a0}
@@ -422,7 +422,7 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             ldr x8, {n}
             ldr x0, {a0}
@@ -445,7 +445,7 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
 # ret: syscall result (negative on error)
 pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
     var out: i64;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, {n}
             mov rdi, {a0}
@@ -456,7 +456,7 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             ldr x8, {n}
             ldr x0, {a0}
@@ -481,7 +481,7 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
 # ret: syscall result (negative on error)
 pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
     var out: i64;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, {n}
             mov rdi, {a0}
@@ -493,7 +493,7 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             ldr x8, {n}
             ldr x0, {a0}
@@ -520,7 +520,7 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
 # ret: syscall result (negative on error)
 pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
     var out: i64;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, {n}
             mov rdi, {a0}
@@ -533,7 +533,7 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             ldr x8, {n}
             ldr x0, {a0}
@@ -936,10 +936,10 @@ pub fun rename(olddir: i32, oldpath: *u8, newdir: i32, newpath: *u8) i64 {
 # linkpath: path of the link to create
 # ret:      0 on success, or negative errno
 pub fun symlink(target: *u8, linkpath: *u8) i64 {
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         ret syscall2(SYS_SYMLINK, target::usize, linkpath::usize);
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         # aarch64 has no symlink syscall; symlinkat against AT_FDCWD is equivalent.
         ret syscall3(SYS_SYMLINKAT, target::usize, AT_FDCWD::isize::usize, linkpath::usize);
     }
@@ -1007,10 +1007,10 @@ pub fun environ() **u8 {
 pub fun terminate(code: i64) {
     syscall1(SYS_EXIT_GROUP, code::usize);
     # exit_group never returns; trap loudly if it somehow does.
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 { hlt }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 { brk 0 }
     }
 }
@@ -1024,10 +1024,10 @@ pub fun abort() {
 # ---
 # ret: in parent: child PID (>0), in child: 0, on error: negative errno
 pub fun fork() i64 {
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         ret syscall0(SYS_FORK);
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         # aarch64 has no fork syscall; clone with SIGCHLD and no child stack
         # (child runs on a copy-on-write image of the parent stack) is fork.
         ret syscall5(SYS_CLONE, SIGCHLD, 0, 0, 0, 0);
@@ -1038,10 +1038,10 @@ pub fun fork() i64 {
 # ---
 # ret: in parent: child PID (>0), in child: 0, on error: negative errno
 pub fun vfork() i64 {
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         ret syscall0(SYS_VFORK);
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         # aarch64 has no vfork syscall; clone with CLONE_VM|CLONE_VFORK|SIGCHLD
         # and no child stack matches vfork semantics (parent suspended, child
         # shares the address space until exec/_exit). same caller contract as
@@ -1152,7 +1152,7 @@ pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, s
     if (pid == 0) {
         # aarch64 has no dup2 syscall; dup3 with flags 0 is equivalent (it
         # differs only in rejecting oldfd == newfd, which redirect fds never are).
-        $if ($mach.target.arch == $mach.arch.x86_64) {
+        $if ($mach.build.arch == $mach.arch.x86_64) {
             if (stdin_fd != -1 && syscall2(SYS_DUP2, stdin_fd::isize::usize, STDIN_FD::isize::usize) < 0) {
                 syscall1(SYS_EXIT_GROUP, 126);
             }
@@ -1163,7 +1163,7 @@ pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, s
                 syscall1(SYS_EXIT_GROUP, 126);
             }
         }
-        $or ($mach.target.arch == $mach.arch.aarch64) {
+        $or ($mach.build.arch == $mach.arch.aarch64) {
             if (stdin_fd != -1 && syscall3(SYS_DUP3, stdin_fd::isize::usize, STDIN_FD::isize::usize, 0) < 0) {
                 syscall1(SYS_EXIT_GROUP, 126);
             }

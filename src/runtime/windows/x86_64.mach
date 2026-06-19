@@ -10,16 +10,16 @@
 #   4. exits via ExitProcess with the return code from main
 #
 # user code must define:
-#   $main.symbol = "main";
+#   `symbol("main")`
 #   fun main(argc: i64, argv: **u8) i64 { ... }
 
 use std.types.size.usize;
 
-$if ($mach.target.os != $mach.os.windows) {
+$if ($mach.build.os != $mach.os.windows) {
     $error("std.runtime.windows.x86_64: requires windows target");
 }
 
-$if ($mach.target.arch != $mach.arch.x86_64) {
+$if ($mach.build.arch != $mach.arch.x86_64) {
     $error("std.runtime.windows.x86_64: requires x86_64 target");
 }
 
@@ -32,16 +32,16 @@ val MAX_ARGS: usize = 256;
 val MAX_CMDLINE: usize = 32768;
 
 # the entrypoint references these by literal name from inline asm (`[argc]`,
-# `[argv_ptrs]`, `call parse_cmdline`), so each carries a `.symbol` override to
+# `[argv_ptrs]`, `call parse_cmdline`), so each carries a `symbol` decorator to
 # keep its link name verbatim rather than mangled — mirroring the linux runtime's
 # `_rt_*` symbols.
 var cmdline_buf: [32768]u8;
-$argv_ptrs.symbol = "argv_ptrs";
+`symbol("argv_ptrs")`
 var argv_ptrs: [256]usize;
-$argc.symbol = "argc";
+`symbol("argc")`
 var argc: i64 = 0;
 
-$_start.symbol = "mainCRTStartup";
+`symbol("mainCRTStartup")`
 pub fun _start() {
     asm x86_64 {
         and rsp, -16      # align stack to 16 bytes
@@ -66,7 +66,7 @@ pub fun _start() {
 # copies the command line into cmdline_buf, splits on whitespace,
 # handles double-quote grouping (quotes are stripped from the result).
 # populates argv_ptrs and argc.
-$parse_cmdline.symbol = "parse_cmdline";
+`symbol("parse_cmdline")`
 fun parse_cmdline(cmdline: *u8) {
     if (cmdline == nil) {
         argc = 0;

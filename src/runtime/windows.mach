@@ -1,8 +1,8 @@
-$if ($mach.target.os != $mach.os.windows) {
+$if ($mach.build.os != $mach.os.windows) {
     $error("std.runtime.windows: requires windows target");
 }
 
-$if ($mach.target.arch == $mach.arch.x86_64) {
+$if ($mach.build.arch == $mach.arch.x86_64) {
     use std.runtime.windows.x86_64;
 }
 $or {
