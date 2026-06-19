@@ -46,7 +46,7 @@ val THREAD_CLONE_FLAGS: usize = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAN
 # prologue (stp x29,x30,[sp,#-16]!; mov x29,sp) then places the four args at
 # [x29+16..x29+40]. NOTE: this offset assumes that frame-record convention and
 # must be confirmed against the mach aarch64 prologue under qemu.
-$thread_trampoline.symbol = "_std_thread_trampoline";
+`symbol("_std_thread_trampoline")`
 fun thread_trampoline() {
     var fn_addr: usize = 0;
     var done_addr: usize = 0;

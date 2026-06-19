@@ -39,7 +39,7 @@ val THREAD_CLONE_FLAGS: usize = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAN
 # the symbol is pinned so the inline-asm branch can target it. at entry rsp
 # points at the argument block on the child stack, so after the prologue the
 # args sit at [rbp+8..rbp+32] exactly as if the trampoline had been called.
-$thread_trampoline.symbol = "_std_thread_trampoline";
+`symbol("_std_thread_trampoline")`
 fun thread_trampoline() {
     var fn_addr: usize = 0;
     var done_addr: usize = 0;

@@ -3,8 +3,8 @@
 # windows has no stable syscall interface. all OS interaction goes through
 # kernel32.dll and ntdll.dll via ext fun declarations, plus ws2_32.dll for
 # sockets, advapi32.dll for RtlGenRandom, and api-ms-win-core-synch-l1-2-0.dll
-# for the wait-on-address family; these are pinned with `$<sym>.library` so the
-# PE import directory attributes them to the right DLL rather than the first
+# for the wait-on-address family; these are pinned with a `library` decorator so
+# the PE import directory attributes them to the right DLL rather than the first
 # dependency. a HANDLE-to-fd mapping table bridges the POSIX-style fd interface
 # used by os.mach.
 
@@ -212,7 +212,7 @@ ext fun FindNextFileA(p0: isize, p1: *u8) i32;
 ext fun FindClose(p0: isize) i32;
 ext fun GetFinalPathNameByHandleA(p0: isize, p1: *u8, p2: u32, p3: u32) u32;
 # CreateSymbolicLinkA is exported by kernel32.dll (the first dependency), so
-# an unqualified import binds correctly without a `$<sym>.library` pin (unlike
+# an unqualified import binds correctly without a `library` decorator (unlike
 # the synch-apiset functions of #253). it returns a BOOLEAN — a single byte.
 ext fun CreateSymbolicLinkA(p0: *u8, p1: *u8, p2: u32) u8;
 
@@ -224,60 +224,49 @@ ext fun CreateThread(p0: ptr, p1: usize, p2: usize, p3: ptr, p4: u32, p5: *u32) 
 
 # WaitOnAddress / WakeByAddressSingle live in the synch apiset DLL, not kernel32.
 # real windows' kernel32 does not export them (only wine's does), so without
-# `$<sym>.library` the import binds to kernel32 and the native loader rejects the
-# exe with STATUS_ENTRYPOINT_NOT_FOUND. pin them to the canonical apiset DLL. see
-# issue #253.
-$WaitOnAddress.library = "api-ms-win-core-synch-l1-2-0.dll";
+# the `library` decorator the import binds to kernel32 and the native loader
+# rejects the exe with STATUS_ENTRYPOINT_NOT_FOUND. pin them to the canonical
+# apiset DLL. see issue #253.
+`library("api-ms-win-core-synch-l1-2-0.dll")`
 ext fun WaitOnAddress(p0: ptr, p1: ptr, p2: usize, p3: u32) i32;
-$WakeByAddressSingle.library = "api-ms-win-core-synch-l1-2-0.dll";
+`library("api-ms-win-core-synch-l1-2-0.dll")`
 ext fun WakeByAddressSingle(p0: ptr);
 
-# Winsock2 API imports (ws2_32.dll). each is pinned to ws2_32.dll with
-# `$<sym>.library`; without it an `ext` import binds to the first dependency
+# Winsock2 API imports (ws2_32.dll). each is pinned to ws2_32.dll with a
+# `library` decorator; without it an `ext` import binds to the first dependency
 # (kernel32.dll) and aborts at call time on a real loader.
 
-$WSAStartup.library = "ws2_32.dll";
+`library("ws2_32.dll")`
 ext fun WSAStartup(p0: u16, p1: *u8) i32;
-$WSAGetLastError.library = "ws2_32.dll";
+`library("ws2_32.dll")`
 ext fun WSAGetLastError() i32;
-$ws2_socket.library = "ws2_32.dll";
-$ws2_socket.symbol  = "socket";
+`library("ws2_32.dll")` `symbol("socket")`
 ext fun ws2_socket(p0: i32, p1: i32, p2: i32) usize;
-$ws2_bind.library = "ws2_32.dll";
-$ws2_bind.symbol  = "bind";
+`library("ws2_32.dll")` `symbol("bind")`
 ext fun ws2_bind(p0: usize, p1: *u8, p2: i32) i32;
-$ws2_listen.library = "ws2_32.dll";
-$ws2_listen.symbol  = "listen";
+`library("ws2_32.dll")` `symbol("listen")`
 ext fun ws2_listen(p0: usize, p1: i32) i32;
-$ws2_accept.library = "ws2_32.dll";
-$ws2_accept.symbol  = "accept";
+`library("ws2_32.dll")` `symbol("accept")`
 ext fun ws2_accept(p0: usize, p1: *u8, p2: *i32) usize;
-$ws2_connect.library = "ws2_32.dll";
-$ws2_connect.symbol  = "connect";
+`library("ws2_32.dll")` `symbol("connect")`
 ext fun ws2_connect(p0: usize, p1: *u8, p2: i32) i32;
-$ws2_sendto.library = "ws2_32.dll";
-$ws2_sendto.symbol  = "sendto";
+`library("ws2_32.dll")` `symbol("sendto")`
 ext fun ws2_sendto(p0: usize, p1: *u8, p2: i32, p3: i32, p4: *u8, p5: i32) i32;
-$ws2_recvfrom.library = "ws2_32.dll";
-$ws2_recvfrom.symbol  = "recvfrom";
+`library("ws2_32.dll")` `symbol("recvfrom")`
 ext fun ws2_recvfrom(p0: usize, p1: *u8, p2: i32, p3: i32, p4: *u8, p5: *i32) i32;
-$ws2_shutdown.library = "ws2_32.dll";
-$ws2_shutdown.symbol  = "shutdown";
+`library("ws2_32.dll")` `symbol("shutdown")`
 ext fun ws2_shutdown(p0: usize, p1: i32) i32;
-$ws2_setsockopt.library = "ws2_32.dll";
-$ws2_setsockopt.symbol  = "setsockopt";
+`library("ws2_32.dll")` `symbol("setsockopt")`
 ext fun ws2_setsockopt(p0: usize, p1: i32, p2: i32, p3: *u8, p4: i32) i32;
-$ws2_send.library = "ws2_32.dll";
-$ws2_send.symbol  = "send";
+`library("ws2_32.dll")` `symbol("send")`
 ext fun ws2_send(p0: usize, p1: *u8, p2: i32, p3: i32) i32;
-$ws2_recv.library = "ws2_32.dll";
-$ws2_recv.symbol  = "recv";
+`library("ws2_32.dll")` `symbol("recv")`
 ext fun ws2_recv(p0: usize, p1: *u8, p2: i32, p3: i32) i32;
-$closesocket.library = "ws2_32.dll";
+`library("ws2_32.dll")`
 ext fun closesocket(p0: usize) i32;
 
 # advapi32.dll
-$SystemFunction036.library = "advapi32.dll";
+`library("advapi32.dll")`
 ext fun SystemFunction036(p0: *u8, p1: u32) i32;
 
 ext fun GetCurrentProcessId() u32;
