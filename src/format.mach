@@ -735,20 +735,25 @@ pub fun vformat(w: *writer.Writer, fmt: str, va: ...) Result[usize, str] {
         if (is_err[Spec, str](spr)) { ret err[usize, str](unwrap_err[Spec, str](spr)); }
         var sp: Spec = unwrap_ok[Spec, str](spr);
 
+        # type-directed dispatch: a `$type_of` gate folds at lowering (#1472), so
+        # every arm is type-checked under each concrete arg type and only the
+        # selected arm executes. each arm casts arg to its own type — an identity
+        # cast in the taken arm; the rest are pruned before they run. unsupported
+        # types fall through to a runtime ERR_BAD_FORMAT.
         var fr: Result[usize, str];
-        $if      ($type_of(arg) == str) { fr = fmt_str_field(w, arg, ?sp); }
-        $or ($type_of(arg) == ptr) { fr = fmt_ptr_field(w, arg, ?sp); }
-        $or ($type_of(arg) == f64) { fr = fmt_f64_field(w, arg, ?sp); }
+        $if      ($type_of(arg) == str) { fr = fmt_str_field(w, (arg::usize)::str, ?sp); }
+        $or ($type_of(arg) == ptr) { fr = fmt_ptr_field(w, (arg::usize)::ptr, ?sp); }
+        $or ($type_of(arg) == f64) { fr = fmt_f64_field(w, arg::f64, ?sp); }
         $or ($type_of(arg) == f32) { fr = fmt_f64_field(w, arg::f64, ?sp); }
-        $or ($type_of(arg) == i64) { fr = fmt_i64(w, arg, ?sp); }
+        $or ($type_of(arg) == i64) { fr = fmt_i64(w, arg::i64, ?sp); }
         $or ($type_of(arg) == i32) { fr = fmt_i64(w, arg::i64, ?sp); }
         $or ($type_of(arg) == i16) { fr = fmt_i64(w, arg::i64, ?sp); }
         $or ($type_of(arg) == i8)  { fr = fmt_i64(w, arg::i64, ?sp); }
-        $or ($type_of(arg) == u64) { fr = fmt_u64(w, arg, ?sp); }
+        $or ($type_of(arg) == u64) { fr = fmt_u64(w, arg::u64, ?sp); }
         $or ($type_of(arg) == u32) { fr = fmt_u64(w, arg::u64, ?sp); }
         $or ($type_of(arg) == u16) { fr = fmt_u64(w, arg::u64, ?sp); }
         $or ($type_of(arg) == u8)  { fr = fmt_u64(w, arg::u64, ?sp); }
-        $or { $error("std.format: no formatter for this argument type"); }
+        $or { fr = err[usize, str](ERR_BAD_FORMAT); }
         if (is_err[usize, str](fr)) { ret fr; }
         total = total + unwrap_ok[usize, str](fr);
     }
@@ -882,5 +887,122 @@ test "write_f64: golden extremes (exact bits)" {
     if (!golden_bits_eq(1, "5e-324")) { ret 1; }
     if (!golden_bits_eq(0x54B249AD2594C37D, "1e100")) { ret 1; }
     if (!golden_bits_eq(0x4341C37937E08000, "10000000000000000")) { ret 1; }
+    ret 0;
+}
+
+# fmt_capture: vformat a pack into storage (null-terminated); returns the Result.
+# behavioral tests assert the captured bytes and the returned true byte count.
+fun fmt_capture(storage: *u8, cap: usize, fmt: str, va: ...) Result[usize, str] {
+    var tb: TestBuf;
+    tb.data = storage;
+    tb.len = 0;
+    tb.cap = cap;
+    var w: writer.Writer;
+    w.ctx = (?tb)::ptr;
+    w.fn_write = testbuf_write;
+    val r: Result[usize, str] = vformat(?w, fmt, va...);
+    storage[tb.len] = 0;
+    ret r;
+}
+
+# a heterogeneous format covering every dispatch arm (signed/unsigned int, str,
+# f64, char via {:c}, bool, ptr) in one runtime scan; bool and char share u8's
+# representation, so bool formats as its numeric value and {:c} renders a byte.
+test "format: mixed types -> exact bytes" {
+    var s:  [128]u8;
+    var pz: ptr = nil;
+    val r: Result[usize, str] = fmt_capture(?s[0], 128,
+        "i={} u={} s={} f={} c={:c} b={} p={}",
+        -42::i64, 7::u64, "hi", 3.5::f64, 65::u8, true, pz);
+    if (is_err[usize, str](r)) { ret 1; }
+    val want: str = "i=-42 u=7 s=hi f=3.5 c=A b=1 p=0x0";
+    if (!str_equals(?s[0], want)) { ret 2; }
+    # the count is the true bytes written, not the format-scan position.
+    if (unwrap_ok[usize, str](r) != str_len(want)) { ret 3; }
+    ret 0;
+}
+
+test "format: hex, width and zero-pad specs" {
+    var s: [64]u8;
+    var r: Result[usize, str];
+
+    r = fmt_capture(?s[0], 64, "{:x}", 255::u64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "ff")) { ret 1; }
+
+    r = fmt_capture(?s[0], 64, "{:X}", 255::u64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "FF")) { ret 2; }
+
+    r = fmt_capture(?s[0], 64, "{:08x}", 0xABCD::u64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "0000abcd")) { ret 3; }
+
+    r = fmt_capture(?s[0], 64, "[{:5}]", 42::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[   42]")) { ret 4; }
+
+    r = fmt_capture(?s[0], 64, "[{:05}]", 42::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[00042]")) { ret 5; }
+
+    # zero-pad keeps the sign ahead of the fill.
+    r = fmt_capture(?s[0], 64, "[{:05}]", -42::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[-0042]")) { ret 6; }
+
+    # strings space-pad regardless of the zero flag.
+    r = fmt_capture(?s[0], 64, "[{:5}]", "hi");
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[   hi]")) { ret 7; }
+    ret 0;
+}
+
+test "format: literal brace escapes" {
+    var s: [64]u8;
+    var r: Result[usize, str];
+
+    r = fmt_capture(?s[0], 64, "{{}}");
+    if (is_err[usize, str](r) || !str_equals(?s[0], "{}")) { ret 1; }
+
+    r = fmt_capture(?s[0], 64, "a{{{}}}b", 9::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "a{9}b")) { ret 2; }
+    ret 0;
+}
+
+test "format: arg/hole mismatch and bad-format errors" {
+    var s: [64]u8;
+    var r: Result[usize, str];
+
+    # more arguments than holes.
+    r = fmt_capture(?s[0], 64, "{}", 1::i64, 2::i64);
+    if (!is_err[usize, str](r)) { ret 1; }
+    if (!str_equals(unwrap_err[usize, str](r), ERR_FEW_HOLES)) { ret 2; }
+
+    # more holes than arguments.
+    r = fmt_capture(?s[0], 64, "{} {}", 1::i64);
+    if (!is_err[usize, str](r)) { ret 3; }
+    if (!str_equals(unwrap_err[usize, str](r), ERR_MANY_HOLES)) { ret 4; }
+
+    # an unmatched literal brace.
+    r = fmt_capture(?s[0], 64, "oops }", 1::i64);
+    if (!is_err[usize, str](r)) { ret 5; }
+    if (!str_equals(unwrap_err[usize, str](r), ERR_BAD_FORMAT)) { ret 6; }
+
+    # a malformed hole spec.
+    r = fmt_capture(?s[0], 64, "{:q}", 1::i64);
+    if (!is_err[usize, str](r)) { ret 7; }
+    if (!str_equals(unwrap_err[usize, str](r), ERR_BAD_FORMAT)) { ret 8; }
+    ret 0;
+}
+
+# exercises the whole-pack forward through the `format` wrapper into vformat.
+test "format: forwards whole pack through format wrapper" {
+    var s:  [64]u8;
+    var tb: TestBuf;
+    tb.data = ?s[0];
+    tb.len  = 0;
+    tb.cap  = 64;
+    var w: writer.Writer;
+    w.ctx = (?tb)::ptr;
+    w.fn_write = testbuf_write;
+
+    val r: Result[usize, str] = format(?w, "{}-{}", 1::i64, 2::i64);
+    s[tb.len] = 0;
+    if (is_err[usize, str](r)) { ret 1; }
+    if (!str_equals(?s[0], "1-2")) { ret 2; }
     ret 0;
 }
