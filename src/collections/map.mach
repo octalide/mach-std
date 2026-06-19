@@ -86,9 +86,9 @@ pub fun dnit[K, V](m: *Map[K, V]) bool {
     }
 
     var ok: bool = true;
-    if (allocator.deallocate[K](m.alloc, m.keys, m.cap) < 0) { ok = false; }
-    if (allocator.deallocate[V](m.alloc, m.values, m.cap) < 0) { ok = false; }
-    if (allocator.deallocate[u8](m.alloc, m.states, m.cap) < 0) { ok = false; }
+    if (is_err[bool, str](allocator.deallocate[K](m.alloc, m.keys, m.cap))) { ok = false; }
+    if (is_err[bool, str](allocator.deallocate[V](m.alloc, m.values, m.cap))) { ok = false; }
+    if (is_err[bool, str](allocator.deallocate[u8](m.alloc, m.states, m.cap))) { ok = false; }
 
     m.keys       = nil;
     m.values     = nil;
