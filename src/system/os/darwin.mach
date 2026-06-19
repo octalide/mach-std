@@ -4,14 +4,14 @@
 # consumers who need darwin-specific functionality import this module
 # directly rather than going through std.system.os.
 
-$if ($mach.target.os != $mach.os.darwin) {
+$if ($mach.build.os != $mach.os.darwin) {
     $error("std.system.os.darwin: requires darwin target");
 }
 
-$if ($mach.target.arch == $mach.arch.aarch64) {
+$if ($mach.build.arch == $mach.arch.aarch64) {
     use impl: std.system.os.darwin.aarch64;
 }
-$or ($mach.target.arch == $mach.arch.x86_64) {
+$or ($mach.build.arch == $mach.arch.x86_64) {
     use impl: std.system.os.darwin.x86_64;
 }
 $or {

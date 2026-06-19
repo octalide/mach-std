@@ -19,7 +19,7 @@ use std.types.string.str_len;
 use os_shared: std.system.os.shared;
 use atomic:    std.sync.atomic;
 
-$if ($mach.target.os != $mach.os.windows) {
+$if ($mach.build.os != $mach.os.windows) {
     $error("std.system.os.windows.shared: requires windows target");
 }
 
