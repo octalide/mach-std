@@ -1159,7 +1159,7 @@ rec spawn_ctx {
 # closes inherited fds, and execs — all stack-safe under CLONE_VM — and never
 # returns: a successful exec replaces the image, any failure exits the child
 # (126 on a failed redirect, 127 on a failed exec).
-`symbol("_std_spawn_trampoline")`
+#[symbol("_std_spawn_trampoline")]
 fun spawn_trampoline() {
     var ctx_addr: usize = 0;
     $if ($mach.build.arch == $mach.arch.x86_64) {
