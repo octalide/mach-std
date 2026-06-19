@@ -12,6 +12,8 @@ use std.types.result.unwrap_err;
 use std.types.option.Option;
 use std.types.option.is_none;
 use std.types.option.unwrap;
+use std.types.bool.bool;
+use std.types.bool.true;
 use std.types.size.usize;
 use std.types.string.str;
 
@@ -154,15 +156,21 @@ pub fun reallocate[T](a: *Allocator, p: *T, old_count: usize, new_count: usize) 
     ret ok[*T, str](unwrap_ok[ptr, str](res_reallocate_raw)::*T);
 }
 
-# deallocate: deallocate memory previously returned by alloc/zalloc for count elements.
+# deallocate: deallocate memory previously returned by alloc/zalloc for count
+# elements.
 # ---
+# a:     Allocator to use for this operation
 # p:     pointer returned by alloc/zalloc (may be nil)
 # count: number of elements to deallocate
-# ret:   0 on success, or negative errno; no-op for nil pointer or count == 0.
-pub fun deallocate[T](a: *Allocator, p: *T, count: usize) i64 {
+# ret:   ok(true) on success (including the nil-pointer / count == 0 no-op), or
+#        err on a non-zero deallocator status, mirroring allocate/reallocate.
+pub fun deallocate[T](a: *Allocator, p: *T, count: usize) Result[bool, str] {
     if (p == nil || count == 0) {
-        ret 0;
+        ret ok[bool, str](true);
     }
 
-    ret deallocate_raw(a, p::ptr, $size_of(T) * count, $align_of(T));
+    if (deallocate_raw(a, p::ptr, $size_of(T) * count, $align_of(T)) != 0) {
+        ret err[bool, str]("deallocate failed");
+    }
+    ret ok[bool, str](true);
 }

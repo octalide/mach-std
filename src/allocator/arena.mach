@@ -439,7 +439,7 @@ test "arena: free is noop for non-last allocation" {
     if (is_err[*i64, str](r2)) { ret 1; }
     val p2: *i64 = unwrap_ok[*i64, str](r2);
 
-    if (allo.deallocate[i64](?aa, p1, 2) < 0) { ret 1; }
+    if (is_err[bool, str](allo.deallocate[i64](?aa, p1, 2))) { ret 1; }
 
     p2[0] = 999;
     if (p2[0] != 999) { ret 1; }
@@ -464,7 +464,7 @@ test "arena: free last allocation rolls back" {
     if (is_err[*i64, str](r2)) { ret 1; }
     val p2: *i64 = unwrap_ok[*i64, str](r2);
 
-    if (allo.deallocate[i64](?aa, p2, 2) < 0) { ret 1; }
+    if (is_err[bool, str](allo.deallocate[i64](?aa, p2, 2))) { ret 1; }
 
     val r3: Result[*i64, str] = allo.allocate[i64](?aa, 2);
     if (is_err[*i64, str](r3)) { ret 1; }
@@ -590,5 +590,25 @@ test "arena: zero-cap arena grows on first alloc" {
     if (p1[0] != 42) { ret 1; }
 
     if (dnit(?ar) < 0) { ret 1; }
+    ret 0;
+}
+
+# generic deallocate now reports its outcome as a Result, aligning with
+# allocate/reallocate (issue #291): a real free, a nil pointer, and a zero
+# count all yield ok.
+test "allocator: generic deallocate returns ok" {
+    var pa: allo.Allocator;
+    page.make(?pa);
+
+    val r: Result[*i64, str] = allo.allocate[i64](?pa, 4);
+    if (is_err[*i64, str](r)) { ret 1; }
+    val p: *i64 = unwrap_ok[*i64, str](r);
+
+    # a real free succeeds.
+    if (is_err[bool, str](allo.deallocate[i64](?pa, p, 4))) { ret 1; }
+    # a nil pointer is a no-op that still reports ok.
+    if (is_err[bool, str](allo.deallocate[i64](?pa, nil::*i64, 4))) { ret 2; }
+    # a zero count is a no-op that still reports ok.
+    if (is_err[bool, str](allo.deallocate[i64](?pa, p, 0))) { ret 3; }
     ret 0;
 }

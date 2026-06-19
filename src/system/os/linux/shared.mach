@@ -122,10 +122,6 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
     val SYS_GETCPU:        usize = 168;
     val SYS_CLOSE_RANGE:   usize = 436;
     val SYS_DUP3:          usize = 24;
-
-    # aarch64 lacks fork/vfork syscalls; both are expressed via clone.
-    val SIGCHLD:      usize = 17;
-    val CLONE_VFORK:  usize = 0x00004000;
 }
 $or {
     $error("std.system.os.linux.shared: unsupported architecture");
@@ -142,6 +138,12 @@ pub val CLONE_FILES:   usize = 0x00000400;
 pub val CLONE_SIGHAND: usize = 0x00000800;
 pub val CLONE_THREAD:  usize = 0x00010000;
 pub val CLONE_SYSVSEM: usize = 0x00040000;
+
+# clone-flag/signal values used by vfork and the spawn fast path. SIGCHLD in
+# the low byte makes the child a normal waitable process; CLONE_VFORK suspends
+# the parent until the child execs or exits. identical across linux arches.
+val CLONE_VFORK: usize = 0x00004000;
+val SIGCHLD:     usize = 17;
 
 val MREMAP_MAYMOVE: usize = 1;
 
@@ -1114,6 +1116,103 @@ fun close_inherited_fds() {
     }
 }
 
+# spawn child stack: a private, page-multiple stack handed to the clone child
+# so it never runs on the parent's stack. the child only redirects fds, closes
+# inherited fds, and execs, so a few pages are ample.
+val SPAWN_STACK_SIZE: usize = 16384;
+
+# clone flags for the spawn fast path: CLONE_VM shares the address space (no
+# COW, so the kernel never runs fork's overcommit commit-accounting and spawn
+# cannot ENOMEM on a swapless vm.overcommit_memory=0 host — issue mach#1487),
+# CLONE_VFORK suspends the parent until the child execs or exits, and SIGCHLD
+# makes the child a normal waitable process.
+val SPAWN_CLONE_FLAGS: usize = CLONE_VM | CLONE_VFORK | SIGCHLD;
+
+# child-stack bias: the trampoline is entered with sp = stack_top - bias and
+# reads its single ctx-pointer argument from that slot after the standard
+# prologue. x86_64 keeps sp ≡ 8 (mod 16) to mirror a post-call frame; aarch64
+# keeps sp 16-byte aligned.
+$if ($mach.build.arch == $mach.arch.x86_64) {
+    val SPAWN_SP_BIAS: usize = 24;
+}
+$or ($mach.build.arch == $mach.arch.aarch64) {
+    val SPAWN_SP_BIAS: usize = 16;
+}
+
+# spawn_ctx: arguments carried across the clone boundary to the trampoline.
+# lives in the parent's frame; CLONE_VFORK keeps the parent suspended (and this
+# struct alive and stable) until the child execs or exits.
+rec spawn_ctx {
+    pathname:  *u8;
+    argv:      **u8;
+    envp:      **u8;
+    stdin_fd:  i32;
+    stdout_fd: i32;
+    stderr_fd: i32;
+}
+
+# spawn_trampoline: child-side entry, reached by a direct jump/branch from the
+# child half of clone (see spawn_redirected) so it runs on the private child
+# stack and never touches the parent's frame. at entry sp points at the
+# ctx-pointer slot; after the standard prologue it sits at [rbp+8] (x86_64) /
+# [x29+16] (aarch64), matching thread_trampoline. the child only redirects fds,
+# closes inherited fds, and execs — all stack-safe under CLONE_VM — and never
+# returns: a successful exec replaces the image, any failure exits the child
+# (126 on a failed redirect, 127 on a failed exec).
+`symbol("_std_spawn_trampoline")`
+fun spawn_trampoline() {
+    var ctx_addr: usize = 0;
+    $if ($mach.build.arch == $mach.arch.x86_64) {
+        asm x86_64 {
+            mov rax, [rbp+8]
+            mov {ctx_addr}, rax
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.aarch64) {
+        asm aarch64 {
+            ldr x0, [x29, 16]
+            str x0, {ctx_addr}
+        }
+    }
+    val ctx: *spawn_ctx = ctx_addr::*spawn_ctx;
+
+    # aarch64 has no dup2 syscall; dup3 with flags 0 is equivalent (it differs
+    # only in rejecting oldfd == newfd, which redirect fds never are).
+    $if ($mach.build.arch == $mach.arch.x86_64) {
+        if (ctx.stdin_fd != -1 && syscall2(SYS_DUP2, ctx.stdin_fd::isize::usize, STDIN_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+        if (ctx.stdout_fd != -1 && syscall2(SYS_DUP2, ctx.stdout_fd::isize::usize, STDOUT_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+        if (ctx.stderr_fd != -1 && syscall2(SYS_DUP2, ctx.stderr_fd::isize::usize, STDERR_FD::isize::usize) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.aarch64) {
+        if (ctx.stdin_fd != -1 && syscall3(SYS_DUP3, ctx.stdin_fd::isize::usize, STDIN_FD::isize::usize, 0) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+        if (ctx.stdout_fd != -1 && syscall3(SYS_DUP3, ctx.stdout_fd::isize::usize, STDOUT_FD::isize::usize, 0) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+        if (ctx.stderr_fd != -1 && syscall3(SYS_DUP3, ctx.stderr_fd::isize::usize, STDERR_FD::isize::usize, 0) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+    }
+    close_inherited_fds();
+    exec(ctx.pathname, ctx.argv, ctx.envp);
+    syscall1(SYS_EXIT_GROUP, 127);
+    # exec replaces the image and exit_group never returns; trap loudly rather
+    # than ret into a garbage frame on the child stack if the child falls through.
+    $if ($mach.build.arch == $mach.arch.x86_64) {
+        asm x86_64 { hlt }
+    }
+    $or ($mach.build.arch == $mach.arch.aarch64) {
+        asm aarch64 { brk 0 }
+    }
+}
+
 # spawn: create a child process running the given program.
 #
 # closes inherited file descriptors >= 3 in the child before exec to
@@ -1145,40 +1244,69 @@ pub fun spawn(pathname: *u8, argv: **u8, envp: **u8) i64 {
 # stderr_fd: descriptor to install as the child's stderr, or -1 to inherit
 # ret:       child PID on success, or negative errno
 pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, stdout_fd: i32, stderr_fd: i32) i64 {
-    val pid: i64 = fork();
-    if (pid < 0) {
-        ret pid;
+    var ctx: spawn_ctx;
+    ctx.pathname  = pathname;
+    ctx.argv      = argv;
+    ctx.envp      = envp;
+    ctx.stdin_fd  = stdin_fd;
+    ctx.stdout_fd = stdout_fd;
+    ctx.stderr_fd = stderr_fd;
+
+    # a private child stack keeps the child off the parent's stack; CLONE_VM
+    # then shares the address space (no COW) so spawn never trips the fork
+    # overcommit-accounting ENOMEM, and CLONE_VFORK suspends the parent until
+    # the child execs or exits (issue mach#1487).
+    val stack_base: ptr = allocate(SPAWN_STACK_SIZE);
+    if (stack_base == nil) {
+        ret ENOMEM;
     }
-    if (pid == 0) {
-        # aarch64 has no dup2 syscall; dup3 with flags 0 is equivalent (it
-        # differs only in rejecting oldfd == newfd, which redirect fds never are).
-        $if ($mach.build.arch == $mach.arch.x86_64) {
-            if (stdin_fd != -1 && syscall2(SYS_DUP2, stdin_fd::isize::usize, STDIN_FD::isize::usize) < 0) {
-                syscall1(SYS_EXIT_GROUP, 126);
-            }
-            if (stdout_fd != -1 && syscall2(SYS_DUP2, stdout_fd::isize::usize, STDOUT_FD::isize::usize) < 0) {
-                syscall1(SYS_EXIT_GROUP, 126);
-            }
-            if (stderr_fd != -1 && syscall2(SYS_DUP2, stderr_fd::isize::usize, STDERR_FD::isize::usize) < 0) {
-                syscall1(SYS_EXIT_GROUP, 126);
-            }
+    val stack_top: usize = stack_base::usize + SPAWN_STACK_SIZE;
+    val child_sp:  usize = stack_top - SPAWN_SP_BIAS;
+    @(child_sp::*usize) = (?ctx)::usize;
+
+    var flags:     usize = SPAWN_CLONE_FLAGS;
+    var stack_ptr: usize = child_sp;
+    var result:    i64 = 0;
+
+    # parent/child discrimination stays in registers: the child returns from
+    # clone with sp = child_sp and branches straight to the trampoline (never
+    # returning here); the parent (pid != 0) falls through and stores the pid.
+    # CLONE_VFORK runs the child to exec/exit before the parent resumes, so the
+    # child is gone by the time result and the stack free below execute.
+    $if ($mach.build.arch == $mach.arch.x86_64) {
+        asm x86_64 { mfence }
+        asm x86_64 {
+            mov rdi, {flags}
+            mov rsi, {stack_ptr}
+            xor rdx, rdx
+            xor r10, r10
+            xor r8, r8
+            mov rax, 56           # SYS_clone
+            syscall
+            test rax, rax
+            jz _std_spawn_trampoline
+            mov {result}, rax     # parent: pid, or negative errno on failure
         }
-        $or ($mach.build.arch == $mach.arch.aarch64) {
-            if (stdin_fd != -1 && syscall3(SYS_DUP3, stdin_fd::isize::usize, STDIN_FD::isize::usize, 0) < 0) {
-                syscall1(SYS_EXIT_GROUP, 126);
-            }
-            if (stdout_fd != -1 && syscall3(SYS_DUP3, stdout_fd::isize::usize, STDOUT_FD::isize::usize, 0) < 0) {
-                syscall1(SYS_EXIT_GROUP, 126);
-            }
-            if (stderr_fd != -1 && syscall3(SYS_DUP3, stderr_fd::isize::usize, STDERR_FD::isize::usize, 0) < 0) {
-                syscall1(SYS_EXIT_GROUP, 126);
-            }
-        }
-        close_inherited_fds();
-        exec(pathname, argv, envp);
-        syscall1(SYS_EXIT_GROUP, 127);
     }
-    ret pid;
+    $or ($mach.build.arch == $mach.arch.aarch64) {
+        asm aarch64 { dmb ish }
+        asm aarch64 {
+            ldr x0, {flags}
+            ldr x1, {stack_ptr}
+            mov x2, 0
+            mov x3, 0
+            mov x4, 0
+            mov x8, 220           # SYS_clone
+            svc 0
+            cbnz x0, 1f           # parent (pid != 0): skip the child dispatch
+            b _std_spawn_trampoline    # child (x0 == 0): branch to trampoline (no return)
+        1:
+            str x0, {result}      # parent: pid, or negative errno on failure
+        }
+    }
+
+    deallocate(stack_base, SPAWN_STACK_SIZE);
+    ret result;
 }
 
 # getpid: return the current process ID.
