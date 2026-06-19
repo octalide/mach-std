@@ -11,6 +11,7 @@ use std.types.result.ok;
 use std.types.result.err;
 use std.types.result.is_err;
 use std.types.result.unwrap_ok;
+use std.types.result.unwrap_err;
 use std.types.string.str;
 use std.types.string.str_len;
 use std.types.string.str_equals;
@@ -455,216 +456,321 @@ pub fun write_f64(w: *writer.Writer, n: f64) Result[usize, str] {
 }
 
 pub val ERR_BAD_FORMAT: str = "bad format";
+pub val ERR_FEW_HOLES:  str = "more arguments than format holes";
+pub val ERR_MANY_HOLES: str = "more format holes than arguments";
 
-# aarch64 varargs is deferred to v1.6.x (#276): gate the variadic surface so
-# the rest of std cross-compiles. the write_* primitives above stay available.
-$if ($mach.target.arch != $mach.arch.aarch64) {
-
-# vformat: format variadic arguments into a writer.
-#
-# format specifiers: %% (literal %), %s (string), %d (signed i64),
-# %u (unsigned u64), %x/%X (hex), %c (char), %p (pointer).
+# Spec: a parsed `{...}` hole spec.
 # ---
-# w:      target writer
-# format: format string
-# ap:     pointer to va_list
-# ret:    total bytes written, or an error message
-pub fun vformat(w: *writer.Writer, format: str, ap: *va_list, ...) Result[usize, str] {
-    if (w == nil || ap == nil) {
-        ret err[usize, str](ERR_BAD_FORMAT);
-    }
+# hex:   render an integer in hexadecimal
+# upper: uppercase hex digits when hex
+# chr:   render an integer's low byte as a character
+# zero:  pad to width with '0' instead of ' '
+# width: minimum field width in bytes
+rec Spec {
+    hex:   bool;
+    upper: bool;
+    chr:   bool;
+    zero:  bool;
+    width: usize;
+}
 
-    var total: usize = 0;
+# Span: a fixed-capacity buffer writer used to size a field before padding.
+rec Span {
+    buf: *u8;
+    len: usize;
+    cap: usize;
+}
+
+# span_write: Writer callback appending bytes into a Span up to its capacity.
+fun span_write(ctx: ptr, p: *u8, len: usize) Result[usize, str] {
+    val s: *Span = ctx::*Span;
     var i: usize = 0;
-
-    for (format[i] != 0) {
-        if (format[i] != '%') {
-            val r: Result[usize, str] = write_byte(w, format[i]);
-            if (is_err[usize, str](r)) { ret r; }
-            total = total + unwrap_ok[usize, str](r);
-            i = i + 1;
-            cnt;
-        }
-
-        i = i + 1;
-        val c: u8 = format[i];
-        if (c == 0) {
-            ret err[usize, str](ERR_BAD_FORMAT);
-        }
-
-        var r: Result[usize, str];
-
-        if (c == '%') {
-            r = write_byte(w, '%');
-        }
-        or (c == 's') {
-            r = write_str(w, va_arg[str](ap));
-        }
-        or (c == 'd') {
-            r = write_i64(w, va_arg[i64](ap));
-        }
-        or (c == 'u') {
-            r = write_u64(w, va_arg[u64](ap));
-        }
-        or (c == 'x') {
-            r = write_hex_u64(w, va_arg[u64](ap), false);
-        }
-        or (c == 'X') {
-            r = write_hex_u64(w, va_arg[u64](ap), true);
-        }
-        or (c == 'c') {
-            r = write_byte(w, va_arg[u8](ap));
-        }
-        or (c == 'p') {
-            r = write_ptr(w, va_arg[ptr](ap));
-        }
-        or {
-            ret err[usize, str](ERR_BAD_FORMAT);
-        }
-
-        if (is_err[usize, str](r)) { ret r; }
-        total = total + unwrap_ok[usize, str](r);
+    for (i < len) {
+        if (s.len >= s.cap) { ret err[usize, str](ERR_BAD_FORMAT); }
+        s.buf[s.len] = p[i];
+        s.len = s.len + 1;
         i = i + 1;
     }
+    ret ok[usize, str](len);
+}
+
+# parse_spec: parse a `{...}` hole, advancing *ip past the closing brace.
+# ---
+# precondition: fmt[*ip] == '{' opening a real hole (callers handle `{{`).
+# grammar: '{' [ ':' [ '0' ] [ width ] [ 'x' | 'X' | 'c' ] ] '}'
+# ip:  in/out format cursor
+# ret: the parsed spec, or ERR_BAD_FORMAT on a malformed hole
+fun parse_spec(fmt: str, ip: *usize) Result[Spec, str] {
+    var i: usize = @ip + 1;
+    var sp: Spec = Spec{ hex: false, upper: false, chr: false, zero: false, width: 0 };
+
+    if (fmt[i] == '}') {
+        @ip = i + 1;
+        ret ok[Spec, str](sp);
+    }
+    if (fmt[i] != ':') {
+        ret err[Spec, str](ERR_BAD_FORMAT);
+    }
+    i = i + 1;
+
+    if (fmt[i] == '0') {
+        sp.zero = true;
+        i = i + 1;
+    }
+    for (fmt[i] >= '0' && fmt[i] <= '9') {
+        sp.width = sp.width * 10 + (fmt[i] - '0')::usize;
+        i = i + 1;
+    }
+
+    if (fmt[i] == 'x') {
+        sp.hex = true;
+        i = i + 1;
+    }
+    or (fmt[i] == 'X') {
+        sp.hex = true;
+        sp.upper = true;
+        i = i + 1;
+    }
+    or (fmt[i] == 'c') {
+        sp.chr = true;
+        i = i + 1;
+    }
+
+    if (fmt[i] != '}') {
+        ret err[Spec, str](ERR_BAD_FORMAT);
+    }
+    @ip = i + 1;
+    ret ok[Spec, str](sp);
+}
+
+# emit_pad: write n copies of byte b to w.
+fun emit_pad(w: *writer.Writer, b: u8, n: usize) Result[usize, str] {
+    var i: usize = 0;
+    for (i < n) {
+        val r: Result[usize, str] = write_byte(w, b);
+        if (is_err[usize, str](r)) { ret r; }
+        i = i + 1;
+    }
+    ret ok[usize, str](n);
+}
+
+# emit_field: write a rendered field with width padding per spec.
+# ---
+# right-aligned; a leading '-' stays ahead of '0' padding.
+# ret: total bytes written (>= len), or an error
+fun emit_field(w: *writer.Writer, buf: *u8, len: usize, sp: *Spec) Result[usize, str] {
+    if (sp.width <= len) {
+        ret write_bytes(w, buf, len);
+    }
+    val pad: usize = sp.width - len;
+
+    if (sp.zero && len > 0 && buf[0] == '-') {
+        val r1: Result[usize, str] = write_byte(w, '-');
+        if (is_err[usize, str](r1)) { ret r1; }
+        val r2: Result[usize, str] = emit_pad(w, '0', pad);
+        if (is_err[usize, str](r2)) { ret r2; }
+        val r3: Result[usize, str] = write_bytes(w, (buf::usize + 1)::*u8, len - 1);
+        if (is_err[usize, str](r3)) { ret r3; }
+        ret ok[usize, str](sp.width);
+    }
+
+    var fill: u8 = ' ';
+    if (sp.zero) { fill = '0'; }
+    val rp: Result[usize, str] = emit_pad(w, fill, pad);
+    if (is_err[usize, str](rp)) { ret rp; }
+    val rb: Result[usize, str] = write_bytes(w, buf, len);
+    if (is_err[usize, str](rb)) { ret rb; }
+    ret ok[usize, str](sp.width);
+}
+
+# emit_literal: write literal text up to the next hole, honoring `{{`/`}}`.
+# ---
+# advances *ip and adds written bytes to *tp.
+# ret: ok(true) stopped at a hole-open `{`; ok(false) reached end of string;
+#      err on an unmatched `}` or a write failure
+fun emit_literal(w: *writer.Writer, fmt: str, ip: *usize, tp: *usize) Result[bool, str] {
+    var i: usize = @ip;
+    for (fmt[i] != 0) {
+        if (fmt[i] == '{') {
+            if (fmt[i + 1] == '{') {
+                val r: Result[usize, str] = write_byte(w, '{');
+                if (is_err[usize, str](r)) { @ip = i; ret err[bool, str](unwrap_err[usize, str](r)); }
+                @tp = @tp + unwrap_ok[usize, str](r);
+                i = i + 2;
+                cnt;
+            }
+            @ip = i;
+            ret ok[bool, str](true);
+        }
+        if (fmt[i] == '}') {
+            if (fmt[i + 1] == '}') {
+                val r: Result[usize, str] = write_byte(w, '}');
+                if (is_err[usize, str](r)) { @ip = i; ret err[bool, str](unwrap_err[usize, str](r)); }
+                @tp = @tp + unwrap_ok[usize, str](r);
+                i = i + 2;
+                cnt;
+            }
+            @ip = i;
+            ret err[bool, str](ERR_BAD_FORMAT);
+        }
+        val r: Result[usize, str] = write_byte(w, fmt[i]);
+        if (is_err[usize, str](r)) { @ip = i; ret err[bool, str](unwrap_err[usize, str](r)); }
+        @tp = @tp + unwrap_ok[usize, str](r);
+        i = i + 1;
+    }
+    @ip = i;
+    ret ok[bool, str](false);
+}
+
+# fmt_i64: format a signed integer per spec (decimal, hex of the two's-complement
+# bits, or low-byte char) with width padding.
+fun fmt_i64(w: *writer.Writer, v: i64, sp: *Spec) Result[usize, str] {
+    var scratch: [64]u8;
+    var s: Span = Span{ buf: ?scratch[0], len: 0, cap: 64 };
+    var bw: writer.Writer;
+    bw.ctx = (?s)::ptr;
+    bw.fn_write = span_write;
+
+    var r: Result[usize, str];
+    if (sp.chr) {
+        r = write_byte(?bw, v::u8);
+    }
+    or (sp.hex) {
+        r = write_hex_u64(?bw, v::u64, sp.upper);
+    }
+    or {
+        r = write_i64(?bw, v);
+    }
+    if (is_err[usize, str](r)) { ret r; }
+    ret emit_field(w, ?scratch[0], s.len, sp);
+}
+
+# fmt_u64: format an unsigned integer per spec (decimal, hex, or low-byte char)
+# with width padding.
+fun fmt_u64(w: *writer.Writer, v: u64, sp: *Spec) Result[usize, str] {
+    var scratch: [64]u8;
+    var s: Span = Span{ buf: ?scratch[0], len: 0, cap: 64 };
+    var bw: writer.Writer;
+    bw.ctx = (?s)::ptr;
+    bw.fn_write = span_write;
+
+    var r: Result[usize, str];
+    if (sp.chr) {
+        r = write_byte(?bw, v::u8);
+    }
+    or (sp.hex) {
+        r = write_hex_u64(?bw, v, sp.upper);
+    }
+    or {
+        r = write_u64(?bw, v);
+    }
+    if (is_err[usize, str](r)) { ret r; }
+    ret emit_field(w, ?scratch[0], s.len, sp);
+}
+
+# fmt_f64_field: format a float in shortest round-trip decimal with width padding.
+fun fmt_f64_field(w: *writer.Writer, v: f64, sp: *Spec) Result[usize, str] {
+    var scratch: [64]u8;
+    var s: Span = Span{ buf: ?scratch[0], len: 0, cap: 64 };
+    var bw: writer.Writer;
+    bw.ctx = (?s)::ptr;
+    bw.fn_write = span_write;
+
+    val r: Result[usize, str] = write_f64(?bw, v);
+    if (is_err[usize, str](r)) { ret r; }
+    ret emit_field(w, ?scratch[0], s.len, sp);
+}
+
+# fmt_ptr_field: format a pointer as 0x-prefixed hex with width padding.
+fun fmt_ptr_field(w: *writer.Writer, p: ptr, sp: *Spec) Result[usize, str] {
+    var scratch: [64]u8;
+    var s: Span = Span{ buf: ?scratch[0], len: 0, cap: 64 };
+    var bw: writer.Writer;
+    bw.ctx = (?s)::ptr;
+    bw.fn_write = span_write;
+
+    val r: Result[usize, str] = write_ptr(?bw, p);
+    if (is_err[usize, str](r)) { ret r; }
+    ret emit_field(w, ?scratch[0], s.len, sp);
+}
+
+# fmt_str_field: write a string with width padding (space-padded, right-aligned).
+fun fmt_str_field(w: *writer.Writer, sv: str, sp: *Spec) Result[usize, str] {
+    var n: usize = 0;
+    if (sv != nil) { n = str_len(sv); }
+    if (sp.width <= n) {
+        ret write_str(w, sv);
+    }
+    val rp: Result[usize, str] = emit_pad(w, ' ', sp.width - n);
+    if (is_err[usize, str](rp)) { ret rp; }
+    val rs: Result[usize, str] = write_str(w, sv);
+    if (is_err[usize, str](rs)) { ret rs; }
+    ret ok[usize, str](sp.width);
+}
+
+# vformat: format a comptime-variadic pack into a writer (v1.7 packs).
+#
+# holes are type-directed `{}` matched to args in order: signed/unsigned int ->
+# decimal, str -> text, ptr -> 0xHEX, f64 -> shortest round-trip decimal. specs:
+# `{:x}`/`{:X}` hex, `{:c}` low-byte char, `{:N}`/`{:0N}` minimum width. `{{` and
+# `}}` are literal-brace escapes. the arg sequence is comptime-unrolled and
+# monomorphized per call; the format scan stays at runtime.
+# ---
+# w:   target writer
+# fmt: format string
+# va:  comptime variadic argument pack
+# ret: total bytes written, or an error message
+pub fun vformat(w: *writer.Writer, fmt: str, va: ...) Result[usize, str] {
+    if (w == nil) { ret err[usize, str](ERR_BAD_FORMAT); }
+
+    var i: usize = 0;
+    var total: usize = 0;
+
+    $each arg in va {
+        val lit: Result[bool, str] = emit_literal(w, fmt, ?i, ?total);
+        if (is_err[bool, str](lit)) { ret err[usize, str](unwrap_err[bool, str](lit)); }
+        if (!unwrap_ok[bool, str](lit)) { ret err[usize, str](ERR_FEW_HOLES); }
+
+        val spr: Result[Spec, str] = parse_spec(fmt, ?i);
+        if (is_err[Spec, str](spr)) { ret err[usize, str](unwrap_err[Spec, str](spr)); }
+        var sp: Spec = unwrap_ok[Spec, str](spr);
+
+        var fr: Result[usize, str];
+        $if      ($type_of(arg) == str) { fr = fmt_str_field(w, arg, ?sp); }
+        $or ($type_of(arg) == ptr) { fr = fmt_ptr_field(w, arg, ?sp); }
+        $or ($type_of(arg) == f64) { fr = fmt_f64_field(w, arg, ?sp); }
+        $or ($type_of(arg) == f32) { fr = fmt_f64_field(w, arg::f64, ?sp); }
+        $or ($type_of(arg) == i64) { fr = fmt_i64(w, arg, ?sp); }
+        $or ($type_of(arg) == i32) { fr = fmt_i64(w, arg::i64, ?sp); }
+        $or ($type_of(arg) == i16) { fr = fmt_i64(w, arg::i64, ?sp); }
+        $or ($type_of(arg) == i8)  { fr = fmt_i64(w, arg::i64, ?sp); }
+        $or ($type_of(arg) == u64) { fr = fmt_u64(w, arg, ?sp); }
+        $or ($type_of(arg) == u32) { fr = fmt_u64(w, arg::u64, ?sp); }
+        $or ($type_of(arg) == u16) { fr = fmt_u64(w, arg::u64, ?sp); }
+        $or ($type_of(arg) == u8)  { fr = fmt_u64(w, arg::u64, ?sp); }
+        $or { $error("std.format: no formatter for this argument type"); }
+        if (is_err[usize, str](fr)) { ret fr; }
+        total = total + unwrap_ok[usize, str](fr);
+    }
+
+    val tail: Result[bool, str] = emit_literal(w, fmt, ?i, ?total);
+    if (is_err[bool, str](tail)) { ret err[usize, str](unwrap_err[bool, str](tail)); }
+    if (unwrap_ok[bool, str](tail)) { ret err[usize, str](ERR_MANY_HOLES); }
 
     ret ok[usize, str](total);
 }
 
-# format: format arguments into a writer.
+# format: format a comptime-variadic pack into a writer.
 #
-# convenience wrapper that manages va_list internally.
+# thin wrapper that forwards the whole pack to vformat.
 # ---
-# w:      target writer
-# format: format string
-# ret:    total bytes written, or an error message
-pub fun format(w: *writer.Writer, format: str, ...) Result[usize, str] {
-    var ap: va_list;
-    va_start(?ap);
-    val r: Result[usize, str] = vformat(w, format, ?ap);
-    va_end(?ap);
-    ret r;
+# w:   target writer
+# fmt: format string
+# va:  comptime variadic argument pack
+# ret: total bytes written, or an error message
+pub fun format(w: *writer.Writer, fmt: str, va: ...) Result[usize, str] {
+    ret vformat(w, fmt, va...);
 }
-
-# variadic-codegen regression coverage.
-#
-# these guard the SysV variadic lowering against two miscompiles that silently
-# re-break (mach issues #1135 / #1136): the va_list overflow cursor must skip an
-# empty-aggregate vararg, and the AL-guarded FP-register save must see the caller's
-# vector-register count survive the prologue. plus baseline va_arg smoke cases.
-
-# an empty (size-0) aggregate, passed through varargs to exercise the overflow
-# cursor advance for a zero-byte slot.
-rec VaEmpty {}
-
-# a <=16B aggregate (two GP eightbytes) and a >16B aggregate (passed by reference),
-# to cover the non-empty by-value and by-reference va_arg overflow paths alongside
-# the empty case.
-rec VaSmall { x: i64; y: i64; }
-rec VaBig   { a: i64; b: i64; c: i64; }
-
-# va_empty_then_i64: six fixed i64 params consume all six SysV GP argument
-# registers, so gp_offset == 48 on entry to the varargs and both the empty struct
-# and the i64 land in the overflow area. returns the i64 vararg; the empty slot
-# must be skipped (advanced by one eightbyte) or the i64 re-reads the empty slot.
-fun va_empty_then_i64(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, ...) i64 {
-    var ap: va_list;
-    va_start(?ap);
-    val _e: VaEmpty = va_arg[VaEmpty](?ap);
-    val n: i64 = va_arg[i64](?ap);
-    va_end(?ap);
-    ret n;
-}
-
-# va_mixed_aggregates: empty + small + scalar + big-by-ref + scalar, all forced
-# into the overflow area, returns their checksum to prove every cursor advance.
-fun va_mixed_aggregates(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64, ...) i64 {
-    var ap: va_list;
-    va_start(?ap);
-    val _e: VaEmpty = va_arg[VaEmpty](?ap);
-    val s:  VaSmall = va_arg[VaSmall](?ap);
-    val n1: i64     = va_arg[i64](?ap);
-    val g:  VaBig   = va_arg[VaBig](?ap);
-    val n2: i64     = va_arg[i64](?ap);
-    va_end(?ap);
-    ret s.x + s.y + n1 + g.a + g.b + g.c + n2;
-}
-
-# va_one_gp_then_f64: one named GP param then an f64 vararg. the prologue captures
-# p0 before the AL-guarded FP-register save; if a capture vreg is colored to the
-# vector-count register (RAX) the save's `test al,al` reads the wrong count. when
-# p0's low byte is zero (p0 == 256) a clobbered AL would be zero and skip the FP
-# save, so va_arg[f64] would read garbage.
-fun va_one_gp_then_f64(p0: i64, ...) i64 {
-    var ap: va_list;
-    va_start(?ap);
-    val x: f64 = va_arg[f64](?ap);
-    va_end(?ap);
-    ret p0 + x::i64;
-}
-
-# va_i64: a baseline integer vararg smoke case.
-fun va_i64(n: i64, ...) i64 {
-    var ap: va_list;
-    va_start(?ap);
-    val v: i64 = va_arg[i64](?ap);
-    va_end(?ap);
-    ret v;
-}
-
-# va_str: a baseline string vararg smoke case (str is a 16-byte aggregate).
-fun va_str(n: i64, ...) str {
-    var ap: va_list;
-    va_start(?ap);
-    val s: str = va_arg[str](?ap);
-    va_end(?ap);
-    ret s;
-}
-
-# va_f64: a baseline float vararg smoke case (lands in a vector register).
-fun va_f64(n: i64, ...) f64 {
-    var ap: va_list;
-    va_start(?ap);
-    val v: f64 = va_arg[f64](?ap);
-    va_end(?ap);
-    ret v;
-}
-
-test "variadic: empty-aggregate overflow cursor skips the empty slot" {
-    if (va_empty_then_i64(1, 2, 3, 4, 5, 6, VaEmpty{}, 4242) != 4242) { ret 1; }
-    ret 0;
-}
-
-test "variadic: mixed empty/small/big/scalar overflow varargs" {
-    val s: VaSmall = VaSmall{ x: 11, y: 22 };
-    val g: VaBig   = VaBig{ a: 100, b: 200, c: 300 };
-    val want: i64  = 11 + 22 + 7 + 100 + 200 + 300 + 9000;
-    if (va_mixed_aggregates(1, 2, 3, 4, 5, 6, VaEmpty{}, s, 7, g, 9000) != want) { ret 1; }
-    ret 0;
-}
-
-test "variadic: FP-save AL guard survives a zero-low-byte GP param" {
-    # p0 == 256 -> low byte 0: a clobbered AL would skip the FP save.
-    if (va_one_gp_then_f64(256, 3.0) != 259) { ret 1; }
-    # a non-zero-low-byte control case.
-    if (va_one_gp_then_f64(1, 7.0) != 8) { ret 1; }
-    ret 0;
-}
-
-test "variadic: baseline i64 vararg" {
-    if (va_i64(0, 1234567) != 1234567) { ret 1; }
-    ret 0;
-}
-
-test "variadic: baseline str vararg" {
-    if (!str_equals(va_str(0, "hello"), "hello")) { ret 1; }
-    ret 0;
-}
-
-test "variadic: baseline f64 vararg" {
-    if (va_f64(0, 1234.0)::i64 != 1234) { ret 1; }
-    ret 0;
-}
-}  # end $if (arch != aarch64) — varargs deferred to v1.6.x (#276)
 
 # test-only buffer-backed writer used to capture write_f64 output.
 rec TestBuf {
