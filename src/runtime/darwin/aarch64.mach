@@ -15,14 +15,14 @@
 #   4. exits via sys_exit with the return code from main
 #
 # user code must define:
-#   $main.symbol = "main";
+#   `symbol("main")`
 #   fun main(argc: i64, argv: **u8) i64 { ... }
 
-$if ($mach.target.os != $mach.os.darwin) {
+$if ($mach.build.os != $mach.os.darwin) {
     $error("std.runtime.darwin.aarch64: requires darwin target");
 }
 
-$if ($mach.target.arch != $mach.arch.aarch64) {
+$if ($mach.build.arch != $mach.arch.aarch64) {
     $error("std.runtime.darwin.aarch64: requires aarch64 target");
 }
 
@@ -32,12 +32,12 @@ var _rt_argc: i64 = 0;
 var _rt_argv: u64 = 0;
 var _rt_envp: u64 = 0;
 
-$_rt_init.symbol = "_rt_init";
+`symbol("_rt_init")`
 fun _rt_init() {
     os._envp = _rt_envp;
 }
 
-$_start.symbol = "start";
+`symbol("start")`
 pub fun _start() {
     asm aarch64 {
         ldr x0, [sp]      # argc -> x0 (1st argument)

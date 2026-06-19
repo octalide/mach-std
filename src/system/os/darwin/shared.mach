@@ -14,7 +14,7 @@ use std.types.string.str_len;
 use std.types.string.str_starts_with;
 use atomic: std.sync.atomic;
 
-$if ($mach.target.os != $mach.os.darwin) {
+$if ($mach.build.os != $mach.os.darwin) {
     $error("std.system.os.darwin.shared: requires darwin target");
 }
 
@@ -232,7 +232,7 @@ pub val EINTR_MAX_RETRIES: usize = 8;
 pub fun syscall0(n: usize) i64 {
     var out: i64 = 0;
     var fail: i64 = 0;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
@@ -243,7 +243,7 @@ pub fun syscall0(n: usize) i64 {
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             mov x16, {n}
             svc 0x80
@@ -259,7 +259,7 @@ pub fun syscall0(n: usize) i64 {
 pub fun syscall1(n: usize, a0: usize) i64 {
     var out: i64 = 0;
     var fail: i64 = 0;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
@@ -271,7 +271,7 @@ pub fun syscall1(n: usize, a0: usize) i64 {
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             mov x16, {n}
             mov x0, {a0}
@@ -288,7 +288,7 @@ pub fun syscall1(n: usize, a0: usize) i64 {
 pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
     var out: i64 = 0;
     var fail: i64 = 0;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
@@ -301,7 +301,7 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             mov x16, {n}
             mov x0, {a0}
@@ -319,7 +319,7 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
 pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
     var out: i64 = 0;
     var fail: i64 = 0;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
@@ -333,7 +333,7 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             mov x16, {n}
             mov x0, {a0}
@@ -352,7 +352,7 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
 pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
     var out: i64 = 0;
     var fail: i64 = 0;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
@@ -367,7 +367,7 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             mov x16, {n}
             mov x0, {a0}
@@ -387,7 +387,7 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
 pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize) i64 {
     var out: i64 = 0;
     var fail: i64 = 0;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
@@ -403,7 +403,7 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             mov x16, {n}
             mov x0, {a0}
@@ -424,7 +424,7 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
 pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize, a5: usize) i64 {
     var out: i64 = 0;
     var fail: i64 = 0;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
@@ -441,7 +441,7 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             mov {out}, rax
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             mov x16, {n}
             mov x0, {a0}
@@ -467,10 +467,10 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
 # code: exit code
 pub fun terminate(code: i64) {
     syscall1(SYS_EXIT, code::usize);
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 { hlt }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 { brk 0 }
     }
 }
@@ -728,7 +728,7 @@ pub fun fork() i64 {
     var out: i64 = 0;
     var fail: i64 = 0;
     var child: i64 = 0;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
@@ -740,7 +740,7 @@ pub fun fork() i64 {
             mov {child}, rdx
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             mov x16, {n}
             svc 0x80
@@ -774,7 +774,7 @@ pub fun vfork() i64 {
     var out: i64 = 0;
     var fail: i64 = 0;
     var child: i64 = 0;
-    $if ($mach.target.arch == $mach.arch.x86_64) {
+    $if ($mach.build.arch == $mach.arch.x86_64) {
         asm x86_64 {
             mov rax, 0x2000000
             or rax, {n}
@@ -786,7 +786,7 @@ pub fun vfork() i64 {
             mov {child}, rdx
         }
     }
-    $or ($mach.target.arch == $mach.arch.aarch64) {
+    $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             mov x16, {n}
             svc 0x80

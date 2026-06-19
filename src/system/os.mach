@@ -10,13 +10,13 @@ use std.types.string.str_len;
 
 use shared: std.system.os.shared;
 
-$if ($mach.target.os == $mach.os.linux) {
+$if ($mach.build.os == $mach.os.linux) {
     use impl: std.system.os.linux;
 }
-$or ($mach.target.os == $mach.os.darwin) {
+$or ($mach.build.os == $mach.os.darwin) {
     use impl: std.system.os.darwin;
 }
-$or ($mach.target.os == $mach.os.windows) {
+$or ($mach.build.os == $mach.os.windows) {
     use impl: std.system.os.windows;
 }
 $or {
@@ -208,7 +208,7 @@ fwd impl.thread_wake;
 # cap: buffer capacity in bytes
 # ret: full length of the path, or negative on error
 pub fun temp_dir(buf: *u8, cap: usize) i64 {
-    $if ($mach.target.os == $mach.os.windows) {
+    $if ($mach.build.os == $mach.os.windows) {
         ret impl.temp_dir(buf, cap);
     }
     $or {
@@ -218,7 +218,7 @@ pub fun temp_dir(buf: *u8, cap: usize) i64 {
     }
 }
 
-$if ($mach.target.os != $mach.os.windows) {
+$if ($mach.build.os != $mach.os.windows) {
     val TEMP_DIR_DEFAULT: str = "/tmp";
 
     # copy the posix fallback temp directory into buf under the temp_dir
