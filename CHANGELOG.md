@@ -5,15 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.0] - 2026-06-19
 
-### Known limitations
+Format and print are rebuilt on the v1.7 comptime variadic packs, which also
+**re-enables variadic formatting on aarch64-linux** — the C-style `va_list`
+machinery and its arch gates are gone, so `format`/`print` work on every target.
+Float support is now complete: correctly-rounded parsing *and* shortest
+round-trippable formatting. Built with the mach v1.7.0 compiler.
 
-- **aarch64-linux: variadic formatting is unavailable.** `std.format.format`/`vformat`
-  and `std.print.printf`/`eprintf`/`printlnf`/`eprintlnf` are arch-gated out on aarch64;
-  AAPCS64 varargs lowering is deferred to v1.6.x pending a cross-platform varargs
-  redesign. Non-variadic output (`std.print.print`/`println`/`eprint`,
-  `std.format.write_*`, all of `std.log`) is fully available. (#276)
+### Added
+
+- format: `write_f64` — correctly-rounded shortest float formatting (dragon4),
+  and a `{}` hole on an `f64` (#282).
+- text: correctly-rounded `parse_f64` (round-trippable) via exact `std.math.bignum`
+  (a fixed 128-limb big-int) (#287, #288).
+
+### Changed
+
+- format/print rewritten onto comptime variadic packs — `vformat`/`format`/
+  `printf`/`eprintf`/`printlnf`/`eprintlnf` take a `va: ...` pack consumed by
+  `$each` + `$type_of` dispatch, monomorphized per call. `{}` is type-directed
+  (integers decimal; `str`, `ptr`, `f64`), with `{:c}` (byte→char), `{:x}`/`{:X}`
+  hex, width and `0`-padding, and `{{`/`}}` escapes. Writes are `Result`-threaded,
+  the returned count is the true bytes written, and hole/arg-count mismatches
+  error both ways (`ERR_FEW_HOLES`/`ERR_MANY_HOLES`) (#282).
+- **aarch64-linux variadic formatting re-enabled** — `format`/`print` are no
+  longer arch-gated; they work on aarch64 under AAPCS64 (resolves #276) (#282).
+
+### Removed
+
+- the C-style `va_arg`/`va_start`/`va_list` machinery, replaced by comptime packs
+  (#282).
 
 ## [0.10.0] - 2026-06-13
 
