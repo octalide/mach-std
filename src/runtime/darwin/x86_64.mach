@@ -15,7 +15,7 @@
 #   4. exits via sys_exit with the return code from main
 #
 # user code must define:
-#   `symbol("main")`
+#   #[symbol("main")]
 #   fun main(argc: i64, argv: **u8) i64 { ... }
 
 $if ($mach.build.os != $mach.os.darwin) {
@@ -32,12 +32,12 @@ var _rt_argc: i64 = 0;
 var _rt_argv: u64 = 0;
 var _rt_envp: u64 = 0;
 
-`symbol("_rt_init")`
+#[symbol("_rt_init")]
 fun _rt_init() {
     os._envp = _rt_envp;
 }
 
-`symbol("start")`
+#[symbol("start")]
 pub fun _start() {
     asm x86_64 {
         mov rax, rsp      # rax = initial stack pointer
