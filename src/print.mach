@@ -95,54 +95,38 @@ pub fun eu64(n: u64) Result[usize, str] {
     ret f.write_u64(?w, n);
 }
 
-# aarch64 varargs is deferred to v1.6.x (#276): gate the variadic print API
-# so the rest of std cross-compiles. non-varargs print/println/u64 stay.
-$if ($mach.target.arch != $mach.arch.aarch64) {
-
 # formatted output to stdout.
 # ---
-# format: format string (see std.format.vformat for specifiers)
-# ret:    bytes written, or an error
-pub fun printf(format: str, ...) Result[usize, str] {
+# fmt: format string (see std.format.vformat for hole syntax)
+# va:  comptime variadic argument pack
+# ret: bytes written, or an error
+pub fun printf(fmt: str, va: ...) Result[usize, str] {
     var w: writer.Writer;
     stdout_writer(?w);
-
-    var ap: va_list;
-    va_start(?ap);
-    val r: Result[usize, str] = f.vformat(?w, format, ?ap);
-    va_end(?ap);
-
-    ret r;
+    ret f.vformat(?w, fmt, va...);
 }
 
 # formatted output to stderr.
 # ---
-# format: format string (see std.format.vformat for specifiers)
-# ret:    bytes written, or an error
-pub fun eprintf(format: str, ...) Result[usize, str] {
+# fmt: format string (see std.format.vformat for hole syntax)
+# va:  comptime variadic argument pack
+# ret: bytes written, or an error
+pub fun eprintf(fmt: str, va: ...) Result[usize, str] {
     var w: writer.Writer;
     stderr_writer(?w);
-
-    var ap: va_list;
-    va_start(?ap);
-    val r: Result[usize, str] = f.vformat(?w, format, ?ap);
-    va_end(?ap);
-
-    ret r;
+    ret f.vformat(?w, fmt, va...);
 }
 
 # formatted output to stdout followed by a newline.
 # ---
-# format: format string (see std.format.vformat for specifiers)
-# ret:    bytes written, or an error
-pub fun printlnf(format: str, ...) Result[usize, str] {
+# fmt: format string (see std.format.vformat for hole syntax)
+# va:  comptime variadic argument pack
+# ret: bytes written, or an error
+pub fun printlnf(fmt: str, va: ...) Result[usize, str] {
     var w: writer.Writer;
     stdout_writer(?w);
 
-    var ap: va_list;
-    va_start(?ap);
-    val r1: Result[usize, str] = f.vformat(?w, format, ?ap);
-    va_end(?ap);
+    val r1: Result[usize, str] = f.vformat(?w, fmt, va...);
     if (is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = f.write_newline(?w);
@@ -153,16 +137,14 @@ pub fun printlnf(format: str, ...) Result[usize, str] {
 
 # formatted output to stderr followed by a newline.
 # ---
-# format: format string (see std.format.vformat for specifiers)
-# ret:    bytes written, or an error
-pub fun eprintlnf(format: str, ...) Result[usize, str] {
+# fmt: format string (see std.format.vformat for hole syntax)
+# va:  comptime variadic argument pack
+# ret: bytes written, or an error
+pub fun eprintlnf(fmt: str, va: ...) Result[usize, str] {
     var w: writer.Writer;
     stderr_writer(?w);
 
-    var ap: va_list;
-    va_start(?ap);
-    val r1: Result[usize, str] = f.vformat(?w, format, ?ap);
-    va_end(?ap);
+    val r1: Result[usize, str] = f.vformat(?w, fmt, va...);
     if (is_err[usize, str](r1)) { ret r1; }
 
     val r2: Result[usize, str] = f.write_newline(?w);
@@ -170,4 +152,12 @@ pub fun eprintlnf(format: str, ...) Result[usize, str] {
 
     ret ok[usize, str](unwrap_ok[usize, str](r1) + unwrap_ok[usize, str](r2));
 }
-}  # end $if (arch != aarch64) — varargs deferred to v1.6.x (#276)
+
+# smoke: a pack-tailed printf forwards its (empty) pack to vformat end-to-end on
+# every target, writing nothing for an empty format.
+test "printf: forwards pack to stdout" {
+    val r: Result[usize, str] = printf("");
+    if (is_err[usize, str](r)) { ret 1; }
+    if (unwrap_ok[usize, str](r) != 0) { ret 2; }
+    ret 0;
+}
