@@ -5,17 +5,11 @@
 # the byte-wise FNV-1a used by the stdlib map's `hash_str`, exposed as an
 # `init` seed plus per-value `step_*` folds.
 
-# FNV-1a 64-bit offset basis.
-val FNV_OFFSET: u64 = 14695981039346656037;
 # FNV-1a 64-bit prime.
-val FNV_PRIME:  u64 = 1099511628211;
-
-# init: the FNV-1a seed value to begin a hash with.
-# ---
-# ret: the 64-bit offset basis
-pub fun init() u64 {
-    ret FNV_OFFSET;
-}
+pub val FNV_PRIME:  u64 = 1099511628211;
+# FNV-1a 64-bit offset basis.
+pub val FNV_OFFSET: u64 = 14695981039346656037;
+pub val FNV_INIT:   u64 = FNV_OFFSET;
 
 # step_u8: fold one byte into the running hash.
 # ---
