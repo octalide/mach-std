@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1] - 2026-06-23
+
+Restore linear-time `str_region_equals`, eliminating a whole-source scan that
+made the compiler's parser quadratic and stalled stdlib-heavy front-end builds.
+Built with mach 2.5.2.
+
+### Fixed
+
+- string: `str_region_equals` no longer calls `str_len` over the entire source
+  buffer to bounds-check. The parser's keyword matcher (`at_kw`) calls it per
+  keyword probe per token, so the whole-source scan made parsing O(file²) and
+  caused multi-second pauses during the front-end of large builds. The scan is
+  now bounded to the compared region with a NUL-terminator guard, restoring
+  linear-time comparison (#301).
+
 ## [0.14.0] - 2026-06-19
 
 Migrate all decorator syntax from backtick form to `#[attr]`. Built with mach 2.3.0.
