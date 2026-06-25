@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0] - 2026-06-25
+
+Expose the FNV-1a seed as a `pub val FNV_INIT` constant and publish the offset
+and prime, replacing the `init()` accessor. The compiler's type interners fold
+from the constant seed directly. Built with mach 2.5.9.
+
+### Changed
+
+- crypto/hash: `fnv1a` exposes `pub val FNV_INIT` (and `pub` `FNV_OFFSET` /
+  `FNV_PRIME`) instead of `pub fun init()`. Callers fold from the constant seed
+  rather than a function that returned it (#1600 on octalide/mach).
+
+### Removed
+
+- crypto/hash: `fnv1a.init()` is removed in favour of `FNV_INIT` (breaking; no
+  in-tree consumers).
+
 ## [0.14.1] - 2026-06-23
 
 Restore linear-time `str_region_equals`, eliminating a whole-source scan that
