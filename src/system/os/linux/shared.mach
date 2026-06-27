@@ -18,9 +18,10 @@ $if ($mach.build.os != $mach.os.linux) {
 }
 
 # syscall numbers are architecture-specific: x86_64 has its own table, while
-# aarch64 uses the generic asm-generic/unistd table. the aarch64 table also
-# lacks fork/vfork/symlink/dup2 entirely — clone, symlinkat, and dup3 stand in
-# (see the fork, vfork, symlink, and spawn_redirected wrappers below).
+# aarch64 and riscv64 both use the generic asm-generic/unistd table. those tables
+# lack fork/vfork/symlink/dup2 entirely — clone, symlinkat, and dup3 stand in
+# (see the fork, vfork, symlink, and spawn_redirected wrappers below). riscv64 also
+# lacks the legacy renameat, so its table carries renameat2 instead.
 $if ($mach.build.arch == $mach.arch.x86_64) {
     val SYS_READ:          usize = 0;
     val SYS_WRITE:         usize = 1;
@@ -123,6 +124,58 @@ $or ($mach.build.arch == $mach.arch.aarch64) {
     val SYS_CLOSE_RANGE:   usize = 436;
     val SYS_DUP3:          usize = 24;
 }
+$or ($mach.build.arch == $mach.arch.riscv64) {
+    val SYS_READ:          usize = 63;
+    val SYS_WRITE:         usize = 64;
+    val SYS_CLOSE:         usize = 57;
+    val SYS_FSTAT:         usize = 80;
+    val SYS_LSEEK:         usize = 62;
+    val SYS_MMAP:          usize = 222;
+    val SYS_MPROTECT:      usize = 226;
+    val SYS_MUNMAP:        usize = 215;
+    val SYS_BRK:           usize = 214;
+    val SYS_MREMAP:        usize = 216;
+    val SYS_MSYNC:         usize = 227;
+    val SYS_MADVISE:       usize = 233;
+    val SYS_NANOSLEEP:     usize = 101;
+    val SYS_GETPID:        usize = 172;
+    val SYS_CLONE:         usize = 220;
+    val SYS_EXECVE:        usize = 221;
+    val SYS_EXIT:          usize = 93;
+    val SYS_EXIT_GROUP:    usize = 94;
+    val SYS_WAIT4:         usize = 260;
+    val SYS_PIPE2:         usize = 59;
+    val SYS_GETCWD:        usize = 17;
+    val SYS_MLOCK:         usize = 228;
+    val SYS_MUNLOCK:       usize = 229;
+    val SYS_GETDENTS64:    usize = 61;
+    val SYS_CLOCK_GETTIME: usize = 113;
+    val SYS_MBIND:         usize = 235;
+    val SYS_GET_MEMPOLICY: usize = 236;
+    val SYS_OPENAT:        usize = 56;
+    val SYS_MKDIRAT:       usize = 34;
+    val SYS_NEWFSTATAT:    usize = 79;
+    val SYS_UNLINKAT:      usize = 35;
+    # riscv lacks __ARCH_WANT_RENAMEAT, so the legacy renameat (38) is unimplemented
+    # (ENOSYS); renameat2 (276) stands in (see the rename wrapper below).
+    val SYS_RENAMEAT2:     usize = 276;
+    val SYS_FACCESSAT:     usize = 48;
+    val SYS_SYMLINKAT:     usize = 36;
+    pub val SYS_FUTEX:     usize = 98;
+    val SYS_SENDTO:        usize = 206;
+    val SYS_RECVFROM:      usize = 207;
+    val SYS_SHUTDOWN:      usize = 210;
+    val SYS_BIND:          usize = 200;
+    val SYS_LISTEN:        usize = 201;
+    val SYS_SETSOCKOPT:    usize = 208;
+    val SYS_SOCKET:        usize = 198;
+    val SYS_CONNECT:       usize = 203;
+    val SYS_ACCEPT:        usize = 202;
+    val SYS_GETRANDOM:     usize = 278;
+    val SYS_GETCPU:        usize = 168;
+    val SYS_CLOSE_RANGE:   usize = 436;
+    val SYS_DUP3:          usize = 24;
+}
 $or {
     $error("std.system.os.linux.shared: unsupported architecture");
 }
@@ -187,7 +240,7 @@ use os_shared: std.system.os.shared;
 # kernel ABI types
 
 # stat_t: linux stat structure for file metadata. the kernel struct differs
-# by architecture: x86_64 has its own layout, while aarch64 uses the
+# by architecture: x86_64 has its own layout, while aarch64 and riscv64 share the
 # asm-generic layout (st_mode/st_nlink order swapped, narrower nlink/blksize).
 # the field names are identical so consumers are arch-agnostic.
 $if ($mach.build.arch == $mach.arch.x86_64) {
@@ -215,6 +268,30 @@ $if ($mach.build.arch == $mach.arch.x86_64) {
     }
 }
 $or ($mach.build.arch == $mach.arch.aarch64) {
+    pub rec stat_t {
+        st_dev:        u64;
+        st_ino:        u64;
+        st_mode:       u32;
+        st_nlink:      u32;
+        st_uid:        u32;
+        st_gid:        u32;
+        st_rdev:       u64;
+        _pad1:         u64;
+        st_size:       i64;
+        st_blksize:    i32;
+        _pad2:         i32;
+        st_blocks:     i64;
+        st_atime:      i64;
+        st_atime_nsec: i64;
+        st_mtime:      i64;
+        st_mtime_nsec: i64;
+        st_ctime:      i64;
+        st_ctime_nsec: i64;
+        _unused4:      u32;
+        _unused5:      u32;
+    }
+}
+$or ($mach.build.arch == $mach.arch.riscv64) {
     pub rec stat_t {
         st_dev:        u64;
         st_ino:        u64;
@@ -270,12 +347,16 @@ pub val O_EXCL:      i32 = 128;
 pub val O_TRUNC:     i32 = 512;
 pub val O_APPEND:    i32 = 1024;
 
-# O_DIRECTORY differs by arch: x86_64 = 0x10000, aarch64 (asm-generic) = 0x4000.
-# 0x10000 means O_DIRECT on aarch64, so the value must be arch-gated.
+# O_DIRECTORY differs by arch: x86_64 = 0x10000, asm-generic (aarch64, riscv64) =
+# 0x4000. 0x10000 means O_DIRECT on the asm-generic arches, so the value must be
+# arch-gated.
 $if ($mach.build.arch == $mach.arch.x86_64) {
 pub val O_DIRECTORY: i32 = 0x10000;
 }
 $or ($mach.build.arch == $mach.arch.aarch64) {
+pub val O_DIRECTORY: i32 = 0x4000;
+}
+$or ($mach.build.arch == $mach.arch.riscv64) {
 pub val O_DIRECTORY: i32 = 0x4000;
 }
 
@@ -347,6 +428,13 @@ pub fun syscall0(n: usize) i64 {
             str x0, {out}
         }
     }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 {
+            ld a7, {n}
+            ecall
+            sd a0, {out}
+        }
+    }
     ret out;
 }
 
@@ -371,6 +459,14 @@ pub fun syscall1(n: usize, a0: usize) i64 {
             ldr x0, {a0}
             svc 0
             str x0, {out}
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 {
+            ld a7, {n}
+            ld a0, {a0}
+            ecall
+            sd a0, {out}
         }
     }
     ret out;
@@ -400,6 +496,15 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
             ldr x1, {a1}
             svc 0
             str x0, {out}
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 {
+            ld a7, {n}
+            ld a0, {a0}
+            ld a1, {a1}
+            ecall
+            sd a0, {out}
         }
     }
     ret out;
@@ -432,6 +537,16 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
             ldr x2, {a2}
             svc 0
             str x0, {out}
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 {
+            ld a7, {n}
+            ld a0, {a0}
+            ld a1, {a1}
+            ld a2, {a2}
+            ecall
+            sd a0, {out}
         }
     }
     ret out;
@@ -467,6 +582,17 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
             ldr x3, {a3}
             svc 0
             str x0, {out}
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 {
+            ld a7, {n}
+            ld a0, {a0}
+            ld a1, {a1}
+            ld a2, {a2}
+            ld a3, {a3}
+            ecall
+            sd a0, {out}
         }
     }
     ret out;
@@ -505,6 +631,18 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             ldr x4, {a4}
             svc 0
             str x0, {out}
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 {
+            ld a7, {n}
+            ld a0, {a0}
+            ld a1, {a1}
+            ld a2, {a2}
+            ld a3, {a3}
+            ld a4, {a4}
+            ecall
+            sd a0, {out}
         }
     }
     ret out;
@@ -546,6 +684,19 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
             ldr x5, {a5}
             svc 0
             str x0, {out}
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 {
+            ld a7, {n}
+            ld a0, {a0}
+            ld a1, {a1}
+            ld a2, {a2}
+            ld a3, {a3}
+            ld a4, {a4}
+            ld a5, {a5}
+            ecall
+            sd a0, {out}
         }
     }
     ret out;
@@ -926,7 +1077,13 @@ pub fun unlink(dirfd: i32, path: *u8, flags: i32) i64 {
 # newpath: destination path
 # ret:     0 on success, or negative errno
 pub fun rename(olddir: i32, oldpath: *u8, newdir: i32, newpath: *u8) i64 {
-    ret syscall4(SYS_RENAMEAT, olddir::isize::usize, oldpath::usize, newdir::isize::usize, newpath::usize);
+    $if ($mach.build.arch == $mach.arch.riscv64) {
+        # riscv has no legacy renameat; renameat2 with flags 0 is equivalent.
+        ret syscall5(SYS_RENAMEAT2, olddir::isize::usize, oldpath::usize, newdir::isize::usize, newpath::usize, 0);
+    }
+    $or {
+        ret syscall4(SYS_RENAMEAT, olddir::isize::usize, oldpath::usize, newdir::isize::usize, newpath::usize);
+    }
 }
 
 # symlink: create a symbolic link at linkpath pointing to target.
@@ -943,6 +1100,10 @@ pub fun symlink(target: *u8, linkpath: *u8) i64 {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         # aarch64 has no symlink syscall; symlinkat against AT_FDCWD is equivalent.
+        ret syscall3(SYS_SYMLINKAT, target::usize, AT_FDCWD::isize::usize, linkpath::usize);
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # riscv has no symlink syscall; symlinkat against AT_FDCWD is equivalent.
         ret syscall3(SYS_SYMLINKAT, target::usize, AT_FDCWD::isize::usize, linkpath::usize);
     }
 }
@@ -1015,6 +1176,9 @@ pub fun terminate(code: i64) {
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 { brk 0 }
     }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 { ebreak }
+    }
 }
 
 # abort: abort the process immediately with exit code 255.
@@ -1034,6 +1198,11 @@ pub fun fork() i64 {
         # (child runs on a copy-on-write image of the parent stack) is fork.
         ret syscall5(SYS_CLONE, SIGCHLD, 0, 0, 0, 0);
     }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # riscv has no fork syscall; clone with SIGCHLD and no child stack
+        # (child runs on a copy-on-write image of the parent stack) is fork.
+        ret syscall5(SYS_CLONE, SIGCHLD, 0, 0, 0, 0);
+    }
 }
 
 # vfork: create child process sharing memory with parent.
@@ -1045,6 +1214,13 @@ pub fun vfork() i64 {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         # aarch64 has no vfork syscall; clone with CLONE_VM|CLONE_VFORK|SIGCHLD
+        # and no child stack matches vfork semantics (parent suspended, child
+        # shares the address space until exec/_exit). same caller contract as
+        # the x86_64 vfork: the child must only exec or _exit.
+        ret syscall5(SYS_CLONE, CLONE_VM | CLONE_VFORK | SIGCHLD, 0, 0, 0, 0);
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # riscv has no vfork syscall; clone with CLONE_VM|CLONE_VFORK|SIGCHLD
         # and no child stack matches vfork semantics (parent suspended, child
         # shares the address space until exec/_exit). same caller contract as
         # the x86_64 vfork: the child must only exec or _exit.
@@ -1131,11 +1307,14 @@ val SPAWN_CLONE_FLAGS: usize = CLONE_VM | CLONE_VFORK | SIGCHLD;
 # child-stack bias: the trampoline is entered with sp = stack_top - bias and
 # reads its single ctx-pointer argument from that slot after the standard
 # prologue. x86_64 keeps sp ≡ 8 (mod 16) to mirror a post-call frame; aarch64
-# keeps sp 16-byte aligned.
+# and riscv64 keep sp 16-byte aligned.
 $if ($mach.build.arch == $mach.arch.x86_64) {
     val SPAWN_SP_BIAS: usize = 24;
 }
 $or ($mach.build.arch == $mach.arch.aarch64) {
+    val SPAWN_SP_BIAS: usize = 16;
+}
+$or ($mach.build.arch == $mach.arch.riscv64) {
     val SPAWN_SP_BIAS: usize = 16;
 }
 
@@ -1174,6 +1353,13 @@ fun spawn_trampoline() {
             str x0, {ctx_addr}
         }
     }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # riscv64 s0 is pinned at the entry sp, so the ctx slot sits at 0(s0).
+        asm riscv64 {
+            ld a0, 0(s0)
+            sd a0, {ctx_addr}
+        }
+    }
     val ctx: *spawn_ctx = ctx_addr::*spawn_ctx;
 
     # aarch64 has no dup2 syscall; dup3 with flags 0 is equivalent (it differs
@@ -1200,6 +1386,19 @@ fun spawn_trampoline() {
             syscall1(SYS_EXIT_GROUP, 126);
         }
     }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # riscv has no dup2 syscall; dup3 with flags 0 is equivalent (it differs
+        # only in rejecting oldfd == newfd, which redirect fds never are).
+        if (ctx.stdin_fd != -1 && syscall3(SYS_DUP3, ctx.stdin_fd::isize::usize, STDIN_FD::isize::usize, 0) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+        if (ctx.stdout_fd != -1 && syscall3(SYS_DUP3, ctx.stdout_fd::isize::usize, STDOUT_FD::isize::usize, 0) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+        if (ctx.stderr_fd != -1 && syscall3(SYS_DUP3, ctx.stderr_fd::isize::usize, STDERR_FD::isize::usize, 0) < 0) {
+            syscall1(SYS_EXIT_GROUP, 126);
+        }
+    }
     close_inherited_fds();
     exec(ctx.pathname, ctx.argv, ctx.envp);
     syscall1(SYS_EXIT_GROUP, 127);
@@ -1210,6 +1409,9 @@ fun spawn_trampoline() {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 { brk 0 }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 { ebreak }
     }
 }
 
@@ -1302,6 +1504,22 @@ pub fun spawn_redirected(pathname: *u8, argv: **u8, envp: **u8, stdin_fd: i32, s
             b _std_spawn_trampoline    # child (x0 == 0): branch to trampoline (no return)
         1:
             str x0, {result}      # parent: pid, or negative errno on failure
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 { fence }
+        asm riscv64 {
+            ld a0, {flags}
+            ld a1, {stack_ptr}
+            li a2, 0
+            li a3, 0
+            li a4, 0
+            li a7, 220           # SYS_clone
+            ecall
+            bnez a0, 1f          # parent (pid != 0): skip the child dispatch
+            tail _std_spawn_trampoline    # child (a0 == 0): jump to trampoline (no return)
+        1:
+            sd a0, {result}      # parent: pid, or negative errno on failure
         }
     }
 
