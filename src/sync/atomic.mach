@@ -10,6 +10,10 @@
 #   - aarch64: LDAR / STLR give acquire/release; the LDAXR/STLXR loop with a
 #     trailing DMB ISH provides seq-cst read-modify-write; DMB ISH is the
 #     standalone full barrier; YIELD is the spin hint.
+#   - riscv64: the A extension provides seq-cst read-modify-write via the
+#     .aqrl-suffixed AMOs (amoadd/amoswap) and the lr.d/sc.d reservation loop;
+#     a plain aligned ld bracketed by full FENCEs is the seq-cst load; FENCE is
+#     the standalone full barrier; PAUSE is the spin hint.
 
 use std.types.bool.bool;
 use std.types.bool.true;
@@ -39,6 +43,17 @@ pub fun load(ptr: *i64) i64 {
             str x9, {result}
         }
     }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # full fences bracket a plain aligned ld for a seq-cst load
+        # {ptr} binds to a stack slot, so stage the address in a0 first
+        asm riscv64 {
+            ld a0, {ptr}
+            fence
+            ld a1, 0(a0)
+            fence
+            sd a1, {result}
+        }
+    }
     $or {
         $error("std.sync.atomic.load: unsupported architecture");
     }
@@ -66,6 +81,15 @@ pub fun store(ptr: *i64, v: i64) {
             ldr x12, {ptr}
             ldr x9, {v}
             stlr x9, [x12]
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # amoswap.d.aqrl discarding the old value is a seq-cst store
+        # {ptr} binds to a stack slot, so stage the address in a0 first
+        asm riscv64 {
+            ld a0, {ptr}
+            ld a1, {v}
+            amoswap.d.aqrl zero, a1, (a0)
         }
     }
     $or {
@@ -113,6 +137,22 @@ pub fun cas(ptr: *i64, expected: *i64, desired: i64) bool {
             dmb ish
         }
     }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # lr.d/sc.d retry loop; .aqrl on both gives full seq-cst order
+        # {ptr} binds to a stack slot, so stage the address in a0 first
+        asm riscv64 {
+            ld a0, {ptr}
+            ld a1, {exp}
+            ld a2, {desired}
+        1:
+            lr.d.aqrl a3, (a0)
+            bne a3, a1, 2f
+            sc.d.aqrl a4, a2, (a0)
+            bnez a4, 1b
+        2:
+            sd a3, {old}
+        }
+    }
     $or {
         $error("std.sync.atomic.cas: unsupported architecture");
     }
@@ -151,6 +191,16 @@ pub fun fetch_add(ptr: *i64, v: i64) i64 {
             cbnz w11, 1b
             str x9, {old}
             dmb ish
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # amoadd.d.aqrl returns the prior value with full seq-cst order
+        # {ptr} binds to a stack slot, so stage the address in a0 first
+        asm riscv64 {
+            ld a0, {ptr}
+            ld a1, {v}
+            amoadd.d.aqrl a2, a1, (a0)
+            sd a2, {old}
         }
     }
     $or {
@@ -192,6 +242,17 @@ pub fun fetch_sub(ptr: *i64, v: i64) i64 {
             dmb ish
         }
     }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # no amosub: negate then amoadd.d.aqrl, returning the prior value
+        # {ptr} binds to a stack slot, so stage the address in a0 first
+        asm riscv64 {
+            ld a0, {ptr}
+            ld a1, {v}
+            neg a1, a1
+            amoadd.d.aqrl a2, a1, (a0)
+            sd a2, {old}
+        }
+    }
     $or {
         $error("std.sync.atomic.fetch_sub: unsupported architecture");
     }
@@ -229,6 +290,16 @@ pub fun exchange(ptr: *i64, v: i64) i64 {
             dmb ish
         }
     }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        # amoswap.d.aqrl returns the prior value with full seq-cst order
+        # {ptr} binds to a stack slot, so stage the address in a0 first
+        asm riscv64 {
+            ld a0, {ptr}
+            ld a1, {v}
+            amoswap.d.aqrl a2, a1, (a0)
+            sd a2, {old}
+        }
+    }
     $or {
         $error("std.sync.atomic.exchange: unsupported architecture");
     }
@@ -247,6 +318,11 @@ pub fun fence() {
             dmb ish
         }
     }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 {
+            fence
+        }
+    }
     $or {
         $error("std.sync.atomic.fence: unsupported architecture");
     }
@@ -262,6 +338,11 @@ pub fun spin_hint() {
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
             yield
+        }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 {
+            pause
         }
     }
     $or {
