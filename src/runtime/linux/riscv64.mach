@@ -1,0 +1,76 @@
+# std.runtime.linux.riscv64: riscv64 (lp64) linux entrypoint
+# ---
+# provides `_start`, the ELF entry point for riscv64 linux executables.
+#
+# on entry, the kernel places the following on the stack (same layout as
+# every LP64 linux triple — 8-byte slots):
+#   [sp]      = argc
+#   [sp+8]    = argv[0]
+#   [sp+16]   = argv[1]
+#   ...
+#   argv + (argc+1)*8 = envp[0]
+#
+# this entrypoint mirrors the x86_64 / aarch64 ones:
+#   1. extracts argc, argv, and envp from the initial stack
+#   2. stores them into the runtime globals
+#   3. calls _rt_init to publish envp into the OS layer
+#   4. calls user-supplied `main(argc, argv)` (a0 = argc, a1 = argv)
+#   5. exits via SYS_exit_group with main's return code (terminates all
+#      threads; SYS_exit would leave non-main threads alive)
+#
+# user code must define:
+#   #[symbol("main")]
+#   fun main(argc: i64, argv: **u8) i64 { ... }
+#
+# entry frame: `_start` is a naked inline-asm function (no locals, no calls
+# outside the asm block), so the backend emits no prologue and the first
+# instruction reads the raw kernel-supplied sp (argc at [sp]). sp is 16-byte
+# aligned on kernel entry (the riscv lp64 process-startup invariant), so no
+# realignment is needed before the calls.
+
+use os: std.system.os.linux.riscv64;
+
+#[symbol("_rt_argc")]
+var _rt_argc: i64 = 0;
+#[symbol("_rt_argv")]
+var _rt_argv: u64 = 0;
+#[symbol("_rt_envp")]
+var _rt_envp: u64 = 0;
+
+#[symbol("_rt_init")]
+fun _rt_init() {
+    os._envp = _rt_envp;
+}
+
+#[symbol("_start")]
+pub fun _start() {
+    asm riscv64 {
+        mv t0, sp            # t0 = initial stack pointer (argc at [t0])
+        ld a0, 0(t0)         # argc -> a0 (1st argument to main)
+        addi a1, t0, 8       # argv -> a1 (2nd argument to main)
+
+        # envp = argv + (argc + 1) * 8
+        addi t1, a0, 1
+        slli t1, t1, 3
+        add t1, a1, t1       # t1 = envp
+
+        la t2, _rt_argc
+        sd a0, 0(t2)
+        la t2, _rt_argv
+        sd a1, 0(t2)
+        la t2, _rt_envp
+        sd t1, 0(t2)
+
+        call _rt_init
+
+        la t2, _rt_argc
+        ld a0, 0(t2)
+        la t2, _rt_argv
+        ld a1, 0(t2)
+        call main
+
+        # exit_group with main's return value (already in a0)
+        li a7, 94            # SYS_exit_group
+        ecall
+    }
+}
