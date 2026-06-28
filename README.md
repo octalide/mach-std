@@ -8,14 +8,14 @@ To use the standard library in your Mach project, you can include it as a depend
 
 ```toml
 [deps.mach-std]
-git = "https://github.com/octalide/mach-std"
+git = "https://github.com/briar-systems/mach-std"
 ref = "branch/main"
 ```
 
 You can also use the Mach dependency manager to add it to your project:
 
 ```bash
-mach dep add mach-std --git https://github.com/octalide/mach-std --ref branch/main
+mach dep add mach-std --git https://github.com/briar-systems/mach-std --ref branch/main
 ```
 
 ## Documentation
