@@ -32,6 +32,15 @@ pub fun panic(msg: *u8) {
                 svc 0
             }
         }
+        $or ($mach.build.arch == $mach.arch.riscv64) {
+            asm riscv64 {
+                li a7, 64     # SYS_write (linux riscv64)
+                li a0, 2      # fd = stderr
+                ld a1, {msg}
+                ld a2, {len}
+                ecall
+            }
+        }
         $or {
             $error("std.system.panic: unsupported linux architecture");
         }
@@ -65,6 +74,9 @@ pub fun panic(msg: *u8) {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 { brk 0 }
+    }
+    $or ($mach.build.arch == $mach.arch.riscv64) {
+        asm riscv64 { ebreak }
     }
     $or {
         $error("std.system.panic: unsupported architecture");

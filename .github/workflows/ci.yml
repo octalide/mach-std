@@ -29,3 +29,27 @@ jobs:
 
       - name: Test
         run: mach test .
+
+  cross-riscv64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Install mach and qemu
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user
+          mkdir -p /tmp/machdl
+          gh release download --repo octalide/mach \
+            --pattern 'mach-*-x86_64-linux.tar.gz' --dir /tmp/machdl --clobber
+          tar -xzf /tmp/machdl/mach-*-x86_64-linux.tar.gz -C /tmp/machdl
+          cp /tmp/machdl/mach /usr/local/bin/mach
+          chmod +x /usr/local/bin/mach
+          mach info
+
+      - name: Cross-compile and run the riscv64 runtime smoke test
+        run: bash test/riscv64/verify.sh

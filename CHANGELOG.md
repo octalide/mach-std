@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0] - 2026-06-28
+
+Add a riscv64-linux target — runtime entry, syscall layer, and atomics — with a
+qemu-backed CI lane, and fix the darwin entry so the darwin cross-build links and
+encodes. Built with mach 2.9.0.
+
+### Added
+
+- runtime: riscv64-linux `_start` entry plus the linux syscall stubs and os
+  module for riscv64 (#306).
+- sync/atomic: riscv64 atomic arms built on the A extension (`.aqrl` AMOs,
+  `lr.d`/`sc.d`, and FENCE barriers) (#308).
+- ci: a cross-riscv64 qemu lane that exercises the riscv64-linux runtime end to
+  end.
+
+### Fixed
+
+- runtime/darwin: export `_rt_argc` / `_rt_argv` / `_rt_envp` with `#[symbol]` so
+  the darwin entry links instead of failing with `undefined symbol: _rt_argc`
+  (#314).
+- os/darwin: load the aarch64 syscall number and arguments with `ldr` instead of
+  `mov`, which rejected the slot-bound operands at encode time (#315).
+- doc: rework the linux `page_size` docstring so it no longer trips the doclint
+  'documented component' warning (#310).
+
 ## [0.15.0] - 2026-06-25
 
 Expose the FNV-1a seed as a `pub val FNV_INIT` constant and publish the offset

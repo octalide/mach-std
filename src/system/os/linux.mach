@@ -14,6 +14,9 @@ $if ($mach.build.arch == $mach.arch.x86_64) {
 $or ($mach.build.arch == $mach.arch.aarch64) {
     use impl: std.system.os.linux.aarch64;
 }
+$or ($mach.build.arch == $mach.arch.riscv64) {
+    use impl: std.system.os.linux.riscv64;
+}
 $or {
     $error("std.system.os.linux: unsupported architecture");
 }

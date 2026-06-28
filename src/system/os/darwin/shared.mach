@@ -245,7 +245,7 @@ pub fun syscall0(n: usize) i64 {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
-            mov x16, {n}
+            ldr x16, {n}
             svc 0x80
             cset x9, cs
             str x9, {fail}
@@ -273,8 +273,8 @@ pub fun syscall1(n: usize, a0: usize) i64 {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
-            mov x16, {n}
-            mov x0, {a0}
+            ldr x16, {n}
+            ldr x0, {a0}
             svc 0x80
             cset x9, cs
             str x9, {fail}
@@ -303,9 +303,9 @@ pub fun syscall2(n: usize, a0: usize, a1: usize) i64 {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
-            mov x16, {n}
-            mov x0, {a0}
-            mov x1, {a1}
+            ldr x16, {n}
+            ldr x0, {a0}
+            ldr x1, {a1}
             svc 0x80
             cset x9, cs
             str x9, {fail}
@@ -335,10 +335,10 @@ pub fun syscall3(n: usize, a0: usize, a1: usize, a2: usize) i64 {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
-            mov x16, {n}
-            mov x0, {a0}
-            mov x1, {a1}
-            mov x2, {a2}
+            ldr x16, {n}
+            ldr x0, {a0}
+            ldr x1, {a1}
+            ldr x2, {a2}
             svc 0x80
             cset x9, cs
             str x9, {fail}
@@ -369,11 +369,11 @@ pub fun syscall4(n: usize, a0: usize, a1: usize, a2: usize, a3: usize) i64 {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
-            mov x16, {n}
-            mov x0, {a0}
-            mov x1, {a1}
-            mov x2, {a2}
-            mov x3, {a3}
+            ldr x16, {n}
+            ldr x0, {a0}
+            ldr x1, {a1}
+            ldr x2, {a2}
+            ldr x3, {a3}
             svc 0x80
             cset x9, cs
             str x9, {fail}
@@ -405,12 +405,12 @@ pub fun syscall5(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
-            mov x16, {n}
-            mov x0, {a0}
-            mov x1, {a1}
-            mov x2, {a2}
-            mov x3, {a3}
-            mov x4, {a4}
+            ldr x16, {n}
+            ldr x0, {a0}
+            ldr x1, {a1}
+            ldr x2, {a2}
+            ldr x3, {a3}
+            ldr x4, {a4}
             svc 0x80
             cset x9, cs
             str x9, {fail}
@@ -443,13 +443,13 @@ pub fun syscall6(n: usize, a0: usize, a1: usize, a2: usize, a3: usize, a4: usize
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
-            mov x16, {n}
-            mov x0, {a0}
-            mov x1, {a1}
-            mov x2, {a2}
-            mov x3, {a3}
-            mov x4, {a4}
-            mov x5, {a5}
+            ldr x16, {n}
+            ldr x0, {a0}
+            ldr x1, {a1}
+            ldr x2, {a2}
+            ldr x3, {a3}
+            ldr x4, {a4}
+            ldr x5, {a5}
             svc 0x80
             cset x9, cs
             str x9, {fail}
@@ -742,7 +742,7 @@ pub fun fork() i64 {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
-            mov x16, {n}
+            ldr x16, {n}
             svc 0x80
             cset x9, cs
             str x9, {fail}
@@ -788,7 +788,7 @@ pub fun vfork() i64 {
     }
     $or ($mach.build.arch == $mach.arch.aarch64) {
         asm aarch64 {
-            mov x16, {n}
+            ldr x16, {n}
             svc 0x80
             cset x9, cs
             str x9, {fail}
