@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1] - 2026-06-28
+
+Rewrite the aarch64 darwin `_start` entry in mach's inline-asm dialect so
+aarch64-darwin links. Built with mach 2.9.0.
+
+### Fixed
+
+- runtime/darwin: rewrite the aarch64 `_start` in mach's inline-asm dialect —
+  bare immediates, an explicit `lsl`+`add` for the envp scale, and no explicit
+  stack realignment (sp is 16-byte aligned on kernel entry). The prior standard
+  ARM syntax used `#`-prefixed immediates (mach's comment char), a 4-operand
+  shifted-register add, and a bitmask-immediate `and`, all of which mach's
+  dialect rejects — so darwin-aarch64 could not link. Semantics are preserved
+  (#320).
+
 ## [0.16.0] - 2026-06-28
 
 Add a riscv64-linux target — runtime entry, syscall layer, and atomics — with a
