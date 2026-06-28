@@ -24,7 +24,7 @@
 #
 # VERIFICATION STATUS — written ahead of the mach aarch64 backend; two
 # assumptions cannot be checked until the backend + qemu are available and
-# MUST be confirmed there (tracked with #270 / octalide/mach#1431):
+# MUST be confirmed there (tracked with #270 / briar-systems/mach#1431):
 #   (a) Entry frame: like x86_64 `_start`, the first asm instruction reads the
 #       raw kernel-supplied sp (argc at [sp]). This relies on mach not emitting
 #       a frame-setup prologue that moves sp before the asm block for the entry
