@@ -15,7 +15,7 @@ from the constant seed directly. Built with mach 2.5.9.
 
 - crypto/hash: `fnv1a` exposes `pub val FNV_INIT` (and `pub` `FNV_OFFSET` /
   `FNV_PRIME`) instead of `pub fun init()`. Callers fold from the constant seed
-  rather than a function that returned it (#1600 on octalide/mach).
+  rather than a function that returned it (#1600 on briar-systems/mach).
 
 ### Removed
 
@@ -153,7 +153,7 @@ shell-outs (cross-platform, including native windows).
 Native-windows temp-file support: the temp directory is resolved per-OS at
 use time (GetTempPathA on windows, $TMPDIR with /tmp fallback on posix). With v0.8.0's
 loader fixes this completes the std side of the compiler's native windows
-CI lane (octalide/mach#1351); the exec-fixture half of #258 was already
+CI lane (briar-systems/mach#1351); the exec-fixture half of #258 was already
 fixed in v0.7.0's OS-gated tests and ships via the pin bump.
 
 ### Added
@@ -382,11 +382,11 @@ These tests fail or hang under `mach test` and are tracked for follow-up. All
 three are gaps in modules added during the 0.4.x rework (after 0.2.5), not
 regressions:
 - `thread: spawn and join` / `thread: is_done after join` deadlock — the clone
-  parent/child discrimination is a shared-memory race ([#195](https://github.com/octalide/mach-std/issues/195)).
+  parent/child discrimination is a shared-memory race ([#195](https://github.com/briar-systems/mach-std/issues/195)).
 - `json: value_find on object` never matches — object keys are stored as
-  non-null-terminated source slices but compared with `str_equals` ([#196](https://github.com/octalide/mach-std/issues/196)).
+  non-null-terminated source slices but compared with `str_equals` ([#196](https://github.com/briar-systems/mach-std/issues/196)).
 - `env: get PATH returns positive length` — the std code is correct; `mach test`
-  execs the test binary with an empty environment ([#197](https://github.com/octalide/mach-std/issues/197)).
+  execs the test binary with an empty environment ([#197](https://github.com/briar-systems/mach-std/issues/197)).
 
 ## [0.4.0] - 2026-03-10
 
