@@ -10,9 +10,9 @@
 #
 # this entrypoint:
 #   1. extracts argc and argv from the initial stack
-#   2. aligns the stack to 16 bytes (required by AAPCS64 before BL)
-#   3. calls user-supplied `main(argc, argv)`
-#   4. exits via sys_exit with the return code from main
+#   2. captures argc/argv/envp for the runtime, then calls `main(argc, argv)`
+#      (sp is already 16-byte aligned on kernel entry, an arm64 invariant)
+#   3. exits via sys_exit with the return code from main
 #
 # user code must define:
 #   #[symbol("main")]
@@ -43,30 +43,33 @@ fun _rt_init() {
 #[symbol("start")]
 pub fun _start() {
     asm aarch64 {
-        ldr x0, [sp]      # argc -> x0 (1st argument)
-        add x1, sp, #8    # argv -> x1 (2nd argument)
+        mov x9, sp            # x9 = initial stack pointer (argc at [x9])
+        ldr x0, [x9]          # argc -> x0 (1st argument to main)
+        add x1, x9, 8         # argv -> x1 (2nd argument to main)
 
         # envp = argv + (argc + 1) * 8
-        add x2, x0, #1
-        add x2, x1, x2, lsl #3
+        add x10, x0, 1
+        lsl x10, x10, 3
+        add x10, x1, x10      # x10 = envp
 
-        adrp x3, _rt_argc
-        str x0, [x3, :lo12:_rt_argc]
-        adrp x3, _rt_argv
-        str x1, [x3, :lo12:_rt_argv]
-        adrp x3, _rt_envp
-        str x2, [x3, :lo12:_rt_envp]
+        adrp x11, _rt_argc
+        str x0, [x11, :lo12:_rt_argc]
+        adrp x11, _rt_argv
+        str x1, [x11, :lo12:_rt_argv]
+        adrp x11, _rt_envp
+        str x10, [x11, :lo12:_rt_envp]
 
-        and sp, sp, #-16  # align stack to 16 bytes
+        # sp is 16-byte aligned on kernel entry (an arm64 architectural
+        # invariant), so no realignment is needed before the calls.
         bl _rt_init
 
-        adrp x3, _rt_argc
-        ldr x0, [x3, :lo12:_rt_argc]
-        adrp x3, _rt_argv
-        ldr x1, [x3, :lo12:_rt_argv]
+        adrp x11, _rt_argc
+        ldr x0, [x11, :lo12:_rt_argc]
+        adrp x11, _rt_argv
+        ldr x1, [x11, :lo12:_rt_argv]
         bl main
 
-        mov x16, #1       # SYS_exit
-        svc #0x80
+        mov x16, 1           # SYS_exit
+        svc 0x80
     }
 }
