@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.2] - 2026-06-28
+
+Enter aarch64 darwin executables through the `LC_MAIN` register convention and
+correct three darwin syscall numbers, so arm64-darwin binaries run. Built with
+mach 2.9.0.
+
+### Fixed
+
+- runtime/darwin: enter the aarch64 `_start` through the PIE `LC_MAIN` register
+  convention — capture argc/argv/envp from x0/x1/x2 as dyld hands them, instead
+  of reading them off the stack. darwin arm64 executables are `LC_MAIN` images
+  (#324).
+- os/darwin: correct the `mkdirat` (475), `unlinkat` (472), and `faccessat`
+  (466) syscall numbers; the prior 464/466/468 were wrong (464 is
+  `openat_nocancel`), so directory and path operations hit the wrong trap once
+  arm64-darwin binaries actually ran (#324).
+
 ## [0.16.1] - 2026-06-28
 
 Rewrite the aarch64 darwin `_start` entry in mach's inline-asm dialect so
