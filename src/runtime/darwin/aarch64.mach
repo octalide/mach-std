@@ -2,16 +2,16 @@
 #
 # provides `_start` (via `start`), the Mach-O entry point for aarch64 darwin executables.
 #
-# on entry, the kernel places the following on the stack:
-#   [sp]     = argc
-#   [sp+8]   = argv[0]
-#   [sp+16]  = argv[1]
-#   ...
+# darwin arm64 executables are PIE `LC_MAIN` images: dyld enters the program like a
+# C `main(argc, argv, envp)`, with the arguments in registers, not on the stack:
+#   x0 = argc
+#   x1 = argv
+#   x2 = envp
 #
 # this entrypoint:
-#   1. extracts argc and argv from the initial stack
-#   2. captures argc/argv/envp for the runtime, then calls `main(argc, argv)`
-#      (sp is already 16-byte aligned on kernel entry, an arm64 invariant)
+#   1. captures argc/argv/envp from x0/x1/x2 for the runtime
+#   2. calls `_rt_init` then `main(argc, argv)` (the stack dyld hands the LC_MAIN
+#      entry is already 16-byte aligned, an arm64 invariant)
 #   3. exits via sys_exit with the return code from main
 #
 # user code must define:
@@ -43,24 +43,17 @@ fun _rt_init() {
 #[symbol("start")]
 pub fun _start() {
     asm aarch64 {
-        mov x9, sp            # x9 = initial stack pointer (argc at [x9])
-        ldr x0, [x9]          # argc -> x0 (1st argument to main)
-        add x1, x9, 8         # argv -> x1 (2nd argument to main)
-
-        # envp = argv + (argc + 1) * 8
-        add x10, x0, 1
-        lsl x10, x10, 3
-        add x10, x1, x10      # x10 = envp
-
+        # dyld enters an LC_MAIN executable with main's arguments in registers:
+        #   x0 = argc, x1 = argv, x2 = envp
         adrp x11, _rt_argc
         str x0, [x11, :lo12:_rt_argc]
         adrp x11, _rt_argv
         str x1, [x11, :lo12:_rt_argv]
         adrp x11, _rt_envp
-        str x10, [x11, :lo12:_rt_envp]
+        str x2, [x11, :lo12:_rt_envp]
 
-        # sp is 16-byte aligned on kernel entry (an arm64 architectural
-        # invariant), so no realignment is needed before the calls.
+        # the stack dyld hands the LC_MAIN entry is already 16-byte aligned (an
+        # arm64 architectural invariant), so no realignment is needed.
         bl _rt_init
 
         adrp x11, _rt_argc
