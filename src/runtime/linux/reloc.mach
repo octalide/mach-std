@@ -1,0 +1,127 @@
+# std.runtime.linux.reloc: static-PIE self-relocation
+# ---
+# A no-libc static-PIE (linux ASLR, `mach build --pie`) has no `ld.so`, so it applies
+# its own ELF RELATIVE relocations before `main`. `_rt_relocate` is called from
+# `_rt_init` - only in a `--pie` build, gated by `$mach.build.pie` - with the program's
+# `envp` pointer (the kernel-supplied initial-stack value `_start` already captured).
+# It runs in `_rt_init` rather than `_start` so the entry point's raw-`rsp` asm is left
+# byte-identical; the auxiliary vector sits immediately after envp's NULL terminator, so
+# envp is all it needs to reach it.
+#
+# It is deliberately position-independent: it reads only `envp`, the stack region it
+# points into, and addresses it computes, never an absolute global, so it is correct
+# before any relocation has been applied (the ELF constants below are literal immediates
+# for the same reason). It recovers the load bias from the kernel auxiliary vector
+# (AT_PHDR vs the link-time PT_PHDR.p_vaddr), finds `.rela.dyn` through PT_DYNAMIC's
+# DT_RELA/DT_RELASZ, and slides every entry by the bias: `*(bias + r_offset) = bias +
+# r_addend`. The mach ELF PIE writer emits only R_*_RELATIVE entries, so every entry is
+# applied unconditionally.
+
+use std.types.bool.bool;
+use std.types.bool.true;
+use std.types.bool.false;
+use std.types.size.usize;
+
+# read a u64 at a raw runtime address. PIC: pure pointer arithmetic, no global.
+# ---
+# addr: the runtime address to read
+# ret:  the 8 bytes at `addr`, little-endian native
+fun load64(addr: usize) u64 {
+    val p: *u64 = addr::ptr::*u64;
+    ret p[0];
+}
+
+# read a u32 at a raw runtime address. PIC: pure pointer arithmetic, no global.
+# ---
+# addr: the runtime address to read
+# ret:  the 4 bytes at `addr`, little-endian native
+fun load32(addr: usize) u32 {
+    val p: *u32 = addr::ptr::*u32;
+    ret p[0];
+}
+
+# store a u64 at a raw runtime address. PIC: pure pointer arithmetic, no global.
+# ---
+# addr:  the runtime address to write
+# value: the 8 bytes to store
+fun store64(addr: usize, value: u64) {
+    val p: *u64 = addr::ptr::*u64;
+    p[0] = value;
+}
+
+# apply the image's ELF RELATIVE relocations, sliding each by the load bias recovered
+# from the kernel auxiliary vector
+#
+# `envp` points at the program's environment vector: envp[0..] then a NULL, immediately
+# after which the kernel placed the auxv (type/value u64 pairs terminated by AT_NULL).
+# PIC by construction - only `envp`, the region it points into, and computed addresses
+# are touched - so it runs correctly before any relocation is applied.
+# ---
+# envp: the program's envp pointer (the value `_start` stored into `_rt_envp`)
+#[symbol("_rt_relocate")]
+pub fun _rt_relocate(envp: *u64) {
+    # walk envp to its NULL terminator; the auxv begins one slot past it.
+    var idx: usize = 0;
+    for (envp[idx] != 0) { idx = idx + 1; }
+    idx = idx + 1;
+
+    # scan the auxv for the program-header location: AT_PHDR=3, AT_PHENT=4, AT_PHNUM=5,
+    # terminated by AT_NULL=0.
+    var at_phdr:  u64 = 0;
+    var at_phent: u64 = 0;
+    var at_phnum: u64 = 0;
+    for (envp[idx] != 0) {
+        val t: u64 = envp[idx];
+        val v: u64 = envp[idx + 1];
+        if (t == 3) { at_phdr  = v; }
+        if (t == 4) { at_phent = v; }
+        if (t == 5) { at_phnum = v; }
+        idx = idx + 2;
+    }
+    if (at_phdr == 0 || at_phnum == 0) { ret; }
+    if (at_phent == 0) { at_phent = 56; }   # Elf64_Phdr stride
+
+    # walk the program headers (Elf64_Phdr: p_type u32 @0, p_vaddr u64 @16): PT_PHDR=6
+    # yields the load bias (runtime AT_PHDR minus its link-time vaddr), PT_DYNAMIC=2 the
+    # .dynamic table.
+    var bias:      u64 = 0;
+    var dyn_va:    u64 = 0;
+    var have_bias: bool = false;
+    var p: u64 = 0;
+    for (p < at_phnum) {
+        val ph: usize = (at_phdr + p * at_phent)::usize;
+        val p_type:  u32 = load32(ph);
+        val p_vaddr: u64 = load64(ph + 16);
+        if (p_type == 6) { bias = at_phdr - p_vaddr; have_bias = true; }
+        if (p_type == 2) { dyn_va = p_vaddr; }
+        p = p + 1;
+    }
+    if (!have_bias || dyn_va == 0) { ret; }
+
+    # walk .dynamic (Elf64_Dyn: d_tag u64 @0, d_val u64 @8, 16-byte stride) for the
+    # .rela.dyn location and size: DT_RELA=7, DT_RELASZ=8, terminated by DT_NULL=0.
+    val dyn_addr: usize = (dyn_va + bias)::usize;
+    var rela:   u64 = 0;
+    var relasz: u64 = 0;
+    var d: usize = 0;
+    for (load64(dyn_addr + d * 16) != 0) {
+        val tag:  u64 = load64(dyn_addr + d * 16);
+        val dval: u64 = load64(dyn_addr + d * 16 + 8);
+        if (tag == 7) { rela   = dval; }
+        if (tag == 8) { relasz = dval; }
+        d = d + 1;
+    }
+    if (rela == 0 || relasz == 0) { ret; }
+
+    # apply each RELATIVE entry (Elf64_Rela: r_offset u64 @0, r_addend u64 @16, 24-byte
+    # stride): *(bias + r_offset) = bias + r_addend.
+    val rela_addr: usize = (rela + bias)::usize;
+    var off: u64 = 0;
+    for (off < relasz) {
+        val ent: usize = rela_addr + off::usize;
+        val r_offset: u64 = load64(ent);
+        val r_addend: u64 = load64(ent + 16);
+        store64((bias + r_offset)::usize, bias + r_addend);
+        off = off + 24;
+    }
+}
