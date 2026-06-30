@@ -2,6 +2,10 @@
 #
 # Duration represents elapsed time as nanoseconds (i64).
 
+use std.types.size.usize;
+use std.types.string.str;
+use std.types.string.str_equals;
+
 # Duration: elapsed time in nanoseconds.
 pub def Duration: i64;
 
@@ -73,6 +77,105 @@ pub fun duration_abs(d: Duration) Duration {
     ret d;
 }
 
+# du_put: append byte b into buf at off if it fits; ret new offset, or cap + 1
+# when the buffer is full (a poison value that later appends propagate).
+fun du_put(buf: *u8, off: usize, cap: usize, b: u8) usize {
+    if (off >= cap) { ret cap + 1; }
+    buf[off] = b;
+    ret off + 1;
+}
+
+# du_put_str: append a null-terminated string into buf at off; ret new offset
+# (poison-propagating like du_put).
+fun du_put_str(buf: *u8, off: usize, cap: usize, s: str) usize {
+    var o: usize = off;
+    var i: usize = 0;
+    for (s[i] != 0) {
+        o = du_put(buf, o, cap, s[i]);
+        i = i + 1;
+    }
+    ret o;
+}
+
+# du_put_u64: append n's decimal digits into buf at off; ret new offset (poison
+# value > cap when the digits would not fit).
+fun du_put_u64(buf: *u8, off: usize, cap: usize, n: u64) usize {
+    if (n == 0) { ret du_put(buf, off, cap, '0'); }
+    var tmp: [20]u8;
+    var len: usize = 0;
+    var x: u64 = n;
+    for (x > 0) {
+        tmp[len] = (x % 10)::u8 + '0';
+        x = x / 10;
+        len = len + 1;
+    }
+    if (off + len > cap) { ret cap + 1; }
+    var i: usize = 0;
+    for (i < len) {
+        buf[off + i] = tmp[len - 1 - i];
+        i = i + 1;
+    }
+    ret off + len;
+}
+
+# format_duration: render d as a compact ASCII human-readable string into buf.
+# ---
+# writes a null-terminated string and returns it (aliasing buf), or nil if cap
+# is too small to hold the rendering plus its terminator. negative durations
+# carry a leading '-'. units are chosen by magnitude:
+#   zero            -> "0ms"
+#   sub-microsecond -> "<1ms"
+#   microseconds    -> "Nus"   (1..999)
+#   milliseconds    -> "Nms"   (1..999)
+#   seconds         -> "N.Ns"  (tenths truncate)
+#   minutes and up  -> "NmNs"  (no hours band; minutes accumulate)
+# a 24-byte buffer holds every i64 duration. fixed ASCII output, no platform
+# branches.
+# ---
+# d:   duration to render
+# buf: caller-provided byte buffer
+# cap: capacity of buf in bytes
+# ret: buf as a null-terminated str, or nil if cap is insufficient
+pub fun format_duration(d: Duration, buf: *u8, cap: usize) str {
+    if (d == 0) {
+        if (cap < 4) { ret nil; }
+        buf[0] = '0'; buf[1] = 'm'; buf[2] = 's'; buf[3] = 0;
+        ret buf::str;
+    }
+
+    var off: usize = 0;
+    if (d < 0) { off = du_put(buf, off, cap, '-'); }
+    val m: Duration = duration_abs(d);
+
+    if (m < MICROSECOND) {
+        off = du_put_str(buf, off, cap, "<1ms");
+    }
+    or (m < MILLISECOND) {
+        off = du_put_u64(buf, off, cap, (m / MICROSECOND)::u64);
+        off = du_put_str(buf, off, cap, "us");
+    }
+    or (m < SECOND) {
+        off = du_put_u64(buf, off, cap, (m / MILLISECOND)::u64);
+        off = du_put_str(buf, off, cap, "ms");
+    }
+    or (m < MINUTE) {
+        off = du_put_u64(buf, off, cap, (m / SECOND)::u64);
+        off = du_put(buf, off, cap, '.');
+        off = du_put_u64(buf, off, cap, ((m % SECOND) / (SECOND / 10))::u64);
+        off = du_put(buf, off, cap, 's');
+    }
+    or {
+        off = du_put_u64(buf, off, cap, (m / MINUTE)::u64);
+        off = du_put(buf, off, cap, 'm');
+        off = du_put_u64(buf, off, cap, ((m % MINUTE) / SECOND)::u64);
+        off = du_put(buf, off, cap, 's');
+    }
+
+    if (off >= cap) { ret nil; }
+    buf[off] = 0;
+    ret buf::str;
+}
+
 test "duration: constants" {
     if (NANOSECOND != 1) { ret 1; }
     if (MICROSECOND != 1000) { ret 2; }
@@ -99,5 +202,46 @@ test "duration: abs" {
     val neg: Duration = 0 - 1000;
     if (duration_abs(pos) != 1000) { ret 1; }
     if (duration_abs(neg) != 1000) { ret 2; }
+    ret 0;
+}
+
+test "duration: format_duration units" {
+    var b: [24]u8;
+    if (!str_equals(format_duration(0, ?b[0], 24), "0ms")) { ret 1; }
+    # sub-microsecond floors to "<1ms"
+    if (!str_equals(format_duration(500, ?b[0], 24), "<1ms")) { ret 2; }
+    # microseconds
+    if (!str_equals(format_duration(5 * MICROSECOND, ?b[0], 24), "5us")) { ret 3; }
+    if (!str_equals(format_duration(999 * MICROSECOND, ?b[0], 24), "999us")) { ret 4; }
+    # milliseconds
+    if (!str_equals(format_duration(1 * MILLISECOND, ?b[0], 24), "1ms")) { ret 5; }
+    if (!str_equals(format_duration(123 * MILLISECOND, ?b[0], 24), "123ms")) { ret 6; }
+    # seconds with truncated tenths
+    if (!str_equals(format_duration(1500 * MILLISECOND, ?b[0], 24), "1.5s")) { ret 7; }
+    if (!str_equals(format_duration(59900 * MILLISECOND, ?b[0], 24), "59.9s")) { ret 8; }
+    # tenths truncate rather than round
+    if (!str_equals(format_duration(1999 * MILLISECOND, ?b[0], 24), "1.9s")) { ret 9; }
+    # minutes
+    if (!str_equals(format_duration(2 * MINUTE + 3 * SECOND, ?b[0], 24), "2m3s")) { ret 10; }
+    ret 0;
+}
+
+test "duration: format_duration sign and boundaries" {
+    var b: [24]u8;
+    # negative carries a leading '-'
+    if (!str_equals(format_duration(0 - 250 * MILLISECOND, ?b[0], 24), "-250ms")) { ret 1; }
+    # exactly one second enters the seconds band
+    if (!str_equals(format_duration(SECOND, ?b[0], 24), "1.0s")) { ret 2; }
+    # exactly one minute enters the minutes band
+    if (!str_equals(format_duration(MINUTE, ?b[0], 24), "1m0s")) { ret 3; }
+    # over an hour stays in minutes (no hours band)
+    if (!str_equals(format_duration(90 * MINUTE, ?b[0], 24), "90m0s")) { ret 4; }
+    ret 0;
+}
+
+test "duration: format_duration insufficient capacity" {
+    var b: [4]u8;
+    # "999us" needs five bytes plus a terminator; cap 4 cannot hold it
+    if (format_duration(999 * MICROSECOND, ?b[0], 4) != nil) { ret 1; }
     ret 0;
 }
