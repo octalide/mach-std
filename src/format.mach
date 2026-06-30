@@ -11,10 +11,12 @@
 # representation, so they render as their numeric value — a bool prints 1 or 0;
 # reach for the `{:c}` spec to render an integer's low byte as a character.
 #
-# a hole may carry a spec after `:` — `x`/`X` for lower/upper hex, `c` for a
-# low-byte char, a decimal minimum width, and a leading `0` to zero-pad rather
-# than space-pad (e.g. `{:x}`, `{:c}`, `{:5}`, `{:08x}`). `{{` and `}}` emit
-# literal braces. a hole/argument count mismatch is an error in either direction.
+# a hole may carry a spec after `:` — a leading `<` to left-align (pad on the
+# right), `x`/`X` for lower/upper hex, `c` for a low-byte char, a decimal minimum
+# width, and a leading `0` to zero-pad rather than space-pad (e.g. `{:x}`, `{:c}`,
+# `{:5}`, `{:<5}`, `{:08x}`). width pads on the left (right-align) by default.
+# `{{` and `}}` emit literal braces. a hole/argument count mismatch is an error
+# in either direction.
 
 use std.types.bool.bool;
 use std.types.bool.true;
@@ -475,12 +477,14 @@ pub val ERR_MANY_HOLES: str = "more format holes than arguments";
 
 # Spec: a parsed `{...}` hole spec.
 # ---
+# left:  left-align (pad on the right) instead of the default right-align
 # hex:   render an integer in hexadecimal
 # upper: uppercase hex digits when hex
 # chr:   render an integer's low byte as a character
 # zero:  pad to width with '0' instead of ' '
 # width: minimum field width in bytes
 rec Spec {
+    left:  bool;
     hex:   bool;
     upper: bool;
     chr:   bool;
@@ -511,12 +515,12 @@ fun span_write(ctx: ptr, p: *u8, len: usize) Result[usize, str] {
 # parse_spec: parse a `{...}` hole, advancing *ip past the closing brace.
 # ---
 # precondition: fmt[*ip] == '{' opening a real hole (callers handle `{{`).
-# grammar: '{' [ ':' [ '0' ] [ width ] [ 'x' | 'X' | 'c' ] ] '}'
+# grammar: '{' [ ':' [ '<' ] [ '0' ] [ width ] [ 'x' | 'X' | 'c' ] ] '}'
 # ip:  in/out format cursor
 # ret: the parsed spec, or ERR_BAD_FORMAT on a malformed hole
 fun parse_spec(fmt: str, ip: *usize) Result[Spec, str] {
     var i: usize = @ip + 1;
-    var sp: Spec = Spec{ hex: false, upper: false, chr: false, zero: false, width: 0 };
+    var sp: Spec = Spec{ left: false, hex: false, upper: false, chr: false, zero: false, width: 0 };
 
     if (fmt[i] == '}') {
         @ip = i + 1;
@@ -526,6 +530,11 @@ fun parse_spec(fmt: str, ip: *usize) Result[Spec, str] {
         ret err[Spec, str](ERR_BAD_FORMAT);
     }
     i = i + 1;
+
+    if (fmt[i] == '<') {
+        sp.left = true;
+        i = i + 1;
+    }
 
     if (fmt[i] == '0') {
         sp.zero = true;
@@ -570,13 +579,23 @@ fun emit_pad(w: *writer.Writer, b: u8, n: usize) Result[usize, str] {
 
 # emit_field: write a rendered field with width padding per spec.
 # ---
-# right-aligned; a leading '-' stays ahead of '0' padding.
+# right-aligned by default; a leading '-' stays ahead of '0' padding. when
+# sp.left is set, the value is written first and space-padded on the right
+# (the zero flag is ignored — trailing zeros would corrupt the value).
 # ret: total bytes written (>= len), or an error
 fun emit_field(w: *writer.Writer, buf: *u8, len: usize, sp: *Spec) Result[usize, str] {
     if (sp.width <= len) {
         ret write_bytes(w, buf, len);
     }
     val pad: usize = sp.width - len;
+
+    if (sp.left) {
+        val rb: Result[usize, str] = write_bytes(w, buf, len);
+        if (is_err[usize, str](rb)) { ret rb; }
+        val rp: Result[usize, str] = emit_pad(w, ' ', pad);
+        if (is_err[usize, str](rp)) { ret rp; }
+        ret ok[usize, str](sp.width);
+    }
 
     if (sp.zero && len > 0 && buf[0] == '-') {
         val r1: Result[usize, str] = write_byte(w, '-');
@@ -708,14 +727,25 @@ fun fmt_ptr_field(w: *writer.Writer, p: ptr, sp: *Spec) Result[usize, str] {
     ret emit_field(w, ?scratch[0], s.len, sp);
 }
 
-# fmt_str_field: write a string with width padding (space-padded, right-aligned).
+# fmt_str_field: write a string with width padding (space-padded; right-aligned
+# by default, left-aligned when sp.left is set).
 fun fmt_str_field(w: *writer.Writer, sv: str, sp: *Spec) Result[usize, str] {
     var n: usize = 0;
     if (sv != nil) { n = str_len(sv); }
     if (sp.width <= n) {
         ret write_str(w, sv);
     }
-    val rp: Result[usize, str] = emit_pad(w, ' ', sp.width - n);
+    val pad: usize = sp.width - n;
+
+    if (sp.left) {
+        val rs: Result[usize, str] = write_str(w, sv);
+        if (is_err[usize, str](rs)) { ret rs; }
+        val rp: Result[usize, str] = emit_pad(w, ' ', pad);
+        if (is_err[usize, str](rp)) { ret rp; }
+        ret ok[usize, str](sp.width);
+    }
+
+    val rp: Result[usize, str] = emit_pad(w, ' ', pad);
     if (is_err[usize, str](rp)) { ret rp; }
     val rs: Result[usize, str] = write_str(w, sv);
     if (is_err[usize, str](rs)) { ret rs; }
@@ -726,7 +756,8 @@ fun fmt_str_field(w: *writer.Writer, sv: str, sp: *Spec) Result[usize, str] {
 #
 # holes are type-directed `{}` matched to args in order: signed/unsigned int ->
 # decimal, str -> text, ptr -> 0xHEX, f64 -> shortest round-trip decimal. specs:
-# `{:x}`/`{:X}` hex, `{:c}` low-byte char, `{:N}`/`{:0N}` minimum width. `{{` and
+# `{:x}`/`{:X}` hex, `{:c}` low-byte char, `{:N}`/`{:0N}` minimum width (right-
+# align), `{:<N}` left-align. `{{` and
 # `}}` are literal-brace escapes. the arg sequence is comptime-unrolled and
 # monomorphized per call; the format scan stays at runtime.
 # ---
@@ -963,6 +994,46 @@ test "format: hex, width and zero-pad specs" {
     # strings space-pad regardless of the zero flag.
     r = fmt_capture(?s[0], 64, "[{:5}]", "hi");
     if (is_err[usize, str](r) || !str_equals(?s[0], "[   hi]")) { ret 7; }
+    ret 0;
+}
+
+# `{:<N}` left-aligns: the value is written first and space-padded on the right.
+# right-aligned specs stay byte-identical (re-asserted against the cases above).
+test "format: left-align spec" {
+    var s: [64]u8;
+    var r: Result[usize, str];
+
+    # int: pad spaces on the right.
+    r = fmt_capture(?s[0], 64, "[{:<5}]", 42::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[42   ]")) { ret 1; }
+
+    # str: pad spaces on the right.
+    r = fmt_capture(?s[0], 64, "[{:<5}]", "hi");
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[hi   ]")) { ret 2; }
+
+    # negative stays intact, padded on the right.
+    r = fmt_capture(?s[0], 64, "[{:<5}]", -42::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[-42  ]")) { ret 3; }
+
+    # the zero flag is ignored for left-align (spaces, not trailing zeros).
+    r = fmt_capture(?s[0], 64, "[{:<05}]", 42::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[42   ]")) { ret 4; }
+
+    # left-align composes with hex.
+    r = fmt_capture(?s[0], 64, "[{:<5x}]", 255::u64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[ff   ]")) { ret 5; }
+
+    # value at or over width: no padding either way.
+    r = fmt_capture(?s[0], 64, "[{:<2}]", 42::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[42]")) { ret 6; }
+
+    # right-align (no `<`) unchanged: int pads on the left.
+    r = fmt_capture(?s[0], 64, "[{:5}]", 42::i64);
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[   42]")) { ret 7; }
+
+    # right-align str unchanged.
+    r = fmt_capture(?s[0], 64, "[{:5}]", "hi");
+    if (is_err[usize, str](r) || !str_equals(?s[0], "[   hi]")) { ret 8; }
     ret 0;
 }
 
