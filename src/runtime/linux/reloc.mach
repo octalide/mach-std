@@ -16,11 +16,20 @@
 # DT_RELA/DT_RELASZ, and slides every entry by the bias: `*(bias + r_offset) = bias +
 # r_addend`. The mach ELF PIE writer emits only R_*_RELATIVE entries, so every entry is
 # applied unconditionally.
+#
+# RELRO: once the relocations are applied, the region the writer marked PT_GNU_RELRO
+# (`.rodata` holding relocated constants, mapped writable for this pass) is mprotect'd
+# read-only, restoring the hardening of those constants before `main`. This step runs
+# after relocation, so it may use the ordinary syscall path.
 
 use std.types.bool.bool;
 use std.types.bool.true;
 use std.types.bool.false;
 use std.types.size.usize;
+
+# for the post-relocation RELRO mprotect (see `_rt_relocate`); safe here because it is
+# reached only after every RELATIVE entry has been slid, never before.
+use sys: std.system.os.linux.shared;
 
 # read a u64 at a raw runtime address. PIC: pure pointer arithmetic, no global.
 # ---
@@ -66,34 +75,41 @@ pub fun _rt_relocate(envp: *u64) {
     idx = idx + 1;
 
     # scan the auxv for the program-header location: AT_PHDR=3, AT_PHENT=4, AT_PHNUM=5,
-    # terminated by AT_NULL=0.
-    var at_phdr:  u64 = 0;
-    var at_phent: u64 = 0;
-    var at_phnum: u64 = 0;
+    # and AT_PAGESZ=6 (the runtime page size, for the RELRO mprotect), terminated by
+    # AT_NULL=0.
+    var at_phdr:   u64 = 0;
+    var at_phent:  u64 = 0;
+    var at_phnum:  u64 = 0;
+    var at_pagesz: u64 = 0;
     for (envp[idx] != 0) {
         val t: u64 = envp[idx];
         val v: u64 = envp[idx + 1];
-        if (t == 3) { at_phdr  = v; }
-        if (t == 4) { at_phent = v; }
-        if (t == 5) { at_phnum = v; }
+        if (t == 3) { at_phdr   = v; }
+        if (t == 4) { at_phent  = v; }
+        if (t == 5) { at_phnum  = v; }
+        if (t == 6) { at_pagesz = v; }
         idx = idx + 2;
     }
     if (at_phdr == 0 || at_phnum == 0) { ret; }
     if (at_phent == 0) { at_phent = 56; }   # Elf64_Phdr stride
 
-    # walk the program headers (Elf64_Phdr: p_type u32 @0, p_vaddr u64 @16): PT_PHDR=6
-    # yields the load bias (runtime AT_PHDR minus its link-time vaddr), PT_DYNAMIC=2 the
-    # .dynamic table.
+    # walk the program headers (Elf64_Phdr: p_type u32 @0, p_vaddr u64 @16, p_memsz u64
+    # @40): PT_PHDR=6 yields the load bias (runtime AT_PHDR minus its link-time vaddr),
+    # PT_DYNAMIC=2 the .dynamic table, PT_GNU_RELRO=0x6474e552 the region to re-protect
+    # after relocation. type ids are bare literals so this stays position-independent.
     var bias:      u64 = 0;
     var dyn_va:    u64 = 0;
+    var relro_va:  u64 = 0;
+    var relro_sz:  u64 = 0;
     var have_bias: bool = false;
     var p: u64 = 0;
     for (p < at_phnum) {
         val ph: usize = (at_phdr + p * at_phent)::usize;
         val p_type:  u32 = load32(ph);
         val p_vaddr: u64 = load64(ph + 16);
-        if (p_type == 6) { bias = at_phdr - p_vaddr; have_bias = true; }
-        if (p_type == 2) { dyn_va = p_vaddr; }
+        if (p_type == 6)          { bias = at_phdr - p_vaddr; have_bias = true; }
+        if (p_type == 2)          { dyn_va = p_vaddr; }
+        if (p_type == 0x6474E552) { relro_va = p_vaddr; relro_sz = load64(ph + 40); }   # PT_GNU_RELRO
         p = p + 1;
     }
     if (!have_bias || dyn_va == 0) { ret; }
@@ -111,17 +127,36 @@ pub fun _rt_relocate(envp: *u64) {
         if (tag == 8) { relasz = dval; }
         d = d + 1;
     }
-    if (rela == 0 || relasz == 0) { ret; }
-
     # apply each RELATIVE entry (Elf64_Rela: r_offset u64 @0, r_addend u64 @16, 24-byte
-    # stride): *(bias + r_offset) = bias + r_addend.
-    val rela_addr: usize = (rela + bias)::usize;
-    var off: u64 = 0;
-    for (off < relasz) {
-        val ent: usize = rela_addr + off::usize;
-        val r_offset: u64 = load64(ent);
-        val r_addend: u64 = load64(ent + 16);
-        store64((bias + r_offset)::usize, bias + r_addend);
-        off = off + 24;
+    # stride): *(bias + r_offset) = bias + r_addend. guarded rather than early-returned so
+    # the RELRO step below stays independent of reloc presence (they are only coupled by
+    # the writer, which emits RELRO exclusively for reloc-bearing segments).
+    if (rela != 0 && relasz != 0) {
+        val rela_addr: usize = (rela + bias)::usize;
+        var off: u64 = 0;
+        for (off < relasz) {
+            val ent: usize = rela_addr + off::usize;
+            val r_offset: u64 = load64(ent);
+            val r_addend: u64 = load64(ent + 16);
+            store64((bias + r_offset)::usize, bias + r_addend);
+            off = off + 24;
+        }
+    }
+
+    # RELRO: re-protect the region the PIE writer marked PT_GNU_RELRO. it holds relocated
+    # constants (vtables, `val` pointer globals) mapped writable for the pass above; now
+    # that they are slid, mprotect it read-only to restore their hardening before `main`.
+    # the writer emits p_vaddr page-aligned and p_memsz already page-rounded, so this does
+    # no arithmetic: it gates on the region being a whole number of runtime pages and
+    # mprotects it exactly. AT_PAGESZ is mandatory on linux; when it is absent, or the
+    # region is not congruent with the runtime page (a kernel page larger than the writer's
+    # 4 KiB segment alignment - briar-systems/mach-std#336), the region is left writable
+    # (correct, just unhardened) rather than risking EINVAL or over-protecting the next
+    # segment. this best-effort skip is the one large-page degradation.
+    if (relro_va != 0 && relro_sz != 0 && at_pagesz != 0) {
+        val relro_start: u64 = bias + relro_va;
+        if (relro_start % at_pagesz == 0 && relro_sz % at_pagesz == 0) {
+            sys.protect(relro_start::usize::ptr, relro_sz::usize, sys.PROT_READ::u32);
+        }
     }
 }

@@ -204,7 +204,9 @@ val SIGCHLD:     usize = 17;
 val MREMAP_MAYMOVE: usize = 1;
 
 val PROT_NONE:  i32 = 0;
-val PROT_READ:  i32 = 1;
+# the read-only protection, exported for the static-PIE RELRO re-protection in
+# std.runtime.linux.reloc.
+pub val PROT_READ:  i32 = 1;
 val PROT_WRITE: i32 = 2;
 val PROT_EXEC:  i32 = 4;
 
