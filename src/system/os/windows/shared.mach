@@ -192,6 +192,7 @@ ext fun HeapAlloc(p0: isize, p1: u32, p2: usize) ptr;
 ext fun HeapFree(p0: isize, p1: u32, p2: ptr) i32;
 ext fun HeapReAlloc(p0: isize, p1: u32, p2: ptr, p3: usize) ptr;
 ext fun GetSystemInfo(p0: *u8);
+ext fun GetActiveProcessorCount(p0: u16) u32;
 
 ext fun CreateFileA(p0: *u8, p1: u32, p2: u32, p3: ptr, p4: u32, p5: u32, p6: isize) isize;
 ext fun ReadFile(p0: isize, p1: *u8, p2: u32, p3: *u32, p4: ptr) i32;
@@ -1733,6 +1734,19 @@ pub fun sleep(nsec: i64) {
     if (nsec <= 0) { ret; }
     val ms: u32 = (nsec / 1000000)::u32;
     Sleep(ms);
+}
+
+# cpu_count: the number of CPUs available to this process.
+#
+# GetActiveProcessorCount over all processor groups, so machines with more
+# than 64 logical processors report fully. never returns less than 1.
+# ---
+# ret: usable CPU count (>= 1)
+pub fun cpu_count() i64 {
+    # ALL_PROCESSOR_GROUPS = 0xffff
+    val n: u32 = GetActiveProcessorCount(0xffff);
+    if (n < 1) { ret 1; }
+    ret n::i64;
 }
 
 # getcwd: get the current working directory.

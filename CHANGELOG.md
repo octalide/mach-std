@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- process: `exec.spawn_redirected` — spawn without waiting, with stdout and/or
+  stderr bound to caller-supplied descriptors (stdin stays inherited); and
+  `exec.wait_any` — block until any child exits, returning the reaped child's
+  handle. POSIX `wait(-1)` semantics on every platform (the windows layer
+  multi-waits across its tracked child handles) (#331).
+- system: `os.cpu_count` — the number of CPUs available to the process; linux
+  popcounts the `sched_getaffinity` mask (honouring taskset/cgroup cpusets),
+  darwin reads `hw.ncpu` via `__sysctl`, windows uses
+  `GetActiveProcessorCount(ALL_PROCESSOR_GROUPS)`. Never less than 1 (#331).
+
 ## [0.16.2] - 2026-06-28
 
 Enter aarch64 darwin executables through the `LC_MAIN` register convention and

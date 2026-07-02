@@ -143,6 +143,7 @@ fwd impl.spawn_redirected;
 fwd impl.getpid;
 fwd impl.pipe;
 fwd impl.sleep;
+fwd impl.cpu_count;
 fwd impl.getcwd;
 fwd impl.getenv;
 fwd impl.environ;
@@ -282,3 +283,9 @@ pub fun message(code: i64) str {
     }
     ret impl.error_message(code);
 }
+
+test "std.system.os.cpu_count:at_least_one" {
+    if (impl.cpu_count() < 1) { ret 1; }
+    ret 0;
+}
+
