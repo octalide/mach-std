@@ -124,6 +124,25 @@ pub fun spawn(pathname: str, argv: **u8, envp: **u8) Result[Child, str] {
     ret ok[Child, str](Child{pid: pid});
 }
 
+# spawn_redirected: start a process without waiting, with its stdout and/or
+# stderr bound to caller-supplied descriptors.
+#
+# the parent keeps ownership of the passed descriptors (close them after the
+# child exits, or after the spawn to let a pipe's read end see EOF); -1 leaves
+# that stream inherited. stdin is always inherited.
+# ---
+# pathname:  path to executable
+# argv:      null-terminated argument array
+# envp:      null-terminated environment array
+# stdout_fd: descriptor for the child's stdout, or -1 to inherit
+# stderr_fd: descriptor for the child's stderr, or -1 to inherit
+# ret:       child handle, or an error message
+pub fun spawn_redirected(pathname: str, argv: **u8, envp: **u8, stdout_fd: i32, stderr_fd: i32) Result[Child, str] {
+    val pid: i64 = os.spawn_redirected(pathname, argv, envp, -1, stdout_fd, stderr_fd);
+    if (pid < 0) { ret err[Child, str]("spawn failed"); }
+    ret ok[Child, str](Child{pid: pid});
+}
+
 # wait: wait for a child process to exit.
 # ---
 # child: child handle from spawn
@@ -133,6 +152,23 @@ pub fun wait(child: Child) Result[ExitStatus, str] {
     val r: i64 = os.wait_pid(child.pid, ?wstatus, 0);
     if (r < 0) { ret err[ExitStatus, str]("wait failed"); }
     ret ok[ExitStatus, str](ExitStatus{raw: wstatus});
+}
+
+# wait_any: block until any child of this process exits.
+#
+# POSIX wait(-1) semantics on every platform (the windows layer emulates the
+# -1 pid by waiting across its tracked child handles). the returned handle
+# identifies which child was reaped, so a caller juggling several children can
+# map the exit back to its work item. errs when there is no child to wait for.
+# ---
+# out_status: receives the reaped child's exit status
+# ret:        the reaped child's handle, or an error message
+pub fun wait_any(out_status: *ExitStatus) Result[Child, str] {
+    var wstatus: i32 = 0;
+    val pid: i64 = os.wait_pid(-1, ?wstatus, 0);
+    if (pid <= 0) { ret err[Child, str]("wait failed"); }
+    out_status.raw = wstatus;
+    ret ok[Child, str](Child{pid: pid});
 }
 
 # exited: check if the process exited normally.
@@ -364,5 +400,76 @@ test "exec: repeated spawns stay correct" {
         if (code(s) != 0) { ret 1; }
         i = i + 1;
     }
+    ret 0;
+}
+
+var redir_buf: [64]u8;
+
+test "std.process.exec.spawn_redirected:pipes_child_stdout" {
+    var fds: [2]i32;
+    if (os.pipe(?fds[0]) < 0) { ret 1; }
+
+    var argv: [4]usize = argv_echo();
+    val sr: Result[Child, str] = spawn_redirected(prog_echo(), (?argv[0])::**u8, nil, fds[1], -1);
+    if (is_err[Child, str](sr)) {
+        os.close(fds[0]);
+        os.close(fds[1]);
+        ret 1;
+    }
+    # closing the parent's write end lets read see EOF once the child exits
+    os.close(fds[1]);
+
+    var total: usize = 0;
+    for (true) {
+        val n: i64 = os.read(fds[0], ((?redir_buf[0])::usize + total)::*u8, 64 - total);
+        if (n <= 0) { brk; }
+        total = total + n::usize;
+    }
+    os.close(fds[0]);
+
+    val wr: Result[ExitStatus, str] = wait(unwrap_ok[Child, str](sr));
+    if (is_err[ExitStatus, str](wr)) { ret 1; }
+    if (code(unwrap_ok[ExitStatus, str](wr)) != 0) { ret 1; }
+
+    if (total != ECHO_LEN) { ret 1; }
+    if (redir_buf[0] != 'h') { ret 1; }
+    if (redir_buf[4] != 'o') { ret 1; }
+    ret 0;
+}
+
+test "std.process.exec.wait_any:reaps_each_child_once" {
+    var argv_a: [4]usize = argv_ok();
+    val ra: Result[Child, str] = spawn(prog_ok(), (?argv_a[0])::**u8, nil);
+    if (is_err[Child, str](ra)) { ret 1; }
+    var argv_b: [4]usize = argv_ok();
+    val rb: Result[Child, str] = spawn(prog_ok(), (?argv_b[0])::**u8, nil);
+    if (is_err[Child, str](rb)) { ret 1; }
+    val pa: i64 = unwrap_ok[Child, str](ra).pid;
+    val pb: i64 = unwrap_ok[Child, str](rb).pid;
+
+    var st: ExitStatus;
+    st.raw = 0;
+    val w1: Result[Child, str] = wait_any(?st);
+    if (is_err[Child, str](w1)) { ret 1; }
+    if (!exited(st) || code(st) != 0) { ret 1; }
+    val p1: i64 = unwrap_ok[Child, str](w1).pid;
+
+    val w2: Result[Child, str] = wait_any(?st);
+    if (is_err[Child, str](w2)) { ret 1; }
+    if (!exited(st) || code(st) != 0) { ret 1; }
+    val p2: i64 = unwrap_ok[Child, str](w2).pid;
+
+    # both children reaped, each exactly once, in either order
+    if (p1 == p2) { ret 1; }
+    if (p1 != pa && p1 != pb) { ret 1; }
+    if (p2 != pa && p2 != pb) { ret 1; }
+    ret 0;
+}
+
+test "std.process.exec.wait_any:errs_with_no_children" {
+    var st: ExitStatus;
+    st.raw = 0;
+    val w: Result[Child, str] = wait_any(?st);
+    if (!is_err[Child, str](w)) { ret 1; }
     ret 0;
 }

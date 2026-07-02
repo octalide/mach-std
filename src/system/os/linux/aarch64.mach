@@ -259,6 +259,7 @@ fwd shared.spawn_redirected;
 fwd shared.getpid;
 fwd shared.pipe;
 fwd shared.sleep;
+fwd shared.cpu_count;
 fwd shared.getcwd;
 fwd shared.getenv;
 fwd shared.fork;

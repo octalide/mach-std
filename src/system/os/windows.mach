@@ -120,6 +120,7 @@ fwd impl.spawn_redirected;
 fwd impl.getpid;
 fwd impl.pipe;
 fwd impl.sleep;
+fwd impl.cpu_count;
 fwd impl.getcwd;
 fwd impl.getenv;
 fwd impl.temp_dir;
